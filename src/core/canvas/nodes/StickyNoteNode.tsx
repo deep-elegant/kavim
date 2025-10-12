@@ -1,5 +1,7 @@
 import React, { memo, useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react';
-import { Handle, NodeResizer, Position, type NodeProps, useReactFlow, Node } from '@xyflow/react';
+import { type NodeProps, useReactFlow, Node } from '@xyflow/react';
+
+import NodeInteractionOverlay from './NodeInteractionOverlay';
 
 export type StickyNoteData = {
   label: string;
@@ -87,40 +89,37 @@ const StickyNoteNode = memo(({ id, data, selected }: NodeProps<StickyNoteNode>) 
   };
 
   return (
-    <div
-      className="relative h-full w-full rounded-lg border border-yellow-400 bg-yellow-100 shadow"
-      onClick={handleClick}
-      role="presentation"
-      style={{ minWidth: MIN_WIDTH, minHeight: MIN_HEIGHT }}
+    <NodeInteractionOverlay
+      isActive={selected}
+      isEditing={isTyping}
+      minWidth={MIN_WIDTH}
+      minHeight={MIN_HEIGHT}
     >
-      <NodeResizer
-        color="#facc15"
-        isVisible={selected && !isTyping}
-        minWidth={MIN_WIDTH}
-        minHeight={MIN_HEIGHT}
-        handleStyle={{ borderRadius: '9999px', width: 10, height: 10 }}
-      />
-      <Handle type="target" position={Position.Left} />
-      <div className="flex h-full w-full">
-        {isTyping ? (
-          <textarea
-            ref={textareaRef}
-            className="h-full w-full resize-none bg-transparent p-2 text-sm font-medium leading-relaxed text-yellow-950 outline-none"
-            value={label}
-            onChange={(event) => handleLabelChange(event.target.value)}
-            onBlur={handleBlur}
-            onMouseDown={(event) => event.stopPropagation()}
-            onKeyDown={handleKeyDown}
-            spellCheck={false}
-          />
-        ) : (
-          <div className="h-full w-full overflow-hidden whitespace-pre-wrap break-words p-2 text-sm font-medium leading-relaxed text-yellow-950">
-            {label || 'Click to add text'}
-          </div>
-        )}
+      <div
+        className="relative h-full w-full rounded-lg border border-yellow-400 bg-yellow-100 shadow"
+        onClick={handleClick}
+        role="presentation"
+      >
+        <div className="flex h-full w-full">
+          {isTyping ? (
+            <textarea
+              ref={textareaRef}
+              className="h-full w-full resize-none bg-transparent p-2 text-sm font-medium leading-relaxed text-yellow-950 outline-none"
+              value={label}
+              onChange={(event) => handleLabelChange(event.target.value)}
+              onBlur={handleBlur}
+              onMouseDown={(event) => event.stopPropagation()}
+              onKeyDown={handleKeyDown}
+              spellCheck={false}
+            />
+          ) : (
+            <div className="h-full w-full overflow-hidden whitespace-pre-wrap break-words p-2 text-sm font-medium leading-relaxed text-yellow-950">
+              {label || 'Click to add text'}
+            </div>
+          )}
+        </div>
       </div>
-      <Handle type="source" position={Position.Right} />
-    </div>
+    </NodeInteractionOverlay>
   );
 });
 
