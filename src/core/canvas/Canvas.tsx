@@ -53,7 +53,7 @@ const CanvasInner = () => {
     nodeId: string;
     start: XYPosition;
   } | null>(null);
-  const { project } = useReactFlow();
+  const { screenToFlowPosition } = useReactFlow();
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -71,7 +71,7 @@ const CanvasInner = () => {
       }
 
       event.preventDefault();
-      const flowPosition = project({ x: event.clientX, y: event.clientY });
+      const flowPosition = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       const nodeId = crypto.randomUUID();
 
       const newNode: StickyNoteNodeType = {
@@ -79,7 +79,9 @@ const CanvasInner = () => {
         type: 'sticky-note',
         position: flowPosition,
         data: { label: '', isTyping: false },
-        style: { width: 0, height: 0 },
+        width: MIN_WIDTH,
+        height: MIN_HEIGHT,
+        style: { width: MIN_WIDTH, height: MIN_HEIGHT },
         selected: true,
       };
 
@@ -89,7 +91,7 @@ const CanvasInner = () => {
         start: flowPosition,
       };
     },
-    [project, selectedTool, setNodes],
+    [screenToFlowPosition, selectedTool, setNodes],
   );
 
   const handlePaneMouseMove = useCallback(
@@ -99,9 +101,9 @@ const CanvasInner = () => {
       }
 
       const { nodeId, start } = drawingState.current;
-      const current = project({ x: event.clientX, y: event.clientY });
-      const width = Math.max(Math.abs(current.x - start.x), 0);
-      const height = Math.max(Math.abs(current.y - start.y), 0);
+      const current = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const width = Math.max(Math.abs(current.x - start.x), MIN_WIDTH);
+      const height = Math.max(Math.abs(current.y - start.y), MIN_HEIGHT);
       const position = {
         x: Math.min(start.x, current.x),
         y: Math.min(start.y, current.y),
@@ -113,6 +115,8 @@ const CanvasInner = () => {
             ? {
                 ...node,
                 position,
+                width,
+                height,
                 style: {
                   ...node.style,
                   width,
@@ -123,7 +127,7 @@ const CanvasInner = () => {
         ),
       );
     },
-    [project, setNodes],
+    [screenToFlowPosition, setNodes],
   );
 
   const handlePaneMouseUp = useCallback(() => {
@@ -145,6 +149,8 @@ const CanvasInner = () => {
 
         return {
           ...node,
+          width,
+          height,
           style: {
             ...node.style,
             width,
@@ -172,6 +178,8 @@ const CanvasInner = () => {
         onMouseDown={handlePaneMouseDown}
         onPaneMouseMove={handlePaneMouseMove}
         onMouseUp={handlePaneMouseUp}
+        panOnDrag={selectedTool !== 'sticky-note'}
+        selectionOnDrag={selectedTool !== 'sticky-note'}
         nodeTypes={nodeTypes}
         className={selectedTool === 'sticky-note' ? 'cursor-crosshair' : undefined}
         style={{ cursor: selectedTool === 'sticky-note' ? 'crosshair' : undefined }}
