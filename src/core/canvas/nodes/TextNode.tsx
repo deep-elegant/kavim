@@ -1,14 +1,10 @@
-import React, {
-  memo,
-  useEffect,
-  useRef,
-  type KeyboardEvent,
-  type MouseEvent,
-} from 'react';
+import React, { memo, type MouseEvent } from 'react';
 import { type NodeProps, useReactFlow, type Node } from '@xyflow/react';
 
 import NodeInteractionOverlay from './NodeInteractionOverlay';
 import { type DrawableNode } from './DrawableNode';
+import { MinimalTiptap } from '@/components/ui/minimal-tiptap';
+import { cn } from '@/utils/tailwind';
 
 export type TextNodeData = {
   label: string;
@@ -76,17 +72,8 @@ export const textDrawable: DrawableNode<TextNode> = {
 
 const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => {
   const { setNodes } = useReactFlow();
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const label = data.label ?? '';
   const isTyping = Boolean(data.isTyping);
-
-  useEffect(() => {
-    if (isTyping && textareaRef.current) {
-      textareaRef.current.focus();
-      const { length } = textareaRef.current.value;
-      textareaRef.current.setSelectionRange(length, length);
-    }
-  }, [isTyping]);
 
   const setTypingState = (value: boolean) => {
     setNodes((nodes) =>
@@ -139,14 +126,11 @@ const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => 
     }
   };
 
-  const handleBlur = () => {
-    setTypingState(false);
-  };
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Escape') {
-      event.currentTarget.blur();
+  const handleBlur = (event: React.FocusEvent<HTMLDivElement>) => {
+    if (event.relatedTarget && event.currentTarget.contains(event.relatedTarget as Node)) {
+      return;
     }
+    setTypingState(false);
   };
 
   return (
@@ -160,23 +144,35 @@ const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => 
       <div
         className="relative flex h-full w-full cursor-text items-center"
         onClick={handleClick}
+        onBlur={handleBlur}
         role="presentation"
       >
         {isTyping ? (
-          <textarea
-            ref={textareaRef}
-            className="h-full w-full resize-none bg-transparent text-base font-semibold leading-relaxed text-slate-900 outline-none"
-            value={label}
-            onChange={(event) => handleLabelChange(event.target.value)}
-            onBlur={handleBlur}
-            onMouseDown={(event) => event.stopPropagation()}
-            onKeyDown={handleKeyDown}
-            spellCheck={false}
-          />
-        ) : (
-          <div className="w-full whitespace-pre-wrap break-words text-base font-semibold leading-relaxed text-slate-900">
-            {label || 'Click to add text'}
+          <div className="h-full w-full" onMouseDown={(e) => e.stopPropagation()}>
+            <MinimalTiptap
+              content={label}
+              onChange={handleLabelChange}
+              editable
+              theme="transparent"
+              className="h-full w-full"
+            />
           </div>
+        ) : (
+          <div
+            className={cn(
+              'prose prose-sm w-full max-w-none',
+              'prose-h1:text-xl prose-h1:leading-tight',
+              'prose-h2:text-lg prose-h2:leading-snug',
+              'prose-h3:text-base prose-h3:leading-snug',
+              'prose-p:my-1 prose-p:leading-normal',
+              'prose-ul:my-1 prose-ol:my-1',
+              'prose-li:my-0',
+              'min-h-[1.5rem] px-3 py-2',
+              'text-slate-900',
+              'break-words',
+            )}
+            dangerouslySetInnerHTML={{ __html: label || '<p>Click to add text</p>' }}
+          />
         )}
       </div>
     </NodeInteractionOverlay>
