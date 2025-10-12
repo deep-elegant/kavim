@@ -27,6 +27,7 @@ import StickyNoteNode, {
   stickyNoteDrawable,
   type StickyNoteNode as StickyNoteNodeType,
 } from './nodes/StickyNoteNode';
+import ShapeNodeComponent, { shapeDrawable } from './nodes/ShapeNode';
 import { type DrawableNode } from './nodes/DrawableNode';
 
 type ToolId = 'sticky-note' | 'shape' | 'arrow' | 'prompt-node' | 'text';
@@ -41,14 +42,18 @@ const tools: { id: ToolId; label: string; icon: ComponentType<{ className?: stri
 
 const nodeTypes = {
   'sticky-note': StickyNoteNode,
+  'shape-node': ShapeNodeComponent,
 };
 
 const drawableNodeTools: Partial<Record<ToolId, DrawableNode<any>>> = {
   'sticky-note': stickyNoteDrawable,
+  shape: shapeDrawable,
 };
 
+const drawingTools: ToolId[] = ['sticky-note', 'shape'];
+
 const CanvasInner = () => {
-  const [nodes, setNodes, onNodesChange] = useNodesState<StickyNoteNodeType>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedTool, setSelectedTool] = useState<ToolId | null>(null);
   const drawingState = useRef<{
@@ -148,11 +153,11 @@ const CanvasInner = () => {
         onMouseDown={handlePaneMouseDown}
         onPaneMouseMove={handlePaneMouseMove}
         onMouseUp={handlePaneMouseUp}
-        panOnDrag={selectedTool !== 'sticky-note'}
-        selectionOnDrag={selectedTool !== 'sticky-note'}
+        panOnDrag={!drawingTools.includes(selectedTool ?? null)}
+        selectionOnDrag={!drawingTools.includes(selectedTool ?? '')}
         nodeTypes={nodeTypes}
-        className={selectedTool === 'sticky-note' ? 'cursor-crosshair' : undefined}
-        style={{ cursor: selectedTool === 'sticky-note' ? 'crosshair' : undefined }}
+        className={drawingTools.includes(selectedTool ?? '') ? 'cursor-crosshair' : undefined}
+        style={{ cursor: drawingTools.includes(selectedTool ?? '') ? 'crosshair' : undefined }}
       >
         <MiniMap />
         <Controls
