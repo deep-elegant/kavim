@@ -153,7 +153,8 @@ const CanvasInner = () => {
         onMouseDown={handlePaneMouseDown}
         onPaneMouseMove={handlePaneMouseMove}
         onMouseUp={handlePaneMouseUp}
-        panOnDrag={!drawingTools.includes(selectedTool ?? null)}
+        // Panning with the right mouse button
+        panOnDrag={[2]}
         selectionOnDrag={!drawingTools.includes(selectedTool ?? '')}
         nodeTypes={nodeTypes}
         className={drawingTools.includes(selectedTool ?? '') ? 'cursor-crosshair' : undefined}
