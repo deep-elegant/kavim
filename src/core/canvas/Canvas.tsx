@@ -37,6 +37,7 @@ import StickyNoteNode, {
   type StickyNoteNode as StickyNoteNodeType,
 } from './nodes/StickyNoteNode';
 import ShapeNodeComponent, { shapeDrawable } from './nodes/ShapeNode';
+import TextNodeComponent, { textDrawable } from './nodes/TextNode';
 import { type DrawableNode } from './nodes/DrawableNode';
 import { Button } from '@/components/ui/button';
 
@@ -53,14 +54,16 @@ const tools: { id: ToolId; label: string; icon: ComponentType<{ className?: stri
 const nodeTypes = {
   'sticky-note': StickyNoteNode,
   'shape-node': ShapeNodeComponent,
+  'text-node': TextNodeComponent,
 };
 
 const drawableNodeTools: Partial<Record<ToolId, DrawableNode<any>>> = {
   'sticky-note': stickyNoteDrawable,
   shape: shapeDrawable,
+  text: textDrawable,
 };
 
-const drawingTools: ToolId[] = ['sticky-note', 'shape'];
+const drawingTools: ToolId[] = ['sticky-note', 'shape', 'text'];
 
 const CanvasInner = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
