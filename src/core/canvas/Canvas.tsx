@@ -142,6 +142,8 @@ const CanvasInner = () => {
     setSelectedTool(null);
   }, [selectedTool, setNodes]);
 
+  const isDrawingToolSelected = selectedTool != null && drawingTools.includes(selectedTool);
+
   return (
     <div style={{ height: '100%', width: '100%' }}>
       <ReactFlow
@@ -155,10 +157,10 @@ const CanvasInner = () => {
         onMouseUp={handlePaneMouseUp}
         // Panning with the right mouse button
         panOnDrag={[2]}
-        selectionOnDrag={!drawingTools.includes(selectedTool ?? '')}
+        selectionOnDrag={!isDrawingToolSelected}
         nodeTypes={nodeTypes}
-        className={drawingTools.includes(selectedTool ?? '') ? 'cursor-crosshair' : undefined}
-        style={{ cursor: drawingTools.includes(selectedTool ?? '') ? 'crosshair' : undefined }}
+        className={isDrawingToolSelected ? 'cursor-crosshair' : undefined}
+        style={{ cursor: isDrawingToolSelected ? 'crosshair' : undefined }}
       >
         <MiniMap />
         <Controls
