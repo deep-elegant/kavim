@@ -11,7 +11,7 @@ function HomePage() {
   const { t } = useTranslation();
 
   return (
-    <div className="h-screen w-screen">
+    <div className="h-[calc(100vh-32px)] w-screen">
         <Canvas />
     </div>
   );

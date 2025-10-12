@@ -170,7 +170,7 @@ const CanvasInner = () => {
           showFitView
           orientation="horizontal"
         >
-          <div className="flex flex-col gap-2 rounded-lg border border-border bg-background/95 p-2 shadow-lg">
+          <div className="flex flex-row gap-2 rounded-lg border border-border bg-background/95 p-2 shadow-lg">
             {tools.map(({ id, label, icon: Icon }) => (
               <ControlButton
                 key={id}
