@@ -1,7 +1,8 @@
 import React, { memo, useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react';
-import { type NodeProps, useReactFlow, Node } from '@xyflow/react';
+import { type NodeProps, useReactFlow, type Node } from '@xyflow/react';
 
 import NodeInteractionOverlay from './NodeInteractionOverlay';
+import { type DrawableNode } from './DrawableNode';
 
 export type StickyNoteData = {
   label: string;
@@ -12,6 +13,60 @@ export type StickyNoteNode = Node<StickyNoteData, 'sticky-note'>;
 
 const MIN_WIDTH = 100;
 const MIN_HEIGHT = 30;
+
+export const stickyNoteDrawable: DrawableNode<StickyNoteNode> = {
+  onPaneMouseDown: (id, position) => ({
+    id,
+    type: 'sticky-note',
+    position,
+    data: { label: '', isTyping: false },
+    width: MIN_WIDTH,
+    height: MIN_HEIGHT,
+    style: { width: MIN_WIDTH, height: MIN_HEIGHT },
+    selected: true,
+  }),
+
+  onPaneMouseMove: (node, start, current) => {
+    const width = Math.max(Math.abs(current.x - start.x), MIN_WIDTH);
+    const height = Math.max(Math.abs(current.y - start.y), MIN_HEIGHT);
+    const position = {
+      x: Math.min(start.x, current.x),
+      y: Math.min(start.y, current.y),
+    };
+
+    return {
+      ...node,
+      position,
+      width,
+      height,
+      style: {
+        ...node.style,
+        width,
+        height,
+      },
+    };
+  },
+
+  onPaneMouseUp: (node) => {
+    const width = Math.max(Number(node.style?.width ?? node.width ?? 0), MIN_WIDTH);
+    const height = Math.max(Number(node.style?.height ?? node.height ?? 0), MIN_HEIGHT);
+
+    return {
+      ...node,
+      width,
+      height,
+      style: {
+        ...node.style,
+        width,
+        height,
+      },
+      data: {
+        ...node.data,
+        isTyping: true,
+      },
+    };
+  },
+};
 
 const StickyNoteNode = memo(({ id, data, selected }: NodeProps<StickyNoteNode>) => {
   const { setNodes } = useReactFlow();
