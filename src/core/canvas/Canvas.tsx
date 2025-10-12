@@ -15,7 +15,6 @@ import {
   useEdgesState,
   addEdge,
   type Connection,
-  type Node,
   type XYPosition,
   useReactFlow,
   ReactFlowProvider,
@@ -24,11 +23,14 @@ import { ArrowRight, MessageSquareDashed, StickyNote, Square, Type } from 'lucid
 
 import '@xyflow/react/dist/style.css';
 
-import StickyNoteNode, { type StickyNoteData } from './nodes/StickyNoteNode';
+import StickyNoteNode, {
+  stickyNoteDrawable,
+  type StickyNoteNode as StickyNoteNodeType,
+} from './nodes/StickyNoteNode';
+import ShapeNodeComponent, { shapeDrawable } from './nodes/ShapeNode';
+import { type DrawableNode } from './nodes/DrawableNode';
 
 type ToolId = 'sticky-note' | 'shape' | 'arrow' | 'prompt-node' | 'text';
-
-type StickyNoteNodeType = Node<StickyNoteData>;
 
 const tools: { id: ToolId; label: string; icon: ComponentType<{ className?: string }> }[] = [
   { id: 'sticky-note', label: 'Sticky Note', icon: StickyNote },
@@ -38,15 +40,20 @@ const tools: { id: ToolId; label: string; icon: ComponentType<{ className?: stri
   { id: 'text', label: 'Text', icon: Type },
 ];
 
-const MIN_WIDTH = 100;
-const MIN_HEIGHT = 30;
-
 const nodeTypes = {
   'sticky-note': StickyNoteNode,
+  'shape-node': ShapeNodeComponent,
 };
 
+const drawableNodeTools: Partial<Record<ToolId, DrawableNode<any>>> = {
+  'sticky-note': stickyNoteDrawable,
+  shape: shapeDrawable,
+};
+
+const drawingTools: ToolId[] = ['sticky-note', 'shape'];
+
 const CanvasInner = () => {
-  const [nodes, setNodes, onNodesChange] = useNodesState<StickyNoteNodeType>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [selectedTool, setSelectedTool] = useState<ToolId | null>(null);
   const drawingState = useRef<{
@@ -66,7 +73,8 @@ const CanvasInner = () => {
 
   const handlePaneMouseDown = useCallback(
     (event: ReactMouseEvent) => {
-      if (selectedTool !== 'sticky-note' || event.button !== 0) {
+      const toolImpl = selectedTool ? drawableNodeTools[selectedTool] : undefined;
+      if (!toolImpl || event.button !== 0) {
         return;
       }
 
@@ -74,16 +82,7 @@ const CanvasInner = () => {
       const flowPosition = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       const nodeId = crypto.randomUUID();
 
-      const newNode: StickyNoteNodeType = {
-        id: nodeId,
-        type: 'sticky-note',
-        position: flowPosition,
-        data: { label: '', isTyping: false },
-        width: MIN_WIDTH,
-        height: MIN_HEIGHT,
-        style: { width: MIN_WIDTH, height: MIN_HEIGHT },
-        selected: true,
-      };
+      const newNode = toolImpl.onPaneMouseDown(nodeId, flowPosition);
 
       setNodes((currentNodes) => [...currentNodes, newNode]);
       drawingState.current = {
@@ -96,42 +95,35 @@ const CanvasInner = () => {
 
   const handlePaneMouseMove = useCallback(
     (event: ReactMouseEvent) => {
-      if (!drawingState.current) {
+      if (!drawingState.current || !selectedTool) {
+        return;
+      }
+      const toolImpl = drawableNodeTools[selectedTool];
+      if (!toolImpl) {
         return;
       }
 
       const { nodeId, start } = drawingState.current;
       const current = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-      const width = Math.max(Math.abs(current.x - start.x), MIN_WIDTH);
-      const height = Math.max(Math.abs(current.y - start.y), MIN_HEIGHT);
-      const position = {
-        x: Math.min(start.x, current.x),
-        y: Math.min(start.y, current.y),
-      };
 
       setNodes((currentNodes) =>
-        currentNodes.map((node) =>
-          node.id === nodeId
-            ? {
-                ...node,
-                position,
-                width,
-                height,
-                style: {
-                  ...node.style,
-                  width,
-                  height,
-                },
-              }
-            : node,
-        ),
+        currentNodes.map((node) => {
+          if (node.id !== nodeId) {
+            return node;
+          }
+          return toolImpl.onPaneMouseMove(node, start, current);
+        }),
       );
     },
-    [screenToFlowPosition, setNodes],
+    [screenToFlowPosition, selectedTool, setNodes],
   );
 
   const handlePaneMouseUp = useCallback(() => {
-    if (!drawingState.current) {
+    if (!drawingState.current || !selectedTool) {
+      return;
+    }
+    const toolImpl = drawableNodeTools[selectedTool];
+    if (!toolImpl) {
       return;
     }
 
@@ -143,29 +135,14 @@ const CanvasInner = () => {
         if (node.id !== nodeId) {
           return node;
         }
-
-        const width = Math.max(Number(node.style?.width ?? node.width ?? 0), MIN_WIDTH);
-        const height = Math.max(Number(node.style?.height ?? node.height ?? 0), MIN_HEIGHT);
-
-        return {
-          ...node,
-          width,
-          height,
-          style: {
-            ...node.style,
-            width,
-            height,
-          },
-          data: {
-            ...node.data,
-            isTyping: true,
-          },
-        };
+        return toolImpl.onPaneMouseUp(node);
       }),
     );
 
     setSelectedTool(null);
-  }, [setNodes]);
+  }, [selectedTool, setNodes]);
+
+  const isDrawingToolSelected = selectedTool != null && drawingTools.includes(selectedTool);
 
   return (
     <div style={{ height: '100%', width: '100%' }}>
@@ -178,11 +155,12 @@ const CanvasInner = () => {
         onMouseDown={handlePaneMouseDown}
         onPaneMouseMove={handlePaneMouseMove}
         onMouseUp={handlePaneMouseUp}
-        panOnDrag={selectedTool !== 'sticky-note'}
-        selectionOnDrag={selectedTool !== 'sticky-note'}
+        // Panning with the right mouse button
+        panOnDrag={[2]}
+        selectionOnDrag={!isDrawingToolSelected}
         nodeTypes={nodeTypes}
-        className={selectedTool === 'sticky-note' ? 'cursor-crosshair' : undefined}
-        style={{ cursor: selectedTool === 'sticky-note' ? 'crosshair' : undefined }}
+        className={isDrawingToolSelected ? 'cursor-crosshair' : undefined}
+        style={{ cursor: isDrawingToolSelected ? 'crosshair' : undefined }}
       >
         <MiniMap />
         <Controls
