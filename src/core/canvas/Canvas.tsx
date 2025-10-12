@@ -19,7 +19,15 @@ import {
   useReactFlow,
   ReactFlowProvider,
 } from '@xyflow/react';
-import { ArrowRight, MessageSquareDashed, StickyNote, Square, Type } from 'lucide-react';
+import {
+  ArrowRight,
+  MessageSquareDashed,
+  StickyNote,
+  Square,
+  Type,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 
 import '@xyflow/react/dist/style.css';
 
@@ -29,6 +37,7 @@ import StickyNoteNode, {
 } from './nodes/StickyNoteNode';
 import ShapeNodeComponent, { shapeDrawable } from './nodes/ShapeNode';
 import { type DrawableNode } from './nodes/DrawableNode';
+import { Button } from '@/components/ui/button';
 
 type ToolId = 'sticky-note' | 'shape' | 'arrow' | 'prompt-node' | 'text';
 
@@ -60,7 +69,7 @@ const CanvasInner = () => {
     nodeId: string;
     start: XYPosition;
   } | null>(null);
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, zoomIn, zoomOut } = useReactFlow();
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -165,25 +174,41 @@ const CanvasInner = () => {
         <MiniMap />
         <Controls
           position="bottom-center"
-          showZoom
+          showZoom={false}
           showInteractive
           showFitView
           orientation="horizontal"
         >
-          <div className="flex flex-row gap-2 rounded-lg border border-border bg-background/95 p-2 shadow-lg">
+          <div className="flex flex-row items-center gap-2 rounded-lg border border-border bg-background/95 p-2 shadow-lg">
+            <Button
+              onClick={() => zoomIn()}
+              aria-label="zoom in"
+              title="zoom in"
+              variant="ghost"
+            >
+              <ZoomIn className="h-5 w-5" />
+            </Button>
+            <Button
+              onClick={() => zoomOut()}
+              aria-label="zoom out"
+              title="zoom out"
+              variant="ghost"
+              className=""
+            >
+              <ZoomOut className="h-5 w-5" />
+            </Button>
+            <div className="mx-1 h-6 border-r border-border" />
             {tools.map(({ id, label, icon: Icon }) => (
-              <ControlButton
+              <Button
                 key={id}
                 aria-label={label}
-                className={`!h-auto !w-auto !rounded-md !bg-transparent !p-2 hover:!bg-accent/60 ${
-                  selectedTool === id ? '!bg-accent/60' : ''
-                }`}
+                variant="ghost"
                 title={label}
                 onClick={() => handleToolSelect(id)}
               >
                 <Icon className="h-5 w-5" />
                 <span className="sr-only">{label}</span>
-              </ControlButton>
+              </Button>
             ))}
           </div>
         </Controls>
