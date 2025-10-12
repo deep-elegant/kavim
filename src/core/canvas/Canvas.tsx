@@ -27,6 +27,7 @@ import {
   Type,
   ZoomIn,
   ZoomOut,
+  Maximize,
 } from 'lucide-react';
 
 import '@xyflow/react/dist/style.css';
@@ -69,7 +70,7 @@ const CanvasInner = () => {
     nodeId: string;
     start: XYPosition;
   } | null>(null);
-  const { screenToFlowPosition, zoomIn, zoomOut } = useReactFlow();
+  const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow();
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -175,8 +176,8 @@ const CanvasInner = () => {
         <Controls
           position="bottom-center"
           showZoom={false}
-          showInteractive
-          showFitView
+          showInteractive={false}
+          showFitView={false}
           orientation="horizontal"
         >
           <div className="flex flex-row items-center gap-2 rounded-lg border border-border bg-background/95 p-2 shadow-lg">
@@ -196,6 +197,14 @@ const CanvasInner = () => {
               className=""
             >
               <ZoomOut className="h-5 w-5" />
+            </Button>
+            <Button
+              onClick={() => fitView()}
+              aria-label="fit view"
+              title="fit view"
+              variant="ghost"
+            >
+              <Maximize className="h-5 w-5" />
             </Button>
             <div className="mx-1 h-6 border-r border-border" />
             {tools.map(({ id, label, icon: Icon }) => (
