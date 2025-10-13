@@ -1,5 +1,6 @@
 import React, {
   useCallback,
+  useMemo,
   useRef,
   useState,
   type ComponentType,
@@ -9,15 +10,16 @@ import {
   ReactFlow,
   MiniMap,
   Controls,
-  ControlButton,
   Background,
   useNodesState,
-  useEdgesState,
   addEdge,
   type Connection,
+  type Edge,
+  type EdgeChange,
   type XYPosition,
   useReactFlow,
   ReactFlowProvider,
+  applyEdgeChanges,
 } from '@xyflow/react';
 import {
   ArrowRight,
@@ -32,16 +34,16 @@ import {
 
 import '@xyflow/react/dist/style.css';
 
-import StickyNoteNode, {
-  stickyNoteDrawable,
-  type StickyNoteNode as StickyNoteNodeType,
-} from './nodes/StickyNoteNode';
-import ShapeNodeComponent, { shapeDrawable } from './nodes/ShapeNode';
-import TextNodeComponent, { textDrawable } from './nodes/TextNode';
+import StickyNoteNode, { stickyNoteDrawable, type StickyNoteNodeType } from './nodes/StickyNoteNode';
+import ShapeNodeComponent, { shapeDrawable, type ShapeNode } from './nodes/ShapeNode';
+import TextNodeComponent, { textDrawable, type TextNode } from './nodes/TextNode';
 import { type DrawableNode } from './nodes/DrawableNode';
 import { Button } from '@/components/ui/button';
+import EditableEdge, { type EditableEdgeData } from './edges/EditableEdge';
 
 type ToolId = 'sticky-note' | 'shape' | 'arrow' | 'prompt-node' | 'text';
+
+type CanvasNode = StickyNoteNode | ShapeNode | TextNode;
 
 const tools: { id: ToolId; label: string; icon: ComponentType<{ className?: string }> }[] = [
   { id: 'sticky-note', label: 'Sticky Note', icon: StickyNote },
@@ -57,7 +59,7 @@ const nodeTypes = {
   'text-node': TextNodeComponent,
 };
 
-const drawableNodeTools: Partial<Record<ToolId, DrawableNode<any>>> = {
+const drawableNodeTools: Partial<Record<ToolId, DrawableNode>> = {
   'sticky-note': stickyNoteDrawable,
   shape: shapeDrawable,
   text: textDrawable,
@@ -66,8 +68,8 @@ const drawableNodeTools: Partial<Record<ToolId, DrawableNode<any>>> = {
 const drawingTools: ToolId[] = ['sticky-note', 'shape', 'text'];
 
 const CanvasInner = () => {
-  const [nodes, setNodes, onNodesChange] = useNodesState<any>([]);
-  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([]);
+  const [edges, setEdges] = useState<Edge<EditableEdgeData>[]>([]);
   const [selectedTool, setSelectedTool] = useState<ToolId | null>(null);
   const drawingState = useRef<{
     nodeId: string;
@@ -75,10 +77,51 @@ const CanvasInner = () => {
   } | null>(null);
   const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow();
 
-  const onConnect = useCallback(
-    (params: Connection) => setEdges((eds) => addEdge(params, eds)),
-    [setEdges],
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange<EditableEdgeData>[]) =>
+      setEdges((current) => applyEdgeChanges(changes, current)),
+    [],
   );
+
+  const onConnect = useCallback(
+    (params: Connection) =>
+      setEdges((eds) =>
+        addEdge<EditableEdgeData>(
+          {
+            ...params,
+            type: 'editable',
+            data: { controlPoints: [] },
+            deletable: true,
+            reconnectable: true,
+          },
+          eds,
+        ),
+      ),
+    [],
+  );
+
+  const handleEdgeUpdate = useCallback(
+    (oldEdge: Edge<EditableEdgeData>, newConnection: Connection) => {
+      setEdges((currentEdges) =>
+        currentEdges.map((edge) => {
+          if (edge.id !== oldEdge.id) {
+            return edge;
+          }
+
+          return {
+            ...edge,
+            source: newConnection.source ?? edge.source,
+            target: newConnection.target ?? edge.target,
+            sourceHandle: newConnection.sourceHandle,
+            targetHandle: newConnection.targetHandle,
+          };
+        }),
+      );
+    },
+    [],
+  );
+
+  const edgeTypes = useMemo(() => ({ editable: EditableEdge }), []);
 
   const handleToolSelect = useCallback((id: ToolId) => {
     setSelectedTool((current) => (current === id ? null : id));
@@ -165,6 +208,8 @@ const CanvasInner = () => {
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onEdgeUpdate={handleEdgeUpdate}
+        edgeTypes={edgeTypes}
         onMouseDown={handlePaneMouseDown}
         onPaneMouseMove={handlePaneMouseMove}
         onMouseUp={handlePaneMouseUp}
@@ -172,6 +217,9 @@ const CanvasInner = () => {
         panOnDrag={[2]}
         selectionOnDrag={!isDrawingToolSelected}
         nodeTypes={nodeTypes}
+        edgesReconnectable
+        defaultEdgeOptions={{ type: 'editable', deletable: true, reconnectable: true }}
+        deleteKeyCode={['Delete', 'Backspace']}
         className={isDrawingToolSelected ? 'cursor-crosshair' : undefined}
         style={{ cursor: isDrawingToolSelected ? 'crosshair' : undefined }}
       >

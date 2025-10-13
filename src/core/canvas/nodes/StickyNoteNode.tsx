@@ -17,14 +17,14 @@ export type StickyNoteData = {
   color?: StickyNoteColor;
 };
 
-export type StickyNoteNode = Node<StickyNoteData, 'sticky-note'>;
+export type StickyNoteNodeType = Node<StickyNoteData, 'sticky-note'>;
 
 export type StickyNoteColor = 'yellow' | 'red' | 'blue' | 'green' | 'pink';
 
 const MIN_WIDTH = 100;
 const MIN_HEIGHT = 30;
 
-export const stickyNoteDrawable: DrawableNode<StickyNoteNode> = {
+export const stickyNoteDrawable: DrawableNode<StickyNoteNodeType> = {
   onPaneMouseDown: (id, position) => ({
     id,
     type: 'sticky-note',
@@ -78,7 +78,7 @@ export const stickyNoteDrawable: DrawableNode<StickyNoteNode> = {
   },
 };
 
-const StickyNoteNode = memo(({ id, data, selected }: NodeProps<StickyNoteNode>) => {
+const StickyNoteNode = memo(({ id, data, selected }: NodeProps<StickyNoteNodeType>) => {
   const { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData } =
     useNodeAsEditor({ id, data });
   const label = data.label ?? '';
