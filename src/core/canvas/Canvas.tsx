@@ -39,7 +39,10 @@ import ShapeNodeComponent, { shapeDrawable, type ShapeNode } from './nodes/Shape
 import TextNodeComponent, { textDrawable, type TextNode } from './nodes/TextNode';
 import { type DrawableNode } from './nodes/DrawableNode';
 import { Button } from '@/components/ui/button';
-import EditableEdge, { type EditableEdgeData } from './edges/EditableEdge';
+import EditableEdge, {
+  createDefaultEditableEdgeData,
+  type EditableEdgeData,
+} from './edges/EditableEdge';
 
 type ToolId = 'sticky-note' | 'shape' | 'arrow' | 'prompt-node' | 'text';
 
@@ -90,7 +93,7 @@ const CanvasInner = () => {
           {
             ...params,
             type: 'editable',
-            data: { controlPoints: [] },
+            data: createDefaultEditableEdgeData(),
             deletable: true,
             reconnectable: true,
           },
