@@ -274,9 +274,12 @@ const EditableEdge = memo(
                 r={CONTROL_POINT_HIT_RADIUS}
                 fill="transparent"
                 stroke="transparent"
+                fillOpacity={0.001}
+                pointerEvents="all"
                 onPointerDown={(event) =>
                   handleControlPointerDown(event, index)
                 }
+                style={{ cursor: 'grab' }}
               />
               <circle
                 cx={point.x}
