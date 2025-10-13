@@ -1,8 +1,11 @@
-import React, { memo, useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react';
-import { type NodeProps, useReactFlow, type Node } from '@xyflow/react';
+import React, { memo } from 'react';
+import { type NodeProps, type Node } from '@xyflow/react';
 
 import NodeInteractionOverlay from './NodeInteractionOverlay';
 import { type DrawableNode } from './DrawableNode';
+import { MinimalTiptap } from '@/components/ui/minimal-tiptap';
+import { cn } from '@/utils/tailwind';
+import { useNodeAsEditor } from '@/helpers/useNodeAsEditor';
 
 export type StickyNoteData = {
   label: string;
@@ -69,79 +72,8 @@ export const stickyNoteDrawable: DrawableNode<StickyNoteNode> = {
 };
 
 const StickyNoteNode = memo(({ id, data, selected }: NodeProps<StickyNoteNode>) => {
-  const { setNodes } = useReactFlow();
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const isTyping = Boolean(data.isTyping);
+  const { editor, isTyping, handleDoubleClick, handleBlur } = useNodeAsEditor({ id, data });
   const label = data.label ?? '';
-
-  useEffect(() => {
-    if (isTyping && textareaRef.current) {
-      textareaRef.current.focus();
-      const { length } = textareaRef.current.value;
-      textareaRef.current.setSelectionRange(length, length);
-    }
-  }, [isTyping]);
-
-  const setTypingState = (value: boolean) => {
-    setNodes((nodes) =>
-      nodes.map((node) => {
-        if (node.id === id) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              isTyping: value,
-            },
-          };
-        }
-
-        if (value && node.data?.isTyping) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              isTyping: false,
-            },
-          };
-        }
-
-        return node;
-      }),
-    );
-  };
-
-  const handleLabelChange = (value: string) => {
-    setNodes((nodes) =>
-      nodes.map((node) =>
-        node.id === id
-          ? {
-              ...node,
-              data: {
-                ...node.data,
-                label: value,
-              },
-            }
-          : node,
-      ),
-    );
-  };
-
-  const handleClick = (event: MouseEvent<HTMLDivElement>) => {
-    event.stopPropagation();
-    if (!isTyping) {
-      setTypingState(true);
-    }
-  };
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Escape') {
-      event.currentTarget.blur();
-    }
-  };
-
-  const handleBlur = () => {
-    setTypingState(false);
-  };
 
   return (
     <NodeInteractionOverlay
@@ -149,28 +81,35 @@ const StickyNoteNode = memo(({ id, data, selected }: NodeProps<StickyNoteNode>) 
       isEditing={isTyping}
       minWidth={MIN_WIDTH}
       minHeight={MIN_HEIGHT}
+      editor={editor}
     >
       <div
         className="relative h-full w-full rounded-lg border border-yellow-400 bg-yellow-100 shadow"
-        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
+        onBlur={handleBlur}
         role="presentation"
       >
-        <div className="flex h-full w-full">
+        <div className="flex h-full w-full text-yellow-950">
           {isTyping ? (
-            <textarea
-              ref={textareaRef}
-              className="h-full w-full resize-none bg-transparent p-2 text-sm font-medium leading-relaxed text-yellow-950 outline-none"
-              value={label}
-              onChange={(event) => handleLabelChange(event.target.value)}
-              onBlur={handleBlur}
-              onMouseDown={(event) => event.stopPropagation()}
-              onKeyDown={handleKeyDown}
-              spellCheck={false}
-            />
-          ) : (
-            <div className="h-full w-full overflow-hidden whitespace-pre-wrap break-words p-2 text-sm font-medium leading-relaxed text-yellow-950">
-              {label || 'Click to add text'}
+            <div className="h-full w-full" onMouseDown={(e) => e.stopPropagation()}>
+              <MinimalTiptap editor={editor} theme="transparent" className="h-full w-full" />
             </div>
+          ) : (
+            <div
+              className={cn(
+                'prose prose-sm w-full max-w-none',
+                'prose-h1:text-xl prose-h1:leading-tight',
+                'prose-h2:text-lg prose-h2:leading-snug',
+                'prose-h3:text-base prose-h3:leading-snug',
+                'prose-p:my-1 prose-p:leading-normal',
+                'prose-ul:my-1 prose-ol:my-1',
+                'prose-li:my-0',
+                'min-h-[1.5rem] px-3 py-2',
+                'text-yellow-950',
+                'break-words',
+              )}
+              dangerouslySetInnerHTML={{ __html: label || '<p>Click to add text</p>' }}
+            />
           )}
         </div>
       </div>
