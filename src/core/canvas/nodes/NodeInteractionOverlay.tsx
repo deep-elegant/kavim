@@ -1,7 +1,10 @@
 import React, { type PropsWithChildren, useMemo } from 'react';
 import { Handle, NodeResizer, Position } from '@xyflow/react';
+import { type Editor } from '@tiptap/react';
 
 import { cn } from '@/utils/tailwind';
+import { TiptapToolbar } from '@/components/ui/minimal-tiptap/TiptapToolbar';
+
 const HANDLE_SIZE = 12;
 const HANDLE_OFFSET = 10;
 
@@ -42,6 +45,7 @@ export type NodeInteractionOverlayProps = PropsWithChildren<{
   minWidth?: number;
   minHeight?: number;
   className?: string;
+  editor?: Editor | null;
 }>;
 
 const NodeInteractionOverlay = ({
@@ -51,6 +55,7 @@ const NodeInteractionOverlay = ({
   minWidth,
   minHeight,
   className,
+  editor,
 }: NodeInteractionOverlayProps) => {
   const shouldShowInteractions = isActive && !isEditing;
   const containerStyle = useMemo<React.CSSProperties>(
@@ -62,7 +67,19 @@ const NodeInteractionOverlay = ({
   );
 
   return (
-    <div className={cn('relative h-full w-full', className)} style={containerStyle}>
+    <div
+      className={cn('relative h-full w-full', className, isEditing && 'cursor-text')}
+      style={containerStyle}
+    >
+      {editor && (
+        <div
+          data-editor-toolbar
+          className="pointer-events-auto absolute left-1/2 top-0 z-10 -mt-2 -translate-y-full -translate-x-1/2"
+        >
+          {(isActive || isEditing) && <TiptapToolbar editor={editor} />}
+        </div>
+      )}
+
       {children}
 
       {shouldShowInteractions && (

@@ -1,10 +1,11 @@
-import React, { memo, type MouseEvent } from 'react';
-import { type NodeProps, useReactFlow, type Node } from '@xyflow/react';
+import React, { memo } from 'react';
+import { type NodeProps, type Node } from '@xyflow/react';
 
 import NodeInteractionOverlay from './NodeInteractionOverlay';
 import { type DrawableNode } from './DrawableNode';
 import { MinimalTiptap } from '@/components/ui/minimal-tiptap';
 import { cn } from '@/utils/tailwind';
+import { useNodeAsEditor } from '@/helpers/useNodeAsEditor';
 
 export type TextNodeData = {
   label: string;
@@ -71,67 +72,8 @@ export const textDrawable: DrawableNode<TextNode> = {
 };
 
 const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => {
-  const { setNodes } = useReactFlow();
+  const { editor, isTyping, handleDoubleClick, handleBlur } = useNodeAsEditor({ id, data });
   const label = data.label ?? '';
-  const isTyping = Boolean(data.isTyping);
-
-  const setTypingState = (value: boolean) => {
-    setNodes((nodes) =>
-      nodes.map((node) => {
-        if (node.id === id) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              isTyping: value,
-            },
-          };
-        }
-
-        if (value && node.data?.isTyping) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              isTyping: false,
-            },
-          };
-        }
-
-        return node;
-      }),
-    );
-  };
-
-  const handleLabelChange = (value: string) => {
-    setNodes((nodes) =>
-      nodes.map((node) =>
-        node.id === id
-          ? {
-              ...node,
-              data: {
-                ...node.data,
-                label: value,
-              },
-            }
-          : node,
-      ),
-    );
-  };
-
-  const handleClick = (event: MouseEvent<HTMLDivElement>) => {
-    event.stopPropagation();
-    if (!isTyping) {
-      setTypingState(true);
-    }
-  };
-
-  const handleBlur = (event: React.FocusEvent<HTMLDivElement>) => {
-    if (event.relatedTarget && event.currentTarget.contains(event.relatedTarget as Node)) {
-      return;
-    }
-    setTypingState(false);
-  };
 
   return (
     <NodeInteractionOverlay
@@ -140,19 +82,18 @@ const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => 
       minWidth={MIN_WIDTH}
       minHeight={MIN_HEIGHT}
       className="text-slate-900"
+      editor={editor}
     >
       <div
         className="relative flex h-full w-full cursor-text items-center"
-        onClick={handleClick}
+        onDoubleClick={handleDoubleClick}
         onBlur={handleBlur}
         role="presentation"
       >
         {isTyping ? (
           <div className="h-full w-full" onMouseDown={(e) => e.stopPropagation()}>
             <MinimalTiptap
-              content={label}
-              onChange={handleLabelChange}
-              editable
+              editor={editor}
               theme="transparent"
               className="h-full w-full"
             />
