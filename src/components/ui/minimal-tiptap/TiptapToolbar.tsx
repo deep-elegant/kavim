@@ -46,7 +46,7 @@ export type ToolbarSeparatorItem = ToolbarBaseItem & {
 
 export type ToolbarCustomItem = ToolbarBaseItem & {
   type: 'custom';
-  render: (editor: Editor) => ReactNode;
+  render: (editor: Editor | null) => ReactNode;
 };
 
 export type ToolbarItem =
@@ -56,7 +56,7 @@ export type ToolbarItem =
   | ToolbarCustomItem;
 
 export interface TiptapToolbarProps {
-  editor: Editor;
+  editor: Editor | null;
   items?: ToolbarItem[];
 }
 
@@ -174,7 +174,7 @@ const defaultToolbarItems: ToolbarItem[] = [
   },
 ];
 
-const renderToolbarItem = (editor: Editor, item: ToolbarItem, index: number) => {
+const renderToolbarItem = (editor: Editor | null, item: ToolbarItem, index: number) => {
   const key = item.id ?? index;
 
   if (item.type === 'separator') {
@@ -187,6 +187,10 @@ const renderToolbarItem = (editor: Editor, item: ToolbarItem, index: number) => 
         {item.render(editor)}
       </div>
     );
+  }
+
+  if (!editor) {
+    return null;
   }
 
   if (item.type === 'button') {
