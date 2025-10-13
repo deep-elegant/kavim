@@ -3,7 +3,7 @@ import { Handle, NodeResizer, Position } from '@xyflow/react';
 import { type Editor } from '@tiptap/react';
 
 import { cn } from '@/utils/tailwind';
-import { TiptapToolbar } from '@/components/ui/minimal-tiptap/TiptapToolbar';
+import { TiptapToolbar, type ToolbarItem } from '@/components/ui/minimal-tiptap/TiptapToolbar';
 
 const HANDLE_SIZE = 12;
 const HANDLE_OFFSET = 10;
@@ -46,6 +46,7 @@ export type NodeInteractionOverlayProps = PropsWithChildren<{
   minHeight?: number;
   className?: string;
   editor?: Editor | null;
+  toolbarItems?: ToolbarItem[];
 }>;
 
 const NodeInteractionOverlay = ({
@@ -56,6 +57,7 @@ const NodeInteractionOverlay = ({
   minHeight,
   className,
   editor,
+  toolbarItems,
 }: NodeInteractionOverlayProps) => {
   const shouldShowInteractions = isActive && !isEditing;
   const containerStyle = useMemo<React.CSSProperties>(
@@ -76,7 +78,7 @@ const NodeInteractionOverlay = ({
           data-editor-toolbar
           className="pointer-events-auto absolute left-1/2 top-0 z-10 -mt-2 -translate-y-full -translate-x-1/2"
         >
-          {(isActive || isEditing) && <TiptapToolbar editor={editor} />}
+          {(isActive || isEditing) && <TiptapToolbar editor={editor} items={toolbarItems} />}
         </div>
       )}
 

@@ -1,7 +1,7 @@
-import { type Node, useReactFlow } from '@xyflow/react';
+import { useReactFlow } from '@xyflow/react';
 import { useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { useEffect, type MouseEvent, type FocusEvent } from 'react';
+import { useCallback, useEffect, type MouseEvent, type FocusEvent } from 'react';
 import { cn } from '@/utils/tailwind';
 
 export type NodeDataWithLabel = {
@@ -9,30 +9,37 @@ export type NodeDataWithLabel = {
   isTyping?: boolean;
 };
 
-export type UseNodeAsEditorParams = {
+export type UseNodeAsEditorParams<T extends NodeDataWithLabel> = {
   id: string;
-  data: NodeDataWithLabel;
+  data: T;
 };
 
-export const useNodeAsEditor = ({ id, data }: UseNodeAsEditorParams) => {
+export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNodeAsEditorParams<T>) => {
   const { setNodes } = useReactFlow();
   const isTyping = Boolean(data.isTyping);
   const label = data.label ?? '';
 
+  const updateNodeData = useCallback(
+    (partial: Partial<T>) => {
+      setNodes((nodes) =>
+        nodes.map((node) =>
+          node.id === id
+            ? {
+                ...node,
+                data: {
+                  ...(node.data as T),
+                  ...partial,
+                },
+              }
+            : node,
+        ),
+      );
+    },
+    [id, setNodes],
+  );
+
   const handleLabelChange = (value: string) => {
-    setNodes((nodes) =>
-      nodes.map((node) =>
-        node.id === id
-          ? {
-              ...node,
-              data: {
-                ...node.data,
-                label: value,
-              },
-            }
-          : node,
-      ),
-    );
+    updateNodeData({ label: value } as Partial<T>);
   };
 
   const editor = useEditor({
@@ -84,10 +91,22 @@ export const useNodeAsEditor = ({ id, data }: UseNodeAsEditorParams) => {
     setNodes((nodes) =>
       nodes.map((node) => {
         if (node.id === id) {
-          return { ...node, data: { ...node.data, isTyping: value } };
+          return {
+            ...node,
+            data: {
+              ...(node.data as NodeDataWithLabel),
+              isTyping: value,
+            },
+          };
         }
         if (value && node.data?.isTyping) {
-          return { ...node, data: { ...node.data, isTyping: false } };
+          return {
+            ...node,
+            data: {
+              ...(node.data as NodeDataWithLabel),
+              isTyping: false,
+            },
+          };
         }
         return node;
       }),
@@ -114,5 +133,5 @@ export const useNodeAsEditor = ({ id, data }: UseNodeAsEditorParams) => {
     setTypingState(false);
   };
 
-  return { editor, isTyping, handleDoubleClick, handleBlur };
+  return { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData };
 };
