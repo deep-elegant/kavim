@@ -2,6 +2,11 @@ import { type AiModel } from '@/core/llm/aiModels';
 import { ChatOpenAI } from '@langchain/openai';
 import { type AIMessage, type AIMessageChunk } from '@langchain/core/messages';
 
+export type ChatMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+};
+
 const MODEL_SETTINGS: Record<
   AiModel,
   { envKey: () => string; placeholder: string; modelName: string; baseURL?: string }
@@ -51,11 +56,11 @@ const extractMessageContent = (message: AIMessage | AIMessageChunk): string => {
 
 export const generateAiResult = async ({
   model,
-  prompt,
+  messages,
   onChunk,
 }: {
   model: AiModel;
-  prompt: string;
+  messages: ChatMessage[];
   onChunk: (chunk: string) => void;
 }): Promise<void> => {
   const settings = MODEL_SETTINGS[model];
@@ -70,6 +75,10 @@ export const generateAiResult = async ({
     streaming: true,
     ...configuration,
   });
+
+  const prompt = messages
+    .map(({ role, content }) => `${role === 'user' ? 'User' : 'Assistant'}: ${content}`)
+    .join('\n\n');
 
   const stream = await llm.stream(prompt);
 
