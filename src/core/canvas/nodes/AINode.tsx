@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { type NodeProps, type Node } from '@xyflow/react';
+import { useReactFlow, type NodeProps, type Node } from '@xyflow/react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -110,6 +110,7 @@ const STATUS_STYLES: Record<AiStatus, string> = {
 };
 
 const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
+  const { setNodes } = useReactFlow();
   const { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData } = useNodeAsEditor({
     id,
     data,
@@ -171,13 +172,34 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
       const currentRequestId = requestIdRef.current + 1;
       requestIdRef.current = currentRequestId;
-      updateNodeData({ status: 'in-progress' });
+      updateNodeData({ status: 'in-progress', result: '' });
 
       try {
-        const generated = await generateAiResult({ model, prompt: trimmedPrompt });
+        await generateAiResult({
+          model,
+          prompt: trimmedPrompt,
+          onChunk: (chunk) => {
+            if (requestIdRef.current === currentRequestId) {
+              setNodes((nodes) =>
+                nodes.map((n) => {
+                  if (n.id === id) {
+                    return {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        result: (n.data.result ?? '') + chunk,
+                      },
+                    };
+                  }
+                  return n;
+                }),
+              );
+            }
+          },
+        });
 
         if (requestIdRef.current === currentRequestId) {
-          updateNodeData({ status: 'done', result: generated });
+          updateNodeData({ status: 'done' });
           lastPromptRef.current = prompt;
         }
       } catch (error) {
@@ -193,7 +215,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
         }
       }
     },
-    [model, updateNodeData],
+    [id, model, setNodes, updateNodeData],
   );
 
   useEffect(() => {

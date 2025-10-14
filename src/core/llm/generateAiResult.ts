@@ -1,22 +1,25 @@
 import { type AiModel } from '@/core/llm/aiModels';
 import { ChatOpenAI } from '@langchain/openai';
-import { AIMessage } from '@langchain/core/messages';
+import { type AIMessage, type AIMessageChunk } from '@langchain/core/messages';
 
-const MODEL_SETTINGS: Record<AiModel, { envKey: () => string; placeholder: string; modelName: string; baseURL?: string }> = {
+const MODEL_SETTINGS: Record<
+  AiModel,
+  { envKey: () => string; placeholder: string; modelName: string; baseURL?: string }
+> = {
   chatgpt: {
-    envKey: () => window.settingsStore.get("chatgpt")?.apiKey ?? "",
+    envKey: () => window.settingsStore.get('chatgpt')?.apiKey ?? '',
     placeholder: 'YOUR_OPENAI_API_KEY',
     modelName: 'gpt-4o-mini',
   },
   deepseek: {
-    envKey: () => window.settingsStore.get("deepseek")?.apiKey ?? "",
+    envKey: () => window.settingsStore.get('deepseek')?.apiKey ?? '',
     placeholder: 'YOUR_DEEPSEEK_API_KEY',
     modelName: 'deepseek-chat',
     baseURL: 'https://api.deepseek.com/v1',
   },
 };
 
-const extractMessageContent = (message: AIMessage): string => {
+const extractMessageContent = (message: AIMessage | AIMessageChunk): string => {
   const { content } = message;
 
   if (typeof content === 'string') {
@@ -46,7 +49,15 @@ const extractMessageContent = (message: AIMessage): string => {
   return '';
 };
 
-export const generateAiResult = async ({ model, prompt }: { model: AiModel; prompt: string }): Promise<string> => {
+export const generateAiResult = async ({
+  model,
+  prompt,
+  onChunk,
+}: {
+  model: AiModel;
+  prompt: string;
+  onChunk: (chunk: string) => void;
+}): Promise<void> => {
   const settings = MODEL_SETTINGS[model];
   const apiKey = settings.envKey();
 
@@ -56,11 +67,14 @@ export const generateAiResult = async ({ model, prompt }: { model: AiModel; prom
     apiKey,
     model: settings.modelName,
     temperature: 0.2,
+    streaming: true,
     ...configuration,
   });
 
-  const response = await llm.invoke(prompt);
-  const content = extractMessageContent(response);
+  const stream = await llm.stream(prompt);
 
-  return content.trim();
+  for await (const chunk of stream) {
+    const content = extractMessageContent(chunk);
+    onChunk(content);
+  }
 };
