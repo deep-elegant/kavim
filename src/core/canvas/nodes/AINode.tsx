@@ -1,18 +1,26 @@
-import React, { memo, useCallback, useMemo, useState, type ChangeEvent } from 'react';
-import { type NodeProps, type Node } from '@xyflow/react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useReactFlow, type NodeProps, type Node } from '@xyflow/react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
 
 import NodeInteractionOverlay from './NodeInteractionOverlay';
 import { type DrawableNode } from './DrawableNode';
 import { MinimalTiptap } from '@/components/ui/minimal-tiptap';
 import { cn } from '@/utils/tailwind';
 import { useNodeAsEditor } from '@/helpers/useNodeAsEditor';
+import { AI_MODELS, type AiModel } from '../../llm/aiModels';
+import { generateAiResult } from '@/core/llm/generateAiResult';
+import { SingleLlmSelect } from '@/core/llm/SingleLlmSelect';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 
-const AI_MODELS = [
-  { value: 'deepseek', label: 'DeepSeek' },
-  { value: 'chatgpt', label: 'ChatGPT' },
-] as const;
-
-type AiModel = (typeof AI_MODELS)[number]['value'];
 export type AiStatus = 'not-started' | 'in-progress' | 'done';
 
 export type AiNodeData = {
@@ -27,6 +35,13 @@ export type AiNodeType = Node<AiNodeData, 'ai-node'>;
 
 const MIN_WIDTH = 240;
 const MIN_HEIGHT = 180;
+
+const aiNodeFormSchema = z.object({
+  model: z.enum(Object.keys(AI_MODELS) as [string, ...string[]]),
+  prompt: z.string(),
+});
+
+type AiNodeFormValues = z.infer<typeof aiNodeFormSchema>;
 
 export const aiNodeDrawable: DrawableNode<AiNodeType> = {
   onPaneMouseDown: (id, position) => ({
@@ -95,21 +110,35 @@ const STATUS_STYLES: Record<AiStatus, string> = {
 };
 
 const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
-  const { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData } =
-    useNodeAsEditor({ id, data });
+  const { setNodes } = useReactFlow();
+  const { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData } = useNodeAsEditor({
+    id,
+    data,
+  });
   const model = data.model ?? 'deepseek';
   const status = data.status ?? 'not-started';
   const result = data.result ?? '';
   const label = data.label ?? '';
 
-  const [isPromptOpen, setPromptOpen] = useState(false);
-
-  const handleModelChange = useCallback(
-    (event: ChangeEvent<HTMLSelectElement>) => {
-      updateNodeData({ model: event.target.value as AiModel });
+  const form = useForm<AiNodeFormValues>({
+    resolver: zodResolver(aiNodeFormSchema),
+    values: {
+      model,
+      prompt: label,
     },
-    [updateNodeData],
-  );
+  });
+
+  const watchedModel = form.watch('model');
+  useEffect(() => {
+    if (data.model !== watchedModel) {
+      updateNodeData({ model: watchedModel as AiModel });
+    }
+  }, [watchedModel, updateNodeData, data.model]);
+
+  const [isPromptOpen, setPromptOpen] = useState(false);
+  const requestIdRef = useRef(0);
+  const lastPromptRef = useRef(label);
+  const wasTypingRef = useRef(isTyping);
 
   const renderPromptContent = useMemo(
     () => (
@@ -132,6 +161,73 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     [label],
   );
 
+  const runPrompt = useCallback(
+    async (prompt: string) => {
+      const trimmedPrompt = prompt.trim();
+      if (trimmedPrompt.length === 0) {
+        lastPromptRef.current = prompt;
+        updateNodeData({ status: 'not-started', result: '' });
+        return;
+      }
+
+      const currentRequestId = requestIdRef.current + 1;
+      requestIdRef.current = currentRequestId;
+      updateNodeData({ status: 'in-progress', result: '' });
+
+      try {
+        await generateAiResult({
+          model,
+          prompt: trimmedPrompt,
+          onChunk: (chunk) => {
+            if (requestIdRef.current === currentRequestId) {
+              setNodes((nodes) =>
+                nodes.map((n) => {
+                  if (n.id === id) {
+                    return {
+                      ...n,
+                      data: {
+                        ...n.data,
+                        result: (n.data.result ?? '') + chunk,
+                      },
+                    };
+                  }
+                  return n;
+                }),
+              );
+            }
+          },
+        });
+
+        if (requestIdRef.current === currentRequestId) {
+          updateNodeData({ status: 'done' });
+          lastPromptRef.current = prompt;
+        }
+      } catch (error) {
+        console.error('Failed to generate AI result', error);
+
+        if (requestIdRef.current === currentRequestId) {
+          updateNodeData({
+            status: 'done',
+            result:
+              'Unable to generate a response. Please verify your API configuration and try again.',
+          });
+          lastPromptRef.current = prompt;
+        }
+      }
+    },
+    [id, model, setNodes, updateNodeData],
+  );
+
+  useEffect(() => {
+    if (wasTypingRef.current && !isTyping) {
+      if (label !== lastPromptRef.current && label !== '') {
+        void runPrompt(label);
+      }
+    }
+
+    wasTypingRef.current = isTyping;
+  }, [isTyping, label, runPrompt]);
+
   return (
     <NodeInteractionOverlay
       isActive={selected}
@@ -144,40 +240,61 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       <div
         className="flex h-full w-full flex-col gap-3 rounded-lg border border-border bg-white p-3 shadow"
         onDoubleClick={handleDoubleClick}
-        onBlur={handleBlur}
         role="presentation"
       >
         {isTyping ? (
-          <div className="flex h-full w-full flex-col gap-3" onMouseDown={(e) => e.stopPropagation()}>
-            <div className="flex flex-col gap-1">
-              <label htmlFor={`ai-node-model-${id}`} className="text-xs font-medium text-slate-600">
-                Model
-              </label>
-              <select
-                id={`ai-node-model-${id}`}
-                value={model}
-                onChange={handleModelChange}
-                className="h-9 rounded-md border border-slate-300 px-2 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
-              >
-                {AI_MODELS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+          <Form {...form}>
+            <div
+              className="flex h-full w-full flex-col gap-3"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <FormField
+                control={form.control}
+                name="model"
+                render={({ field }) => (
+                  <FormItem className="space-y-1">
+                    <FormLabel className="text-xs font-medium text-slate-600">Model</FormLabel>
+                    <FormControl>
+                      <SingleLlmSelect value={field.value} onChange={field.onChange} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="prompt"
+                render={() => (
+                  <FormItem className="flex h-full flex-col space-y-0">
+                    <FormLabel className="text-xs font-medium text-slate-600">Prompt</FormLabel>
+                    <FormControl className="mt-1 min-h-[120px] flex-1">
+                      <div className="h-full overflow-hidden rounded-md border border-slate-300">
+                        <MinimalTiptap
+                          editor={editor}
+                          theme="transparent"
+                          className="h-full w-full"
+                        />
+                      </div>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
-            <div className="flex h-full flex-col">
-              <span className="text-xs font-medium text-slate-600">Prompt</span>
-              <div className="mt-1 min-h-[120px] flex-1 overflow-hidden rounded-md border border-slate-300">
-                <MinimalTiptap editor={editor} theme="transparent" className="h-full w-full" />
-              </div>
-            </div>
-          </div>
+          </Form>
         ) : (
-          <div className="flex h-full w-full flex-col gap-3" onMouseDown={(e) => e.stopPropagation()}>
+          <div
+            className="flex h-full w-full flex-col gap-3"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-slate-600">Status</span>
-              <span className={cn('rounded-full px-2 py-0.5 text-xs font-semibold', STATUS_STYLES[status])}>
+              <span
+                className={cn(
+                  'rounded-full px-2 py-0.5 text-xs font-semibold',
+                  STATUS_STYLES[status],
+                )}
+              >
                 {STATUS_LABELS[status]}
               </span>
             </div>
@@ -193,7 +310,9 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                 <span>Prompt</span>
                 <span className="text-xs text-slate-500">{isPromptOpen ? 'Hide' : 'Show'}</span>
               </button>
-              {isPromptOpen && <div className="border-t border-slate-200">{renderPromptContent}</div>}
+              {isPromptOpen && (
+                <div className="border-t border-slate-200">{renderPromptContent}</div>
+              )}
             </div>
             <div className="flex flex-col gap-1">
               <span className="text-xs font-medium text-slate-600">Result</span>
@@ -203,7 +322,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                   result ? 'text-slate-900' : 'text-slate-500',
                 )}
               >
-                {result ? result : 'No result yet.'}
+                {result || 'No result yet.'}
               </div>
             </div>
           </div>
