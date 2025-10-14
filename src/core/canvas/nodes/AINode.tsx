@@ -1,8 +1,9 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useReactFlow, type NodeProps, type Node } from '@xyflow/react';
+import { useReactFlow, type NodeProps, type Node, type Edge } from '@xyflow/react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
+import { Split } from 'lucide-react';
 
 import NodeInteractionOverlay from './NodeInteractionOverlay';
 import { type DrawableNode } from './DrawableNode';
@@ -10,7 +11,7 @@ import { MinimalTiptap } from '@/components/ui/minimal-tiptap';
 import { cn } from '@/utils/tailwind';
 import { useNodeAsEditor } from '@/helpers/useNodeAsEditor';
 import { AI_MODELS, type AiModel } from '../../llm/aiModels';
-import { generateAiResult } from '@/core/llm/generateAiResult';
+import { generateAiResult, type ChatMessage } from '@/core/llm/generateAiResult';
 import { SingleLlmSelect } from '@/core/llm/SingleLlmSelect';
 import {
   Form,
@@ -20,6 +21,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { createDefaultEditableEdgeData } from '../edges/EditableEdge';
 
 export type AiStatus = 'not-started' | 'in-progress' | 'done';
 
@@ -35,6 +37,14 @@ export type AiNodeType = Node<AiNodeData, 'ai-node'>;
 
 const MIN_WIDTH = 240;
 const MIN_HEIGHT = 180;
+const NODE_HORIZONTAL_GAP = 80;
+
+const htmlToPlainText = (value: string): string =>
+  value
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 const aiNodeFormSchema = z.object({
   model: z.enum(Object.keys(AI_MODELS) as [string, ...string[]]),
@@ -110,7 +120,7 @@ const STATUS_STYLES: Record<AiStatus, string> = {
 };
 
 const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
-  const { setNodes } = useReactFlow();
+  const { setNodes, setEdges, getNodes, getEdges } = useReactFlow();
   const { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData } = useNodeAsEditor({
     id,
     data,
@@ -140,6 +150,158 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   const lastPromptRef = useRef(label);
   const wasTypingRef = useRef(isTyping);
 
+  const buildChatHistory = useCallback(
+    (promptHtml: string): ChatMessage[] => {
+      const flowNodes = getNodes();
+      const flowEdges = getEdges();
+
+      const nodeMap = new Map(flowNodes.map((node) => [node.id, node] as const));
+      const incomingMap = new Map<string, Edge[]>();
+
+      flowEdges.forEach((edge) => {
+        if (!edge.target) {
+          return;
+        }
+        const existing = incomingMap.get(edge.target);
+        if (existing) {
+          existing.push(edge);
+        } else {
+          incomingMap.set(edge.target, [edge]);
+        }
+      });
+
+      const visited = new Set<string>();
+
+      const collectFromNode = (nodeId: string): ChatMessage[] => {
+        if (visited.has(nodeId)) {
+          return [];
+        }
+
+        visited.add(nodeId);
+        const node = nodeMap.get(nodeId);
+        if (!node || node.type !== 'ai-node') {
+          return [];
+        }
+
+        const messagesBefore = (incomingMap.get(nodeId) ?? []).flatMap((incomingEdge) => {
+          const sourceId = incomingEdge.source;
+          if (typeof sourceId !== 'string') {
+            return [];
+          }
+
+          return collectFromNode(sourceId);
+        });
+
+        const nodeData = node.data as AiNodeData | undefined;
+        const promptText = htmlToPlainText(nodeData?.label ?? '');
+        const resultText = (nodeData?.result ?? '').trim();
+
+        const messages: ChatMessage[] = [];
+        if (promptText) {
+          messages.push({ role: 'user', content: promptText });
+        }
+        if (resultText) {
+          messages.push({ role: 'assistant', content: resultText });
+        }
+
+        return [...messagesBefore, ...messages];
+      };
+
+      const history = (incomingMap.get(id) ?? []).flatMap((edge) => {
+        const sourceId = edge.source;
+        if (typeof sourceId !== 'string') {
+          return [];
+        }
+
+        return collectFromNode(sourceId);
+      });
+      const promptText = htmlToPlainText(promptHtml);
+
+      if (promptText) {
+        history.push({ role: 'user', content: promptText });
+      }
+
+      return history;
+    },
+    [getEdges, getNodes, id],
+  );
+
+  const handleCreateSplit = useCallback(() => {
+    const flowNodes = getNodes();
+    const currentNode = flowNodes.find((node) => node.id === id);
+
+    if (!currentNode) {
+      return;
+    }
+
+    const width = Number(currentNode.width ?? currentNode.style?.width ?? MIN_WIDTH);
+    const newNodeId = crypto.randomUUID();
+    const newPosition = {
+      x: currentNode.position.x + width + NODE_HORIZONTAL_GAP,
+      y: currentNode.position.y,
+    };
+
+    const currentNodeData = currentNode.data as AiNodeData | undefined;
+    const newNodeData: AiNodeData = {
+      label: '',
+      isTyping: true,
+      model: currentNodeData?.model ?? model,
+      status: 'not-started',
+      result: '',
+    };
+
+    setNodes((existing) => {
+      const clearedSelection = existing.map((node) => {
+        if (node.id === id && node.type === 'ai-node') {
+          return {
+            ...node,
+            selected: false,
+            data: {
+              ...(node.data as AiNodeData),
+              isTyping: false,
+            },
+          } as AiNodeType;
+        }
+
+        if (node.selected) {
+          return {
+            ...node,
+            selected: false,
+          };
+        }
+
+        return node;
+      });
+
+      return [
+        ...clearedSelection,
+        {
+          id: newNodeId,
+          type: 'ai-node',
+          position: newPosition,
+          data: newNodeData,
+          width: MIN_WIDTH,
+          height: MIN_HEIGHT,
+          style: { width: MIN_WIDTH, height: MIN_HEIGHT },
+          selected: true,
+        } as AiNodeType,
+      ];
+    });
+
+    setEdges((prevEdges) => [
+      ...prevEdges,
+      {
+        id: crypto.randomUUID(),
+        source: id,
+        sourceHandle: 'right-source',
+        target: newNodeId,
+        targetHandle: 'left-target',
+        type: 'editable',
+        data: createDefaultEditableEdgeData(),
+      },
+    ]);
+  }, [getNodes, id, model, setEdges, setNodes]);
+
   const renderPromptContent = useMemo(
     () => (
       <div
@@ -163,8 +325,8 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
   const runPrompt = useCallback(
     async (prompt: string) => {
-      const trimmedPrompt = prompt.trim();
-      if (trimmedPrompt.length === 0) {
+      const promptText = htmlToPlainText(prompt);
+      if (!promptText) {
         lastPromptRef.current = prompt;
         updateNodeData({ status: 'not-started', result: '' });
         return;
@@ -175,9 +337,11 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       updateNodeData({ status: 'in-progress', result: '' });
 
       try {
+        const messages = buildChatHistory(prompt);
+
         await generateAiResult({
           model,
-          prompt: trimmedPrompt,
+          messages,
           onChunk: (chunk) => {
             if (requestIdRef.current === currentRequestId) {
               setNodes((nodes) =>
@@ -215,7 +379,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
         }
       }
     },
-    [id, model, setNodes, updateNodeData],
+    [buildChatHistory, id, model, setNodes, updateNodeData],
   );
 
   useEffect(() => {
@@ -237,9 +401,21 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       className="text-slate-900"
       editor={editor}
     >
+      <button
+        type="button"
+        aria-label="Branch prompt"
+        className="absolute -right-3 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600 shadow transition hover:bg-slate-100"
+        onClick={(event) => {
+          event.stopPropagation();
+          handleCreateSplit();
+        }}
+      >
+        <Split className="h-3.5 w-3.5" />
+      </button>
       <div
         className="flex h-full w-full flex-col gap-3 rounded-lg border border-border bg-white p-3 shadow"
         onDoubleClick={handleDoubleClick}
+        onBlur={handleBlur}
         role="presentation"
       >
         {isTyping ? (
