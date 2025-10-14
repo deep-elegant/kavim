@@ -89,6 +89,23 @@ const CanvasInner = () => {
     [],
   );
 
+  const onPaneClick = useCallback(() => {
+    setNodes((currentNodes) =>
+      currentNodes.map((node) => {
+        if (node.data.isTyping) {
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              isTyping: false,
+            },
+          };
+        }
+        return node;
+      }),
+    );
+  }, [setNodes]);
+
   const onConnect = useCallback(
     (params: Connection) =>
       setEdges((eds) =>
@@ -216,6 +233,7 @@ const CanvasInner = () => {
         onConnect={onConnect}
         onEdgeUpdate={handleEdgeUpdate}
         edgeTypes={edgeTypes}
+        onPaneClick={onPaneClick}
         onMouseDown={handlePaneMouseDown}
         onPaneMouseMove={handlePaneMouseMove}
         onMouseUp={handlePaneMouseUp}
