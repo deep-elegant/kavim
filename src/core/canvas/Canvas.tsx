@@ -35,6 +35,7 @@ import {
 import '@xyflow/react/dist/style.css';
 
 import StickyNoteNode, { stickyNoteDrawable, type StickyNoteNodeType } from './nodes/StickyNoteNode';
+import AiNode, { aiNodeDrawable, type AiNodeType } from './nodes/AINode';
 import ShapeNodeComponent, { shapeDrawable, type ShapeNode } from './nodes/ShapeNode';
 import TextNodeComponent, { textDrawable, type TextNode } from './nodes/TextNode';
 import { type DrawableNode } from './nodes/DrawableNode';
@@ -46,7 +47,7 @@ import EditableEdge, {
 
 type ToolId = 'sticky-note' | 'shape' | 'arrow' | 'prompt-node' | 'text';
 
-type CanvasNode = StickyNoteNode | ShapeNode | TextNode;
+type CanvasNode = StickyNoteNodeType | ShapeNode | TextNode | AiNodeType;
 
 const tools: { id: ToolId; label: string; icon: ComponentType<{ className?: string }> }[] = [
   { id: 'sticky-note', label: 'Sticky Note', icon: StickyNote },
@@ -60,15 +61,17 @@ const nodeTypes = {
   'sticky-note': StickyNoteNode,
   'shape-node': ShapeNodeComponent,
   'text-node': TextNodeComponent,
+  'ai-node': AiNode,
 };
 
 const drawableNodeTools: Partial<Record<ToolId, DrawableNode>> = {
   'sticky-note': stickyNoteDrawable,
   shape: shapeDrawable,
   text: textDrawable,
+  'prompt-node': aiNodeDrawable,
 };
 
-const drawingTools: ToolId[] = ['sticky-note', 'shape', 'text'];
+const drawingTools: ToolId[] = ['sticky-note', 'shape', 'text', 'prompt-node'];
 
 const CanvasInner = () => {
   const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([]);
