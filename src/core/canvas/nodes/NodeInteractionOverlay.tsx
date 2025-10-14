@@ -70,7 +70,12 @@ const NodeInteractionOverlay = ({
 
   return (
     <div
-      className={cn('relative h-full w-full', className, isEditing && 'cursor-text')}
+      className={cn(
+        'relative h-full w-full',
+        className,
+        isEditing && 'cursor-text',
+        shouldShowInteractions && 'cursor-grab active:cursor-grabbing',
+      )}
       style={containerStyle}
     >
       {editor && (
