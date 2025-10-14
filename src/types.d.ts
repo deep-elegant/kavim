@@ -21,4 +21,8 @@ interface ElectronWindow {
 declare interface Window {
   themeMode: ThemeModeContext;
   electronWindow: ElectronWindow;
+  settingsStore: {
+      get: (key: "deepseek" | "chatgpt") => { apiKey: string } | undefined;
+      set: (key: "deepseek" | "chatgpt", value: { apiKey: string }) => void;
+  };
 }

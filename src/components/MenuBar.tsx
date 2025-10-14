@@ -4,6 +4,7 @@ import { SaveModal } from "./SaveModal";
 import { SettingsModal } from "./SettingsModal";
 
 
+
 type DirectoryHandle = {
   name?: string;
 };
@@ -19,9 +20,23 @@ export default function MenuBar() {
   const [folderPickerMessage, setFolderPickerMessage] = useState<string>("");
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [deepseekKey, setDeepseekKey] = useState("");
-  const [chatgptKey, setChatgptKey] = useState("");
+  const [deepseekKey, setDeepseekKey] = useState(
+    () => window.settingsStore.get("deepseek")?.apiKey ?? "",
+  );
+  const [chatgptKey, setChatgptKey] = useState(
+    () => window.settingsStore.get("chatgpt")?.apiKey ?? "",
+  );
   const [settingsMessage, setSettingsMessage] = useState<string>("");
+
+  React.useEffect(() => {
+    if (isSettingsOpen) {
+      const storedDeepseekKey = window.settingsStore.get("deepseek")?.apiKey ?? "";
+      const storedChatgptKey = window.settingsStore.get("chatgpt")?.apiKey ?? "";
+      setDeepseekKey(storedDeepseekKey);
+      setChatgptKey(storedChatgptKey);
+      setSettingsMessage("");
+    }
+  }, [isSettingsOpen]);
 
   const combinedStatus = useMemo(() => {
     return [loadMessage, saveMessage, settingsMessage].filter(Boolean).join(" · ");
@@ -79,8 +94,15 @@ export default function MenuBar() {
   };
 
   const handleSettingsSave = () => {
-    setIsSettingsOpen(false);
-    setSettingsMessage("Settings updated for DeepSeek and ChatGPT.");
+    try {
+      window.settingsStore.set("deepseek", { apiKey: deepseekKey });
+      window.settingsStore.set("chatgpt", { apiKey: chatgptKey });
+      setIsSettingsOpen(false);
+      setSettingsMessage("API keys saved locally.");
+    } catch (error) {
+      console.error("Failed to persist API keys", error);
+      setSettingsMessage("Unable to save API keys. Please try again.");
+    }
   };
 
   return (
