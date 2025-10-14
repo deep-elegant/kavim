@@ -14,7 +14,7 @@ import {
   type XYPosition,
   EdgeLabelRenderer,
 } from '@xyflow/react';
-import { ArrowRight, Minus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Minus } from 'lucide-react';
 
 import { TiptapToolbar, type ToolbarItem } from '@/components/ui/minimal-tiptap/TiptapToolbar';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -42,6 +42,9 @@ const CONTROL_POINT_RADIUS = 6;
 const CONTROL_POINT_HIT_RADIUS = 14;
 const SPLINE_TENSION = 1;
 const EDGE_TOOLBAR_VERTICAL_OFFSET = 32;
+
+const ARROW_HEAD_LEFT = 'M12,0 L12,12 L0,6 z';
+const ARROW_HEAD_RIGHT = 'M0,0 L0,12 L12,6 z';
 
 export const createDefaultEditableEdgeData = (): EditableEdgeData => ({
   controlPoints: [],
@@ -130,6 +133,9 @@ const EditableEdge = memo(
   }: EditableEdgeProps) => {
     const { setEdges, screenToFlowPosition } = useReactFlow();
     const store = useStoreApi();
+
+    const isSourceLeft = sourceX < targetX;
+    let [sourceMarkerPath, targetMarkerPath] = [ARROW_HEAD_LEFT, ARROW_HEAD_RIGHT];
 
     const controlPoints = data?.controlPoints ?? [];
     const sourceMarker = data?.sourceMarker ?? DEFAULT_MARKER;
@@ -298,8 +304,10 @@ const EditableEdge = memo(
       [updateEdgeData],
     );
 
-    const edgeToolbarItems = useMemo<ToolbarItem[]>(
-      () => [
+    const edgeToolbarItems = useMemo<ToolbarItem[]>(() => {
+      const [SourceArrowIcon, TargetArrowIcon] = isSourceLeft ? [ArrowLeft, ArrowRight] : [ArrowRight, ArrowLeft];
+
+      return [
         {
           type: 'custom',
           id: 'source-marker',
@@ -318,7 +326,7 @@ const EditableEdge = memo(
                   <Minus className="h-4 w-4" />
                 </ToggleGroupItem>
                 <ToggleGroupItem value="arrow" aria-label="Source arrow">
-                  <ArrowRight className="h-4 w-4" />
+                  <SourceArrowIcon className="h-4 w-4" />
                 </ToggleGroupItem>
               </ToggleGroup>
             </div>
@@ -342,7 +350,7 @@ const EditableEdge = memo(
                   <Minus className="h-4 w-4" />
                 </ToggleGroupItem>
                 <ToggleGroupItem value="arrow" aria-label="Target arrow">
-                  <ArrowRight className="h-4 w-4" />
+                  <TargetArrowIcon className="h-4 w-4" />
                 </ToggleGroupItem>
               </ToggleGroup>
             </div>
@@ -387,18 +395,18 @@ const EditableEdge = memo(
             </div>
           ),
         },
-      ],
-      [
-        edgeColor,
-        handleColorChange,
-        handleSourceMarkerChange,
-        handleStyleTypeChange,
-        handleTargetMarkerChange,
-        sourceMarker,
-        styleType,
-        targetMarker,
-      ],
-    );
+      ];
+    }, [
+      edgeColor,
+      handleColorChange,
+      handleSourceMarkerChange,
+      handleStyleTypeChange,
+      handleTargetMarkerChange,
+      sourceMarker,
+      styleType,
+      targetMarker,
+      isSourceLeft,
+    ]);
 
     const handleControlPointerDown = useCallback(
       (event: ReactPointerEvent<SVGCircleElement>, index: number) => {
@@ -510,7 +518,7 @@ const EditableEdge = memo(
               orient="auto"
               markerUnits="strokeWidth"
             >
-              <path d="M0,0 L0,12 L12,6 z" fill={edgeColor} />
+              <path d={sourceMarkerPath} fill={edgeColor} />
             </marker>
           )}
           {showTargetArrow && (
@@ -523,7 +531,7 @@ const EditableEdge = memo(
               orient="auto"
               markerUnits="strokeWidth"
             >
-              <path d="M0,0 L0,12 L12,6 z" fill={edgeColor} />
+              <path d={targetMarkerPath} fill={edgeColor} />
             </marker>
           )}
         </defs>
