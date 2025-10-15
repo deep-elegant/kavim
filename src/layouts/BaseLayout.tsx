@@ -9,7 +9,7 @@ export default function BaseLayout({
 }) {
   return (
     <div className="flex h-screen flex-col">
-      <DragWindowRegion title="electron-shadcn" />
+      <DragWindowRegion title="DeepElegant - Yachad" />
       <MenuBar />
       <main className="flex-1 overflow-hidden ">{children}</main>
     </div>
