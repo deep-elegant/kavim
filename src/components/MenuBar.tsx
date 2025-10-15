@@ -46,7 +46,9 @@ export default function MenuBar() {
 
   const handleLoadClick = useCallback(async () => {
     setLoadMessage("");
-    const filePath = await window.dialog.openFile();
+    const filePath = await window.fileSystem.openFile({
+      filters: [{ name: "Pak Files", extensions: ["pak"] }],
+    });
     if (!filePath) {
       setLoadMessage("No file selected.");
       return;
@@ -74,7 +76,7 @@ export default function MenuBar() {
 
   const handleFolderBrowse = useCallback(async () => {
     try {
-      const directoryHandle = await window.dialog.openDirectory();
+      const directoryHandle = await window.fileSystem.openDirectory();
       if (directoryHandle) {
         setSaveFolder(directoryHandle);
         setFolderPickerMessage(`Selected folder: ${directoryHandle}`);
