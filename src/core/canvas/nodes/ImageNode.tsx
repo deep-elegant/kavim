@@ -16,11 +16,12 @@ export type ImageNodeType = Node<ImageNodeData, 'image-node'>;
 export const IMAGE_NODE_MIN_WIDTH = 120;
 export const IMAGE_NODE_MIN_HEIGHT = 120;
 
-const ImageNode = memo(({ data, selected }: NodeProps<ImageNodeType>) => {
+const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeType>) => {
   const { src, alt, fileName } = data;
 
   return (
     <NodeInteractionOverlay
+      nodeId={id}
       isActive={selected}
       minWidth={IMAGE_NODE_MIN_WIDTH}
       minHeight={IMAGE_NODE_MIN_HEIGHT}

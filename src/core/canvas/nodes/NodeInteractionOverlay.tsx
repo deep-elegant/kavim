@@ -1,5 +1,12 @@
 import React, { type PropsWithChildren, useMemo } from 'react';
-import { Handle, NodeResizer, Position } from '@xyflow/react';
+import {
+  Handle,
+  NodeResizer,
+  Position,
+  useConnection,
+  useInternalNode,
+  useStore,
+} from '@xyflow/react';
 import { type Editor } from '@tiptap/react';
 
 import { cn } from '@/utils/tailwind';
@@ -39,7 +46,10 @@ const sharedHandleStyle: React.CSSProperties = {
   boxShadow: '0 0 0 2px rgb(191 219 254 / 0.45)',
 };
 
+const DEFAULT_CONNECTION_RADIUS = 30;
+
 export type NodeInteractionOverlayProps = PropsWithChildren<{
+  nodeId: string;
   isActive: boolean;
   isEditing?: boolean;
   minWidth?: number;
@@ -51,6 +61,7 @@ export type NodeInteractionOverlayProps = PropsWithChildren<{
 
 const NodeInteractionOverlay = ({
   children,
+  nodeId,
   isActive,
   isEditing = false,
   minWidth,
@@ -60,6 +71,36 @@ const NodeInteractionOverlay = ({
   toolbarItems,
 }: NodeInteractionOverlayProps) => {
   const shouldShowInteractions = isActive && !isEditing;
+  const connectionRadius = useStore(
+    (state) => state.connectionRadius ?? DEFAULT_CONNECTION_RADIUS,
+  );
+  const node = useInternalNode(nodeId);
+  const connectionInfo = useConnection((connection) => ({
+    inProgress: connection.inProgress,
+    fromNodeId: connection.fromNode?.id ?? null,
+    toNodeId: connection.toNode?.id ?? null,
+    pointerPosition: connection.to ?? null,
+  }));
+  const { inProgress, fromNodeId, toNodeId, pointerPosition } = connectionInfo;
+  const isPointerNearNode = useMemo(() => {
+    if (!inProgress || !node || !pointerPosition || toNodeId || !node.width || !node.height) {
+      return false;
+    }
+
+    const { x: pointerX, y: pointerY } = pointerPosition;
+    const { x: nodeX, y: nodeY } = node.position;
+
+    return (
+      pointerX >= nodeX - connectionRadius &&
+      pointerX <= nodeX + node.width + connectionRadius &&
+      pointerY >= nodeY - connectionRadius &&
+      pointerY <= nodeY + node.height + connectionRadius
+    );
+  }, [inProgress, node, pointerPosition, toNodeId, connectionRadius]);
+  const shouldShowHandles =
+    shouldShowInteractions ||
+    (inProgress &&
+      (fromNodeId === nodeId || toNodeId === nodeId || isPointerNearNode));
   const containerStyle = useMemo<React.CSSProperties>(
     () => ({
       minWidth,
@@ -111,7 +152,7 @@ const NodeInteractionOverlay = ({
             position={position}
             className={cn(
               'transition-opacity',
-              shouldShowInteractions
+              shouldShowHandles
                 ? 'pointer-events-auto opacity-100'
                 : 'pointer-events-none opacity-0',
             )}
@@ -123,7 +164,7 @@ const NodeInteractionOverlay = ({
             position={position}
             className={cn(
               'transition-opacity',
-              shouldShowInteractions
+              shouldShowHandles
                 ? 'pointer-events-auto opacity-100'
                 : 'pointer-events-none opacity-0',
             )}

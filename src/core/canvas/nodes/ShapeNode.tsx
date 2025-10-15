@@ -1,16 +1,20 @@
-import React, {
-  memo,
-  useEffect,
-  useRef,
-  type KeyboardEvent,
-  type MouseEvent,
-} from 'react';
-import { type NodeProps, useReactFlow, type Node } from '@xyflow/react';
+import React, { memo, useCallback, useMemo } from 'react';
+import { type NodeProps, type Node } from '@xyflow/react';
 
 import { cn } from '@/utils/tailwind';
 
 import NodeInteractionOverlay from './NodeInteractionOverlay';
 import { type DrawableNode } from './DrawableNode';
+import { useNodeAsEditor } from '@/helpers/useNodeAsEditor';
+import { MinimalTiptap } from '@/components/ui/minimal-tiptap';
+import {
+  defaultToolbarItems,
+  type ToolbarItem,
+} from '@/components/ui/minimal-tiptap/TiptapToolbar';
+import {
+  SimpleColorPicker,
+  type ColorStyle,
+} from '@/components/ui/simple-color-picker';
 
 export type ShapeType = 'circle' | 'rectangle';
 
@@ -18,6 +22,7 @@ export type ShapeNodeData = {
   label: string;
   shapeType: ShapeType;
   isTyping?: boolean;
+  color?: ColorStyle;
 };
 
 export type ShapeNode = Node<ShapeNodeData, 'shape-node'>;
@@ -26,12 +31,18 @@ export const CIRCLE_MIN_SIZE = 80;
 export const RECTANGLE_MIN_WIDTH = 120;
 export const RECTANGLE_MIN_HEIGHT = 60;
 
+const defaultColor: ColorStyle = {
+  background: '#EFF6FF', // blue-50
+  border: '#93C5FD', // blue-300
+  text: '#1E293B', // slate-900
+};
+
 export const shapeDrawable: DrawableNode<ShapeNode> = {
   onPaneMouseDown: (id, position) => ({
     id,
     type: 'shape-node',
     position,
-    data: { label: '', shapeType: 'circle', isTyping: false },
+    data: { label: '', shapeType: 'circle', isTyping: false, color: defaultColor },
     width: CIRCLE_MIN_SIZE,
     height: CIRCLE_MIN_SIZE,
     style: { width: CIRCLE_MIN_SIZE, height: CIRCLE_MIN_SIZE },
@@ -83,78 +94,32 @@ export const shapeDrawable: DrawableNode<ShapeNode> = {
 };
 
 const ShapeNodeComponent = memo(({ id, data, selected }: NodeProps<ShapeNode>) => {
-  const { setNodes } = useReactFlow();
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const { label = '', isTyping = false, shapeType } = data;
+  const { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData } =
+    useNodeAsEditor({ id, data });
+  const { label = '', shapeType } = data;
+  const color = data.color ?? defaultColor;
 
-  useEffect(() => {
-    if (isTyping && textareaRef.current) {
-      textareaRef.current.focus();
-      const { length } = textareaRef.current.value;
-      textareaRef.current.setSelectionRange(length, length);
-    }
-  }, [isTyping]);
+  const handleColorChange = useCallback(
+    (value: ColorStyle) => {
+      updateNodeData({ color: value });
+    },
+    [updateNodeData],
+  );
 
-  const setTypingState = (value: boolean) => {
-    setNodes((nodes) =>
-      nodes.map((node) => {
-        if (node.id === id) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              isTyping: value,
-            },
-          };
-        }
-
-        if (value && node.data?.isTyping) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              isTyping: false,
-            },
-          };
-        }
-
-        return node;
-      }),
-    );
-  };
-
-  const handleLabelChange = (value: string) => {
-    setNodes((nodes) =>
-      nodes.map((node) =>
-        node.id === id
-          ? {
-              ...node,
-              data: {
-                ...node.data,
-                label: value,
-              },
-            }
-          : node,
-      ),
-    );
-  };
-
-  const handleClick = (event: MouseEvent<HTMLDivElement>) => {
-    event.stopPropagation();
-    if (!isTyping) {
-      setTypingState(true);
-    }
-  };
-
-  const handleBlur = () => {
-    setTypingState(false);
-  };
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Escape') {
-      event.currentTarget.blur();
-    }
-  };
+  const toolbarItems = useMemo<ToolbarItem[]>(
+    () => [
+      ...defaultToolbarItems,
+      { type: 'separator', id: 'shape-node-color-separator' },
+      {
+        type: 'custom',
+        id: 'shape-node-color-picker',
+        render: () => (
+          <SimpleColorPicker color={color} setColor={handleColorChange} />
+        ),
+      },
+    ],
+    [color, handleColorChange],
+  );
 
   const minWidth = shapeType === 'circle' ? CIRCLE_MIN_SIZE : RECTANGLE_MIN_WIDTH;
   const minHeight = shapeType === 'circle' ? CIRCLE_MIN_SIZE : RECTANGLE_MIN_HEIGHT;
@@ -162,47 +127,68 @@ const ShapeNodeComponent = memo(({ id, data, selected }: NodeProps<ShapeNode>) =
 
   return (
     <NodeInteractionOverlay
+      nodeId={id}
       isActive={selected}
       isEditing={isTyping}
       minWidth={minWidth}
       minHeight={minHeight}
+      editor={editor}
+      toolbarItems={toolbarItems}
     >
       <div
         className={cn(
-          'relative flex h-full w-full overflow-hidden border bg-white text-slate-900 shadow-sm transition-colors',
-          shapeType === 'circle'
-            ? 'rounded-full border-blue-300 bg-blue-50'
-            : 'rounded-lg border-slate-300 bg-slate-50',
+          'relative flex h-full w-full overflow-hidden border text-slate-900 shadow-sm transition-colors',
+          shapeType === 'circle' ? 'rounded-full' : 'rounded-lg',
         )}
-        onClick={handleClick}
+        style={{
+          backgroundColor: color.background,
+          borderColor: color.border,
+        }}
+        onDoubleClick={handleDoubleClick}
+        onBlur={handleBlur}
         role="presentation"
       >
-        {isTyping ? (
-          <textarea
-            ref={textareaRef}
-            className={cn(
-              'h-full w-full resize-none bg-transparent p-4 text-sm font-medium leading-relaxed text-slate-900 outline-none',
-              textAlignClass,
-            )}
-            value={label}
-            onChange={(event) => handleLabelChange(event.target.value)}
-            onBlur={handleBlur}
-            onMouseDown={(event) => event.stopPropagation()}
-            onKeyDown={handleKeyDown}
-            spellCheck={false}
-          />
-        ) : (
-          <div
-            className={cn(
-              'flex h-full w-full overflow-hidden whitespace-pre-wrap break-words p-4 text-sm font-medium leading-relaxed text-slate-900',
-              shapeType === 'circle'
-                ? 'items-center justify-center text-center'
-                : 'items-start justify-start text-left',
-            )}
-          >
-            {label || 'Click to add text'}
-          </div>
-        )}
+        <div
+          className={cn('flex h-full w-full')}
+          style={{ color: color.text }}
+        >
+          {isTyping ? (
+            <div
+              className="h-full w-full"
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              <MinimalTiptap
+                editor={editor}
+                theme="transparent"
+                className={cn('h-full w-full', textAlignClass)}
+                style={{ color: color.text }}
+              />
+            </div>
+          ) : (
+            <div
+              className={cn(
+                'prose prose-sm flex h-full w-full max-w-none items-center justify-center overflow-hidden whitespace-pre-wrap break-words p-4',
+                textAlignClass,
+              )}
+              style={{
+                '--tw-prose-body': color.text,
+                '--tw-prose-headings': color.text,
+                '--tw-prose-links': color.text,
+                '--tw-prose-bold': color.text,
+                '--tw-prose-counters': color.text,
+                '--tw-prose-bullets': color.text,
+                '--tw-prose-hr': color.border,
+                '--tw-prose-quotes': color.text,
+                '--tw-prose-quote-borders': color.border,
+                '--tw-prose-captions': color.text,
+                color: color.text,
+              }}
+              dangerouslySetInnerHTML={{
+                __html: label || '<p>Click to add text</p>',
+              }}
+            />
+          )}
+        </div>
       </div>
     </NodeInteractionOverlay>
   );

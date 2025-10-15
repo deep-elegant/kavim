@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Split } from 'lucide-react';
+import { marked } from 'marked';
 
 import NodeInteractionOverlay from './NodeInteractionOverlay';
 import { type DrawableNode } from './DrawableNode';
@@ -121,6 +122,7 @@ const STATUS_STYLES: Record<AiStatus, string> = {
 
 const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   const { setNodes, setEdges, getNodes, getEdges } = useReactFlow();
+  const contentRef = useRef<HTMLDivElement>(null);
   const { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData } = useNodeAsEditor({
     id,
     data,
@@ -392,8 +394,44 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     wasTypingRef.current = isTyping;
   }, [isTyping, label, runPrompt]);
 
+  useEffect(() => {
+    if (!contentRef.current) {
+      return;
+    }
+
+    const { scrollHeight } = contentRef.current;
+
+    setNodes((nodes) => {
+      const node = nodes.find((n) => n.id === id);
+      if (!node) return nodes;
+
+      const currentHeight = node.height ?? 0;
+
+      if (scrollHeight > currentHeight) {
+        return nodes.map((n) => {
+          if (n.id === id) {
+            return {
+              ...n,
+              height: scrollHeight,
+              style: { ...n.style, height: scrollHeight },
+            };
+          }
+          return n;
+        });
+      }
+      return nodes;
+    });
+  }, [id, setNodes, result]);
+
+  const resultHtml = useMemo(() => {
+    const response = marked.parse(result || '');
+    console.log('markdown',  result, response)
+    return response;
+  }, [result]);
+
   return (
     <NodeInteractionOverlay
+      nodeId={id}
       isActive={selected}
       isEditing={isTyping}
       minWidth={MIN_WIDTH}
@@ -413,6 +451,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
         <Split className="h-3.5 w-3.5" />
       </button>
       <div
+        ref={contentRef}
         className="flex h-full w-full flex-col gap-3 rounded-lg border border-border bg-white p-3 shadow"
         onDoubleClick={handleDoubleClick}
         onBlur={handleBlur}
@@ -498,7 +537,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                   result ? 'text-slate-900' : 'text-slate-500',
                 )}
               >
-                {result || 'No result yet.'}
+                <div dangerouslySetInnerHTML={{ __html: resultHtml }} />
               </div>
             </div>
           </div>

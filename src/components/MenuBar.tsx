@@ -1,17 +1,20 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
+import React, { useCallback, useMemo, useState } from "react";
+import {
+  Menubar,
+  MenubarContent,
+  MenubarItem,
+  MenubarMenu,
+  MenubarTrigger,
+} from "@/components/ui/menubar";
 import { SaveModal } from "./SaveModal";
 import { SettingsModal } from "./SettingsModal";
 import { useCanvasData } from "@/core/canvas/CanvasDataContext";
-
-
 
 type DirectoryHandle = {
   name?: string;
 };
 
 export default function MenuBar() {
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [loadMessage, setLoadMessage] = useState<string>("");
   const { nodes, edges, setCanvasState } = useCanvasData();
 
@@ -32,8 +35,10 @@ export default function MenuBar() {
 
   React.useEffect(() => {
     if (isSettingsOpen) {
-      const storedDeepseekKey = window.settingsStore.get("deepseek")?.apiKey ?? "";
-      const storedChatgptKey = window.settingsStore.get("chatgpt")?.apiKey ?? "";
+      const storedDeepseekKey =
+        window.settingsStore.get("deepseek")?.apiKey ?? "";
+      const storedChatgptKey =
+        window.settingsStore.get("chatgpt")?.apiKey ?? "";
       setDeepseekKey(storedDeepseekKey);
       setChatgptKey(storedChatgptKey);
       setSettingsMessage("");
@@ -130,18 +135,26 @@ export default function MenuBar() {
 
   return (
     <div className="border-b border-border bg-background/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/75">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handleLoadClick}>
-            Load
-          </Button>
-          <Button variant="outline" onClick={() => setIsSaveModalOpen(true)}>
-            Save
-          </Button>
-          <Button variant="outline" onClick={() => setIsSettingsOpen(true)}>
-            Settings
-          </Button>
-        </div>
+      <div className="mx-auto flex max-w-5xl items-center justify-between px-4">
+        <Menubar className="border-none bg-transparent p-0 shadow-none">
+          <MenubarMenu>
+            <MenubarTrigger>File</MenubarTrigger>
+            <MenubarContent>
+              <MenubarItem onClick={handleLoadClick}>Load</MenubarItem>
+              <MenubarItem onClick={() => setIsSaveModalOpen(true)}>
+                Save
+              </MenubarItem>
+            </MenubarContent>
+          </MenubarMenu>
+          <MenubarMenu>
+            <MenubarTrigger>Settings</MenubarTrigger>
+            <MenubarContent>
+              <MenubarItem onClick={() => setIsSettingsOpen(true)}>
+                LLM
+              </MenubarItem>
+            </MenubarContent>
+          </MenubarMenu>
+        </Menubar>
         {combinedStatus ? (
           <span className="text-sm text-muted-foreground">{combinedStatus}</span>
         ) : null}

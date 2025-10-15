@@ -2,7 +2,6 @@ import React, {
   memo,
   useCallback,
   useMemo,
-  type ChangeEvent as ReactChangeEvent,
   type PointerEvent as ReactPointerEvent,
   type MouseEvent as ReactMouseEvent,
 } from 'react';
@@ -16,8 +15,15 @@ import {
 } from '@xyflow/react';
 import { ArrowLeft, ArrowRight, Minus } from 'lucide-react';
 
-import { TiptapToolbar, type ToolbarItem } from '@/components/ui/minimal-tiptap/TiptapToolbar';
+import {
+  TiptapToolbar,
+  type ToolbarItem,
+} from '@/components/ui/minimal-tiptap/TiptapToolbar';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import {
+  SimpleColorPicker,
+  type ColorStyle,
+} from '@/components/ui/simple-color-picker';
 
 export type EdgeMarkerType = 'none' | 'arrow';
 
@@ -35,7 +41,7 @@ type EditableEdgeProps = EdgeProps<EditableEdgeData>;
 
 type Point = XYPosition;
 
-const DEFAULT_STROKE = '#2563eb';
+const DEFAULT_STROKE = '#000000';
 const DEFAULT_MARKER: EdgeMarkerType = 'none';
 const DEFAULT_STYLE_TYPE: EdgeLineStyle = 'regular';
 const CONTROL_POINT_RADIUS = 6;
@@ -293,12 +299,10 @@ const EditableEdge = memo(
     );
 
     const handleColorChange = useCallback(
-      (event: ReactChangeEvent<HTMLInputElement>) => {
-        const { value } = event.target;
-
+      (color: ColorStyle) => {
         updateEdgeData((current) => ({
           ...current,
-          color: value,
+          color: color.background,
         }));
       },
       [updateEdgeData],
@@ -385,12 +389,9 @@ const EditableEdge = memo(
           render: () => (
             <div className="flex items-center gap-2">
               <span className="text-xs font-medium text-muted-foreground">Color</span>
-              <input
-                type="color"
-                value={edgeColor}
-                onChange={handleColorChange}
-                aria-label="Edge color"
-                className="h-8 w-8 cursor-pointer rounded border border-input bg-transparent p-1"
+              <SimpleColorPicker
+                color={{ background: edgeColor, border: '', text: '' }}
+                setColor={handleColorChange}
               />
             </div>
           ),
