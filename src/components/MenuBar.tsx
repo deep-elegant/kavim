@@ -137,7 +137,7 @@ export default function MenuBar() {
 
   return (
     <div className="border-b border-border bg-background/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/75">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-4">
+      <div className="flex max-w-5xl items-center px-4">
         <Menubar className="border-none bg-transparent p-0 shadow-none">
           <MenubarMenu>
             <MenubarTrigger>{i18n.t("menuBar.file")}</MenubarTrigger>
