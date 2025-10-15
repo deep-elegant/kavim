@@ -127,6 +127,7 @@ const ShapeNodeComponent = memo(({ id, data, selected }: NodeProps<ShapeNode>) =
 
   return (
     <NodeInteractionOverlay
+      nodeId={id}
       isActive={selected}
       isEditing={isTyping}
       minWidth={minWidth}

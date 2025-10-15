@@ -77,6 +77,7 @@ const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => 
 
   return (
     <NodeInteractionOverlay
+      nodeId={id}
       isActive={selected}
       isEditing={isTyping}
       minWidth={MIN_WIDTH}

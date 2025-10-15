@@ -123,6 +123,7 @@ const StickyNoteNode = memo(
 
     return (
       <NodeInteractionOverlay
+        nodeId={id}
         isActive={selected}
         isEditing={isTyping}
         minWidth={MIN_WIDTH}

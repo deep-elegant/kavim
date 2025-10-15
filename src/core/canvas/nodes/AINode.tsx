@@ -431,6 +431,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
   return (
     <NodeInteractionOverlay
+      nodeId={id}
       isActive={selected}
       isEditing={isTyping}
       minWidth={MIN_WIDTH}

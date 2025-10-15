@@ -467,8 +467,9 @@ const CanvasInner = () => {
         edgesReconnectable
         defaultEdgeOptions={{ type: 'editable', deletable: true, reconnectable: true }}
         deleteKeyCode={['Delete', 'Backspace']}
+        connectionRadius={50}
         className={isDrawingToolSelected ? 'cursor-crosshair' : undefined}
-        style={{ cursor: isDrawingToolSelected ? 'crosshair' : undefined }}
+        style={{ cursor: isDrawingToolSelected ? 'cursor-crosshair' : undefined }}
       >
         <MiniMap />
         <Controls
