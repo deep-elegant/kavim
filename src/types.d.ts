@@ -39,9 +39,19 @@ interface PakContext {
   load: (filePath: string) => Promise<PakOperationResult>;
 }
 
-interface DialogContext {
-    openFile: () => Promise<string | null>;
-    openDirectory: () => Promise<string | null>;
+type DialogFileFilter = {
+  name: string;
+  extensions: string[];
+};
+
+type DialogOpenFileOptions = {
+  filters?: DialogFileFilter[];
+};
+
+interface FileSystemContext {
+  readFileAsDataUrl: (filePath: string) => Promise<string>;
+  openFile: (options?: DialogOpenFileOptions) => Promise<string | null>;
+  openDirectory: () => Promise<string | null>;
 }
 
 declare interface Window {
@@ -52,5 +62,5 @@ declare interface Window {
       set: (key: "deepseek" | "chatgpt", value: { apiKey: string }) => void;
   };
   projectPak: PakContext;
-  dialog: DialogContext;
+  fileSystem: FileSystemContext;
 }

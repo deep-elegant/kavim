@@ -12,6 +12,8 @@ import {
 } from "@/core/pak/types";
 import { registerPakProtocol, setActivePak } from "@/core/pak/pak-manager";
 import { PAK_LOAD_CHANNEL, PAK_SAVE_CHANNEL } from "./pak-channels";
+import { type Node } from '@xyflow/react';
+import { ImageNodeType } from "@/core/canvas/nodes/ImageNode";
 
 const toBuffer = (data: PakAssetInput["data"]): Buffer => {
   if (Buffer.isBuffer(data)) {
@@ -65,17 +67,47 @@ const prepareAssetFiles = (
   manifest: PakManifest,
   assets: PakAssetInput[] = [],
 ) => {
+  const processedAssets: { path: string; data: Buffer }[] = assets.map(
+    ({ path: assetPath, data }) => ({
+      path: assetPath,
+      data: toBuffer(data),
+    }),
+  );
+
+  let imageCounter = 0;
+  for (const node of canvas.nodes as Node[]) {
+    if (
+      node.type === "image-node" &&
+      (node as ImageNodeType).data.src &&
+      (node as ImageNodeType).data.src.startsWith("data:image")
+    ) {
+      const { src, fileName } = (node as ImageNodeType).data;
+
+      const match = src.match(/^data:image\/(.*?);base64,(.*)$/);
+      if (!match) continue;
+
+      const [, extension, base64Data] = match;
+      const buffer = Buffer.from(base64Data, "base64");
+
+      const uniqueFileName = fileName
+        ? `${path.parse(fileName).name}-${imageCounter}.${extension}`
+        : `image-${imageCounter}.${extension}`;
+      const assetPath = `assets/${uniqueFileName}`;
+      imageCounter++;
+
+      processedAssets.push({ path: assetPath, data: buffer });
+
+      node.data.src = `pak://${assetPath}`;
+    }
+  }
+
   const serializedCanvas = Buffer.from(JSON.stringify(ensureCanvas(canvas)));
   const manifestBuffer = Buffer.from(JSON.stringify(manifest));
-  const normalizedAssets = assets.map(({ path: assetPath, data }) => ({
-    path: assetPath,
-    data: toBuffer(data),
-  }));
 
   return [
     { path: "manifest.json", data: manifestBuffer },
     { path: "canvas.json", data: serializedCanvas },
-    ...normalizedAssets,
+    ...processedAssets,
   ];
 };
 
