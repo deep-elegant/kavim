@@ -17,7 +17,6 @@ type DirectoryHandle = {
 
 export default function MenuBar() {
   const { i18n } = useTranslation();
-  const [loadMessage, setLoadMessage] = useState<string>("");
   const { nodes, edges, setCanvasState } = useCanvasData();
 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -48,21 +47,18 @@ export default function MenuBar() {
   }, [isSettingsOpen]);
 
   const combinedStatus = useMemo(() => {
-    return [loadMessage, saveMessage, settingsMessage].filter(Boolean).join(" · ");
-  }, [loadMessage, saveMessage, settingsMessage]);
+    return [saveMessage, settingsMessage].filter(Boolean).join(" · ");
+  }, [saveMessage, settingsMessage]);
 
   const handleLoadClick = useCallback(async () => {
-    setLoadMessage("");
     const filePath = await window.fileSystem.openFile({
       filters: [{ name: "Pak Files", extensions: ["pak"] }],
     });
     if (!filePath) {
-      setLoadMessage("No file selected.");
       return;
     }
 
     try {
-      setLoadMessage(`Loading ${filePath}...`);
       const result = await window.projectPak.load(filePath);
       const loadedNodes = Array.isArray(result.canvas?.nodes)
         ? (result.canvas.nodes as typeof nodes)
@@ -71,13 +67,8 @@ export default function MenuBar() {
         ? (result.canvas.edges as typeof edges)
         : [];
       setCanvasState(loadedNodes, loadedEdges);
-
-      const manifestName =
-        (result.manifest as { name?: string } | undefined)?.name || filePath;
-      setLoadMessage(`Loaded ${manifestName}`);
     } catch (error) {
       console.error("Failed to load project", error);
-      setLoadMessage("Failed to load project.");
     }
   }, [setCanvasState]);
 

@@ -519,7 +519,7 @@ const CanvasInner = () => {
           showFitView={false}
           orientation="horizontal"
         >
-          <div className="flex flex-row items-center gap-2 rounded-lg border border-border bg-background/95 p-2 shadow-lg">
+          <div className="flex flex-row items-center gap-2 rounded-lg bg-background/95 p-2 shadow-lg">
             <Button
               onClick={() => zoomIn()}
               aria-label="zoom in"

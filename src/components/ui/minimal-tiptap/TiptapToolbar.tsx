@@ -19,6 +19,7 @@ import {
   Redo,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { FontSizePicker } from './FontSizePicker';
 
 type ToolbarBaseItem = {
   id?: string;
@@ -61,6 +62,12 @@ export interface TiptapToolbarProps {
 }
 
 const defaultToolbarItems: ToolbarItem[] = [
+  {
+    type: 'custom',
+    id: 'font-size-picker',
+    render: (editor) => <FontSizePicker editor={editor} />,
+  },
+  { type: 'separator', id: 'separator-font-size' },
   {
     type: 'toggle',
     id: 'bold',
