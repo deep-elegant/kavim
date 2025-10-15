@@ -301,7 +301,7 @@ const CanvasInner = () => {
 
   const handleAddImageFromDialog = useCallback(async () => {
     try {
-      const filePath = await window.dialog.openFile({ filters: IMAGE_FILE_FILTERS });
+      const filePath = await window.fileSystem.openFile({ filters: IMAGE_FILE_FILTERS });
       if (!filePath) {
         return;
       }
