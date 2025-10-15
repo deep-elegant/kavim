@@ -64,6 +64,8 @@ export function SimpleColorPicker({
   className?: string
 }) {
   const solids = [
+    '#FFFFFF',
+    '#000000',
     '#E2E2E2',
     '#ff75c3',
     '#ffa647',
