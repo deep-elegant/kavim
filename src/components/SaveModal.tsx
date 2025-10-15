@@ -65,7 +65,7 @@ export const SaveModal: React.FC<SaveModalProps> = ({
             <p className="text-sm text-muted-foreground">{folderPickerMessage}</p>
           ) : null}
           <p className="text-xs text-muted-foreground">
-            This is a placeholder save flow. Your project will be saved once the backend integration is ready.
+            Projects are saved as <code>.pak</code> archives inside your Documents folder unless an absolute path is provided.
           </p>
         </div>
         <DialogFooter>

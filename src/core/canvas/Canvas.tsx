@@ -1,6 +1,5 @@
 import React, {
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -12,7 +11,6 @@ import {
   MiniMap,
   Controls,
   Background,
-  useNodesState,
   addEdge,
   type Connection,
   type Edge,
@@ -21,6 +19,9 @@ import {
   useReactFlow,
   ReactFlowProvider,
   applyEdgeChanges,
+  applyNodeChanges,
+  type NodeChange,
+  type Node,
 } from '@xyflow/react';
 import {
   ArrowRight,
@@ -76,24 +77,25 @@ const drawableNodeTools: Partial<Record<ToolId, DrawableNode>> = {
 const drawingTools: ToolId[] = ['sticky-note', 'shape', 'text', 'prompt-node'];
 
 const CanvasInner = () => {
-  const [nodes, setNodes, onNodesChange] = useNodesState<CanvasNode>([]);
-  const [edges, setEdges] = useState<Edge<EditableEdgeData>[]>([]);
+  const { nodes, edges, setNodes, setEdges } = useCanvasData();
   const [selectedTool, setSelectedTool] = useState<ToolId | null>(null);
   const drawingState = useRef<{
     nodeId: string;
     start: XYPosition;
   } | null>(null);
   const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow();
-  const { setCanvasState } = useCanvasData();
 
-  useEffect(() => {
-    setCanvasState(nodes, edges);
-  }, [edges, nodes, setCanvasState]);
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      setNodes((nds) => applyNodeChanges(changes, nds as Node<CanvasNode>[]));
+    },
+    [setNodes],
+  );
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange<EditableEdgeData>[]) =>
       setEdges((current) => applyEdgeChanges(changes, current)),
-    [],
+    [setEdges],
   );
 
   const onPaneClick = useCallback(() => {
@@ -119,7 +121,7 @@ const CanvasInner = () => {
         addEdge<EditableEdgeData>(
           {
             ...params,
-            type: 'editable',
+            type: 'editable', // This should be a custom edge type
             data: createDefaultEditableEdgeData(),
             deletable: true,
             reconnectable: true,
@@ -127,7 +129,7 @@ const CanvasInner = () => {
           eds,
         ),
       ),
-    [],
+    [setEdges],
   );
 
   const handleEdgeUpdate = useCallback(
@@ -148,7 +150,7 @@ const CanvasInner = () => {
         }),
       );
     },
-    [],
+    [setEdges],
   );
 
   const edgeTypes = useMemo(() => ({ editable: EditableEdge }), []);

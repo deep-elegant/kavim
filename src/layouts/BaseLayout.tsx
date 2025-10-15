@@ -11,7 +11,7 @@ export default function BaseLayout({
     <div className="flex h-screen flex-col">
       <DragWindowRegion title="electron-shadcn" />
       <MenuBar />
-      <main className="flex-1 overflow-hidden p-2 pb-20">{children}</main>
+      <main className="flex-1 overflow-hidden ">{children}</main>
     </div>
   );
 }

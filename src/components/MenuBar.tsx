@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SaveModal } from "./SaveModal";
 import { SettingsModal } from "./SettingsModal";
@@ -13,10 +13,10 @@ type DirectoryHandle = {
 export default function MenuBar() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loadMessage, setLoadMessage] = useState<string>("");
-  const { nodes, edges } = useCanvasData();
+  const { nodes, edges, setCanvasState } = useCanvasData();
 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
-  const [saveFileName, setSaveFileName] = useState("untitled.txt");
+  const [saveFileName, setSaveFileName] = useState("untitled.pak");
   const [saveFolder, setSaveFolder] = useState("");
   const [saveMessage, setSaveMessage] = useState<string>("");
   const [folderPickerMessage, setFolderPickerMessage] = useState<string>("");
@@ -44,38 +44,40 @@ export default function MenuBar() {
     return [loadMessage, saveMessage, settingsMessage].filter(Boolean).join(" · ");
   }, [loadMessage, saveMessage, settingsMessage]);
 
-  const handleLoadClick = () => {
+  const handleLoadClick = useCallback(async () => {
     setLoadMessage("");
-    fileInputRef.current?.click();
-  };
-
-  const handleFileSelection: React.ChangeEventHandler<HTMLInputElement> = (event) => {
-    const file = event.target.files?.[0];
-    if (!file) {
+    const filePath = await window.dialog.openFile();
+    if (!filePath) {
       setLoadMessage("No file selected.");
       return;
     }
 
-    setLoadMessage(`Ready to load: ${file.name}`);
-    event.target.value = "";
-  };
-
-  const handleFolderBrowse = async () => {
-    setFolderPickerMessage("");
-    const directoryPicker = (window as Window & {
-      showDirectoryPicker?: () => Promise<DirectoryHandle>;
-    }).showDirectoryPicker;
-
-    if (!directoryPicker) {
-      setFolderPickerMessage("Directory picker is not supported in this environment.");
-      return;
-    }
-
     try {
-      const directoryHandle = await directoryPicker();
-      if (directoryHandle?.name) {
-        setSaveFolder(directoryHandle.name);
-        setFolderPickerMessage(`Selected folder: ${directoryHandle.name}`);
+      setLoadMessage(`Loading ${filePath}...`);
+      const result = await window.projectPak.load(filePath);
+      const loadedNodes = Array.isArray(result.canvas?.nodes)
+        ? (result.canvas.nodes as typeof nodes)
+        : [];
+      const loadedEdges = Array.isArray(result.canvas?.edges)
+        ? (result.canvas.edges as typeof edges)
+        : [];
+      setCanvasState(loadedNodes, loadedEdges);
+
+      const manifestName =
+        (result.manifest as { name?: string } | undefined)?.name || filePath;
+      setLoadMessage(`Loaded ${manifestName}`);
+    } catch (error) {
+      console.error("Failed to load project", error);
+      setLoadMessage("Failed to load project.");
+    }
+  }, [setCanvasState]);
+
+  const handleFolderBrowse = useCallback(async () => {
+    try {
+      const directoryHandle = await window.dialog.openDirectory();
+      if (directoryHandle) {
+        setSaveFolder(directoryHandle);
+        setFolderPickerMessage(`Selected folder: ${directoryHandle}`);
       } else {
         setFolderPickerMessage("Folder selected.");
       }
@@ -86,15 +88,30 @@ export default function MenuBar() {
       }
       setFolderPickerMessage("Unable to access the selected folder.");
     }
-  };
+  }, [setFolderPickerMessage]);
 
-  const handleSaveConfirmation = () => {
-    console.log("Canvas nodes:", nodes);
-    console.log("Canvas edges:", edges);
-    setIsSaveModalOpen(false);
-    const safeFileName = saveFileName.trim() || "untitled.txt";
-    const safeFolder = saveFolder.trim() || "the chosen folder";
-    setSaveMessage(`Pretending to save "${safeFileName}" to ${safeFolder}.`);
+  const handleSaveConfirmation = async () => {
+    const safeFileName = saveFileName.trim() || "untitled.pak";
+    const safeFolder = saveFolder.trim();
+    const sanitizedNodes = JSON.parse(JSON.stringify(nodes));
+    const sanitizedEdges = JSON.parse(JSON.stringify(edges));
+
+    try {
+      setSaveMessage(`Saving ${safeFileName}...`);
+      const result = await window.projectPak.save({
+        fileName: safeFileName,
+        directory: safeFolder || undefined,
+        canvas: {
+          nodes: Array.isArray(sanitizedNodes) ? sanitizedNodes : [],
+          edges: Array.isArray(sanitizedEdges) ? sanitizedEdges : [],
+        },
+      });
+      setIsSaveModalOpen(false);
+      setSaveMessage(`Saved project to ${result.filePath}`);
+    } catch (error) {
+      console.error("Failed to save project", error);
+      setSaveMessage("Failed to save project.");
+    }
   };
 
   const handleSettingsSave = () => {
@@ -111,12 +128,6 @@ export default function MenuBar() {
 
   return (
     <div className="border-b border-border bg-background/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/75">
-      <input
-        ref={fileInputRef}
-        type="file"
-        className="hidden"
-        onChange={handleFileSelection}
-      />
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={handleLoadClick}>

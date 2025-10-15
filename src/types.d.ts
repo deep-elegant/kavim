@@ -18,6 +18,32 @@ interface ElectronWindow {
   close: () => Promise<void>;
 }
 
+interface CanvasSnapshot {
+  nodes: unknown[];
+  edges: unknown[];
+}
+
+interface PakOperationResult {
+  manifest: unknown;
+  canvas: CanvasSnapshot;
+  filePath: string;
+}
+
+interface PakContext {
+  save: (payload: {
+    fileName: string;
+    directory?: string;
+    canvas: CanvasSnapshot;
+    assets?: { path: string; data: unknown }[];
+  }) => Promise<PakOperationResult>;
+  load: (filePath: string) => Promise<PakOperationResult>;
+}
+
+interface DialogContext {
+    openFile: () => Promise<string | null>;
+    openDirectory: () => Promise<string | null>;
+}
+
 declare interface Window {
   themeMode: ThemeModeContext;
   electronWindow: ElectronWindow;
@@ -25,4 +51,6 @@ declare interface Window {
       get: (key: "deepseek" | "chatgpt") => { apiKey: string } | undefined;
       set: (key: "deepseek" | "chatgpt", value: { apiKey: string }) => void;
   };
+  projectPak: PakContext;
+  dialog: DialogContext;
 }

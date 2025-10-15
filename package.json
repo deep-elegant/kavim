@@ -7,6 +7,7 @@
   "private": true,
   "scripts": {
     "start": "electron-forge start",
+    "debug": "npm run start -- --inspect-electron",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
@@ -91,6 +92,7 @@
     "electron-store": "^11.0.2",
     "i18next": "^25.5.2",
     "langchain": "^0.3.36",
+    "msgpackr": "^1.10.1",
     "lucide-react": "^0.544.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",

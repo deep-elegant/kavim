@@ -1,16 +1,24 @@
-import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
-import type { Edge, Node } from "@xyflow/react";
-import type { EditableEdgeData } from "./edges/EditableEdge";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
+import type { Edge, Node } from '@xyflow/react';
+import type { EditableEdgeData } from './edges/EditableEdge';
 
 export type CanvasDataContextValue = {
   nodes: Node[];
   edges: Edge<EditableEdgeData>[];
+  setNodes: Dispatch<SetStateAction<Node[]>>;
+  setEdges: Dispatch<SetStateAction<Edge<EditableEdgeData>[]>>;
   setCanvasState: (nodes: Node[], edges: Edge<EditableEdgeData>[]) => void;
 };
 
-const CanvasDataContext = createContext<CanvasDataContextValue | undefined>(
-  undefined,
-);
+const CanvasDataContext = createContext<CanvasDataContextValue | undefined>(undefined);
 
 export const CanvasDataProvider = ({
   children,
@@ -32,6 +40,8 @@ export const CanvasDataProvider = ({
     () => ({
       nodes,
       edges,
+      setNodes,
+      setEdges,
       setCanvasState,
     }),
     [nodes, edges, setCanvasState],
@@ -47,7 +57,7 @@ export const CanvasDataProvider = ({
 export const useCanvasData = () => {
   const context = useContext(CanvasDataContext);
   if (!context) {
-    throw new Error("useCanvasData must be used within a CanvasDataProvider");
+    throw new Error('useCanvasData must be used within a CanvasDataProvider');
   }
   return context;
 };
