@@ -444,8 +444,48 @@ const CanvasInner = () => {
     [addImageNode, screenToFlowPosition, setSelectedTool],
   );
 
+  const handlePaste = useCallback(
+    async (event: React.ClipboardEvent) => {
+      const files = Array.from(event.clipboardData?.files ?? []).filter(isImageFile);
+
+      if (files.length === 0) {
+        return;
+      }
+
+      event.preventDefault();
+      setSelectedTool(null);
+
+      const pastePosition = getCanvasCenterPosition();
+
+      for (const [index, file] of files.entries()) {
+        try {
+          const dataUrl = await readFileAsDataUrl(file);
+          const base64Data = dataUrl.split(',')[1];
+          if (!base64Data) {
+            continue;
+          }
+
+          const extension = file.type.split('/')[1] ?? 'png';
+          const filePath = await window.fileSystem.saveClipboardImage(base64Data, extension);
+          const newSrc = await window.fileSystem.readFileAsDataUrl(filePath);
+          const fileName = getFileName(filePath);
+
+          const offset = index * 24;
+          await addImageNode(
+            newSrc,
+            { x: pastePosition.x + offset, y: pastePosition.y + offset },
+            fileName,
+          );
+        } catch (error) {
+          console.error('Failed to paste image', error);
+        }
+      }
+    },
+    [addImageNode, getCanvasCenterPosition, setSelectedTool],
+  );
+
   return (
-    <div style={{ height: '100%', width: '100%' }} ref={reactFlowWrapperRef}>
+    <div style={{ height: '100%', width: '100%' }} ref={reactFlowWrapperRef} onPaste={handlePaste}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
