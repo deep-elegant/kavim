@@ -9,12 +9,14 @@ import {
 import { SaveModal } from "./SaveModal";
 import { SettingsModal } from "./SettingsModal";
 import { useCanvasData } from "@/core/canvas/CanvasDataContext";
+import { useTranslation } from "react-i18next";
 
 type DirectoryHandle = {
   name?: string;
 };
 
 export default function MenuBar() {
+  const { i18n } = useTranslation();
   const [loadMessage, setLoadMessage] = useState<string>("");
   const { nodes, edges, setCanvasState } = useCanvasData();
 
@@ -138,19 +140,19 @@ export default function MenuBar() {
       <div className="mx-auto flex max-w-5xl items-center justify-between px-4">
         <Menubar className="border-none bg-transparent p-0 shadow-none">
           <MenubarMenu>
-            <MenubarTrigger>File</MenubarTrigger>
+            <MenubarTrigger>{i18n.t("menuBar.file")}</MenubarTrigger>
             <MenubarContent>
-              <MenubarItem onClick={handleLoadClick}>Load</MenubarItem>
+              <MenubarItem onClick={handleLoadClick}>{i18n.t("menuBar.load")}</MenubarItem>
               <MenubarItem onClick={() => setIsSaveModalOpen(true)}>
-                Save
+                {i18n.t("menuBar.save")}
               </MenubarItem>
             </MenubarContent>
           </MenubarMenu>
           <MenubarMenu>
-            <MenubarTrigger>Settings</MenubarTrigger>
+            <MenubarTrigger>{i18n.t("menuBar.settings")}</MenubarTrigger>
             <MenubarContent>
               <MenubarItem onClick={() => setIsSettingsOpen(true)}>
-                LLM
+                {i18n.t("menuBar.llm")}
               </MenubarItem>
             </MenubarContent>
           </MenubarMenu>
