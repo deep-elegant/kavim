@@ -72,22 +72,12 @@ export default function MenuBar() {
     }
   }, [setCanvasState]);
 
-  const handleFolderBrowse = async () => {
-    setFolderPickerMessage("");
-    const directoryPicker = (window as Window & {
-      showDirectoryPicker?: () => Promise<DirectoryHandle>;
-    }).showDirectoryPicker;
-
-    if (!directoryPicker) {
-      setFolderPickerMessage("Directory picker is not supported in this environment.");
-      return;
-    }
-
+  const handleFolderBrowse = useCallback(async () => {
     try {
-      const directoryHandle = await directoryPicker();
-      if (directoryHandle?.name) {
-        setSaveFolder(directoryHandle.name);
-        setFolderPickerMessage(`Selected folder: ${directoryHandle.name}`);
+      const directoryHandle = await window.dialog.openDirectory();
+      if (directoryHandle) {
+        setSaveFolder(directoryHandle);
+        setFolderPickerMessage(`Selected folder: ${directoryHandle}`);
       } else {
         setFolderPickerMessage("Folder selected.");
       }
@@ -98,7 +88,7 @@ export default function MenuBar() {
       }
       setFolderPickerMessage("Unable to access the selected folder.");
     }
-  };
+  }, [setFolderPickerMessage]);
 
   const handleSaveConfirmation = async () => {
     const safeFileName = saveFileName.trim() || "untitled.pak";

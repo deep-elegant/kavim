@@ -41,6 +41,7 @@ interface PakContext {
 
 interface DialogContext {
     openFile: () => Promise<string | null>;
+    openDirectory: () => Promise<string | null>;
 }
 
 declare interface Window {
