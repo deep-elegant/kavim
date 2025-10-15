@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { SaveModal } from "./SaveModal";
 import { SettingsModal } from "./SettingsModal";
+import { useCanvasData } from "@/core/canvas/CanvasDataContext";
 
 
 
@@ -12,6 +13,7 @@ type DirectoryHandle = {
 export default function MenuBar() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [loadMessage, setLoadMessage] = useState<string>("");
+  const { nodes, edges } = useCanvasData();
 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [saveFileName, setSaveFileName] = useState("untitled.txt");
@@ -87,6 +89,8 @@ export default function MenuBar() {
   };
 
   const handleSaveConfirmation = () => {
+    console.log("Canvas nodes:", nodes);
+    console.log("Canvas edges:", edges);
     setIsSaveModalOpen(false);
     const safeFileName = saveFileName.trim() || "untitled.txt";
     const safeFolder = saveFolder.trim() || "the chosen folder";

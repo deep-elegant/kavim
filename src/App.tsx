@@ -3,8 +3,9 @@ import { createRoot } from "react-dom/client";
 import { syncThemeWithLocal } from "./helpers/theme_helpers";
 import { useTranslation } from "react-i18next";
 import { updateAppLanguage } from "./helpers/language_helpers";
-import { RouterProvider } from "@tanstack/react-router";
-import { router } from "./utils/routes";
+import BaseLayout from "./layouts/BaseLayout";
+import Canvas from "./core/canvas/Canvas";
+import { CanvasDataProvider } from "./core/canvas/CanvasDataContext";
 import "./localization/i18n";
 
 export default function App() {
@@ -15,7 +16,15 @@ export default function App() {
     updateAppLanguage(i18n);
   }, [i18n]);
 
-  return <RouterProvider router={router} />;
+  return (
+    <CanvasDataProvider>
+      <BaseLayout>
+        <div className="h-full w-full">
+          <Canvas />
+        </div>
+      </BaseLayout>
+    </CanvasDataProvider>
+  );
 }
 
 const root = createRoot(document.getElementById("app")!);

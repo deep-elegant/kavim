@@ -1,5 +1,6 @@
 import React, {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -44,6 +45,7 @@ import EditableEdge, {
   createDefaultEditableEdgeData,
   type EditableEdgeData,
 } from './edges/EditableEdge';
+import { useCanvasData } from './CanvasDataContext';
 
 type ToolId = 'sticky-note' | 'shape' | 'arrow' | 'prompt-node' | 'text';
 
@@ -82,6 +84,11 @@ const CanvasInner = () => {
     start: XYPosition;
   } | null>(null);
   const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow();
+  const { setCanvasState } = useCanvasData();
+
+  useEffect(() => {
+    setCanvasState(nodes, edges);
+  }, [edges, nodes, setCanvasState]);
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange<EditableEdgeData>[]) =>

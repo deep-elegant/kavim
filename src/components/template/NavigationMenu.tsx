@@ -1,5 +1,4 @@
 import React from "react";
-import { Link } from "@tanstack/react-router";
 import { useTranslation } from "react-i18next";
 import {
   NavigationMenu as NavigationMenuBase,
@@ -12,19 +11,27 @@ import {
 export default function NavigationMenu() {
   const { t } = useTranslation();
 
+  const navigationItems = React.useMemo(
+    () => [
+      { id: "home", label: t("titleHomePage"), href: "#home" },
+      { id: "second", label: t("titleSecondPage"), href: "#second" },
+    ],
+    [t],
+  );
+
   return (
     <NavigationMenuBase className="text-muted-foreground px-2">
       <NavigationMenuList>
-        <NavigationMenuItem>
-          <NavigationMenuLink asChild className={navigationMenuTriggerStyle()}>
-            <Link to="/">{t("titleHomePage")}</Link>
-          </NavigationMenuLink>
-        </NavigationMenuItem>
-        <NavigationMenuItem>
-          <NavigationMenuLink asChild className={navigationMenuTriggerStyle()}>
-            <Link to="/second">{t("titleSecondPage")}</Link>
-          </NavigationMenuLink>
-        </NavigationMenuItem>
+        {navigationItems.map((item) => (
+          <NavigationMenuItem key={item.id}>
+            <NavigationMenuLink
+              href={item.href}
+              className={navigationMenuTriggerStyle()}
+            >
+              {item.label}
+            </NavigationMenuLink>
+          </NavigationMenuItem>
+        ))}
       </NavigationMenuList>
     </NavigationMenuBase>
   );
