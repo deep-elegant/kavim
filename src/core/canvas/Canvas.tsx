@@ -34,6 +34,7 @@ import {
   Maximize,
   Image as ImageIcon,
   WandSparklesIcon,
+  Circle,
 } from 'lucide-react';
 
 import '@xyflow/react/dist/style.css';
@@ -61,8 +62,7 @@ type CanvasNode = StickyNoteNodeType | ShapeNode | TextNode | AiNodeType | Image
 
 const tools: { id: ToolId; label: string; icon: ComponentType<{ className?: string }> }[] = [
   { id: 'sticky-note', label: 'Sticky Note', icon: StickyNote },
-  { id: 'shape', label: 'Shape', icon: Square },
-  { id: 'arrow', label: 'Arrow', icon: ArrowRight },
+  { id: 'shape', label: 'Shape', icon: Circle },
   { id: 'prompt-node', label: 'Prompt Node', icon: WandSparklesIcon },
   { id: 'text', label: 'Text', icon: Type },
   { id: 'image', label: 'Image', icon: ImageIcon },
