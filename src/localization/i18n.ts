@@ -13,7 +13,7 @@ i18n.use(initReactI18next).init({
           llm: "LLM",
           settings: "Settings",
         },
-        appName: "DeepElegant - Yachad",
+        appName: "DeepElegant - Kavim",
       },
     },
   },
