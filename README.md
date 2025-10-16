@@ -1,142 +1,113 @@
-# electron-shadcn
+<p align="center">
+<a href="https://kavim.deepelegant.com">
+  <img src="./images/logo.png" alt="Plane Logo" width="400">
+</a>
+</p>
 
-Electron in all its glory. Everything you will need to develop your beautiful desktop application.
+<p align="center"><b>Brainstorm with Friends on a Private AI-Powered Canvas</b></p>
 
-![Demo GIF](https://github.com/LuanRoger/electron-shadcn/blob/main/images/demo.gif)
+<p align="center">
+<a href="https://discord.com/invite/xTFEu5Q6q6">
+<img alt="Discord online members" src="https://img.shields.io/discord/1392765136837677127?color=5865F2&label=Discord&style=for-the-badge" />
+</a>
+<img alt="Commit activity per month" src="https://img.shields.io/github/commit-activity/m/deep-elegant/kavim?style=for-the-badge" />
+</p>
 
-## Libs and tools
+<p align="center">
+    <a href="https://kavim.deepelegant.com/"><b>Website</b></a> •
+    <a href="https://github.com/deep-elegant/kavim/releases"><b>Releases</b></a> •
+    <a href="https://linkedin.com/company/deepelegant"><b>LinkedIn</b></a> •
+    <a href="https://docs.kavim.deepelegant.com"><b>Documentation</b></a>
+</p>
 
-To develop a Electron app, you probably will need some UI, test, formatter, style or other kind of library or framework, so let me install and configure some of them to you.
+<p>
+    <a href="https://kavim.deepelegant.com/" target="_blank">
+      <img
+        src="./images/MainPage.png"
+        alt="Kavim Main Page"
+        width="100%"
+      />
+    </a>
+</p>
 
-### Core 🏍️
+**Meet [Kavim](https://kavim.deepelegant.com/)** — the open-source **canvas for brainstorming** with friends (and AIs). Sketch, debate, drop ideas, continue each other’s thoughts, and do it all **privately**, without the chaos of cloud storage or corporate surveillance. 🎨🤝
 
-- [Electron 38](https://www.electronjs.org)
-- [Vite 7](https://vitejs.dev)
+> Kavim is evolving faster than your group chat’s inside jokes. Your feedback, wild ideas, and bug reports help us shape the future of collaborative creativity. Jump into the Discord or open an issue on [GitHub](https://github.com/deepelegant/kavim/issues).
+> We read everything — sometimes twice — and respond before your coffee gets cold. ☕
 
-### DX 🛠️
+## 🚀 Installation
 
-- [TypeScript 5.9](https://www.typescriptlang.org)
-- [Prettier](https://prettier.io)
-- [ESLint 9](https://eslint.org)
-- [Zod 4](https://zod.dev)
-- [React Query (TanStack)](https://react-query.tanstack.com)
+Getting started with **Kavim** is simple.
+Choose your platform to download the app:
 
-### UI 🎨
+<p align="center">
+    <a href="https://github.com/deep-elegant/kavim/releases"><b>Windows</b></a> •
+    <a href="https://github.com/deep-elegant/kavim/releases"><b>macOS</b></a> •
+    <a href="https://github.com/deep-elegant/kavim/releases"><b>Linux</b></a>
+</p>
 
-- [React 19](https://reactjs.org)
-- [Tailwind 4](https://tailwindcss.com)
-- [Shadcn UI](https://ui.shadcn.com)
-- [Geist](https://vercel.com/font) as default font
-- [i18next](https://www.i18next.com)
-- [TanStack Router](https://tanstack.com/router)
-- [Lucide](https://lucide.dev)
+## 🌟 Features
 
-### Test 🧪
+**💸 One AI Subscription Is Enough**
+Already paying for an AI? Use it here. Connect your existing model and skip the extra “premium” plans.
 
-- [Vitest](https://vitest.dev)
-- [Playwright](https://playwright.dev)
-- [React Testing Library](https://testing-library.com/docs/react-testing-library/intro)
+**👯 Collaborate with Friends & Family**
+Brainstorm together in real time
 
-### Packing and distribution 📦
+**🧠 Chat with AI & Branch Conversations**
+Talk to multiple AIs, follow new threads, and watch ideas evolve on one shared canvas.
 
-- [Electron Forge](https://www.electronforge.io)
+**💾 Create & Store Everything Locally**
+No clouds. Everything stays right where it belongs — on your device.
 
-### CI/CD 🚀
+**🛡️ Your Data Is Yours (Seriously)**
+Your ideas never meet our servers. When you chat with an AI, your data goes _only_ to the model you choose — and that’s it.
 
-- Pre-configured [GitHub Actions workflow](https://github.com/LuanRoger/electron-shadcn/blob/main/.github/workflows/playwright.yml), for test with Playwright
+## 🛠️ Local development
 
-### Project preferences 🎯
+See [CONTRIBUTING](./CONTRIBUTING.md)
 
-- Use Context isolation
-- [React Compiler](https://react.dev/learn/react-compiler) is enabled by default.
-- `titleBarStyle`: hidden (Using custom title bar)
-- Geist as default font
-- Some default styles was applied, check the [`styles`](https://github.com/LuanRoger/electron-shadcn/tree/main/src/styles) directory
-- React DevTools are installed by default
+## ⚙️ Built with
 
-## Directory structure
+[![React Flow](https://img.shields.io/badge/React%20Flow-0D1117?style=for-the-badge&logo=xyflow&logoColor=FF0073)](https://reactflow.dev/)
+[![Electron](https://img.shields.io/badge/Electron-2C2E3B?style=for-the-badge&logo=electron&logoColor=9FEAF9)](https://www.electronjs.org/)
+[![Yjs](https://img.shields.io/badge/Yjs-181717?style=for-the-badge&logoColor=white)](https://yjs.dev/)
 
-```plaintext
-.
-└── ./src/
-    ├── ./src/assets/
-    │   └── ./src/assets/fonts/
-    ├── ./src/components/
-    │   ├── ./src/components/template
-    │   └── ./src/components/ui/
-    ├── ./src/helpers/
-    │   └── ./src/helpers/ipc/
-    ├── ./src/layout/
-    ├── ./src/lib/
-    ├── ./src/pages/
-    ├── ./src/style/
-    └── ./src/tests/
-```
+## 📸 Screenshots
 
-- `src/`: Main directory
-  - `assets/`: Store assets like images, fonts, etc.
-  - `components/`: Store UI components
-    - `template/`: Store the all not important components used by the template. It doesn't include the `WindowRegion` or the theme toggler, if you want to start an empty project, you can safely delete this directory.
-    - `ui/`: Store Shadcn UI components (this is the default direcotry used by Shadcn UI)
-  - `helpers/`: Store IPC related functions to be called in the renderer process
-    - `ipc/`: Directory to store IPC context and listener functions
-      - Some implementations are already done, like `theme` and `window` for the custom title bar
-  - `layout/`: Directory to store layout components
-  - `lib/`: Store libraries and other utilities
-  - `pages/`: Store app's pages
-  - `style/`: Store global styles
-  - `tests/`: Store tests (from Vitest and Playwright)
+TBD
 
-## NPM script
+## 📝 Documentation
 
-To run any of those scripts:
+Explore Kavim's [documentation](https://docs.kavim.deepelegant.com/) to learn about features, setup, and usage.
 
-```bash
-npm run <script>
-```
+## ❤️ Community
 
-- `start`: Start the app in development mode
-- `package`: Package your application into a platform-specific executable bundle and put the result in a folder.
-- `make`: Generate platform-specific distributables (e.g. .exe, .dmg, etc) of your application for distribution.
-- `publish`: Electron Forge's way of taking the artifacts generated by the `make` command and sending them to a service somewhere for you to distribute or use as updates.
-- `lint`: Run ESLint to lint the code
-- `format`: Run Prettier to check the code (it doesn't change the code)
-- `format:write`: Run Prettier to format the code
-- `test`: Run the default unit-test script (Vitest)
-- `test:watch`: Run the default unit-test script in watch mode (Vitest)
-- `test:unit`: Run the Vitest tests
-- `test:e2e`: Run the Playwright tests
-- `test:all`: Run all tests (Vitest and Playwright)
+Join our growing community of creators and thinkers on [GitHub Discussions](https://github.com/orgs/deep-elegant/discussions) and our [Discord server](https://discord.com/invite/xTFEu5Q6q6). We follow a respectful, friendly [Code of Conduct](./CODE_OF_CONDUCT.md).
 
-> The test scripts involving Playwright require the app be builded before running the tests. So, before run the tests, run the `package`, `make` or `publish` script.
+Ask questions, report bugs, suggest features, share your wildest brainstorms, or just hang out and swap AI tips. We’d love to see what you build on your canvas.
 
-## How to use
+## 🤝 Contributing
 
-1. Clone this repository
+Want to make the canvas even better? We welcome contributors of all shapes and skill levels.
 
-```bash
-git clone https://github.com/LuanRoger/electron-shadcn.git
-```
+-   Report [bugs](https://github.com/deep-elegant/kavim/issues) or suggest [new features](https://github.com/deep-elegant/kavim/issues).
 
-Or use it as a template on GitHub
+-   Help improve our [docs](https://docs.kavim.deepelegant.com/) — from typos to tutorials.
 
-2. Install dependencies
+-   Share your creative templates or ideas in [Discord](https://discord.com/invite/xTFEu5Q6q6).
 
-```bash
-npm install
-```
+-   Upvote features you’d love to see next.
 
-3. Run the app
 
-```bash
-npm run start
-```
+See our [CONTRIBUTING.md](./CONTRIBUTING.md) to learn how to send your first pull request.
 
-## Used by
+### Contributors
 
-- [yaste](https://github.com/LuanRoger/yaste) - yaste (Yet another super ₛᵢₘₚₗₑ text editor) is a text editor, that can be used as an alternative to the native text editor of your SO, maybe.
-- [eletric-drizzle](https://github.com/LuanRoger/electric-drizzle) - shadcn-ui and Drizzle ORM with Electron.
-- [Wordle Game](https://github.com/masonyekta/wordle-game) - A Wordle game which features interactive gameplay, cross-platform compatibility, and integration with a custom Wordle API for word validation and letter correctness.
-- [Mehr 🌟](https://github.com/xmannii/MehrLocalChat) - A modern, elegant local AI chatbot application using Electron, React, shadcn/ui, and Ollama.
+<a href="https://github.com/deep-elegant/kavim/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=deep-elegant/kavim" />
+</a>
 
-> Does you've used this template in your project? Add it here and open a PR.
+## License
+
+This project is licensed under the [GNU Affero General Public License v3.0](https://github.com/deep-elegant/kavim/blob/master/LICENSE.txt).
