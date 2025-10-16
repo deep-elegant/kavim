@@ -8,12 +8,9 @@ import {
 } from "@/components/ui/menubar";
 import { SaveModal } from "./SaveModal";
 import { SettingsModal } from "./SettingsModal";
+import { PeerConnectionModal } from "@/core/canvas/collaboration/PeerConnectionModal";
 import { useCanvasData } from "@/core/canvas/CanvasDataContext";
 import { useTranslation } from "react-i18next";
-
-type DirectoryHandle = {
-  name?: string;
-};
 
 export default function MenuBar() {
   const { i18n } = useTranslation();
@@ -26,6 +23,8 @@ export default function MenuBar() {
   const [folderPickerMessage, setFolderPickerMessage] = useState<string>("");
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isPeerConnectionOpen, setIsPeerConnectionOpen] = useState(false);
+  const [connectionRole, setConnectionRole] = useState<'initiator' | 'responder'>('initiator');
   const [deepseekKey, setDeepseekKey] = useState(
     () => window.settingsStore.get("deepseek")?.apiKey ?? "",
   );
@@ -147,6 +146,17 @@ export default function MenuBar() {
               </MenubarItem>
             </MenubarContent>
           </MenubarMenu>
+          <MenubarMenu>
+            <MenubarTrigger>Connect</MenubarTrigger>
+            <MenubarContent>
+              <MenubarItem onClick={() => { setIsPeerConnectionOpen(true); setConnectionRole('initiator'); }}>
+                Connect as Initiator
+              </MenubarItem>
+              <MenubarItem onClick={() => { setIsPeerConnectionOpen(true); setConnectionRole('responder'); }}>
+                Connect as Responder
+              </MenubarItem>
+            </MenubarContent>
+          </MenubarMenu>
         </Menubar>
         {combinedStatus ? (
           <span className="text-sm text-muted-foreground">{combinedStatus}</span>
@@ -173,6 +183,12 @@ export default function MenuBar() {
         chatgptKey={chatgptKey}
         setChatgptKey={setChatgptKey}
         handleSettingsSave={handleSettingsSave}
+      />
+
+      <PeerConnectionModal
+        isOpen={isPeerConnectionOpen}
+        onClose={() => setIsPeerConnectionOpen(false)}
+        role={connectionRole}
       />
     </div>
   );
