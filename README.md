@@ -23,7 +23,7 @@
 <p>
     <a href="https://kavim.deepelegant.com/" target="_blank">
       <img
-        src="./images/MainPage.png"
+        src="./images/main.png"
         alt="Kavim Main Page"
         width="100%"
       />
