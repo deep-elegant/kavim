@@ -9,13 +9,14 @@ import {
 import { SaveModal } from "./SaveModal";
 import { SettingsModal } from "./SettingsModal";
 import { useCanvasData } from "@/core/canvas/CanvasDataContext";
+import { useTranslation } from "react-i18next";
 
 type DirectoryHandle = {
   name?: string;
 };
 
 export default function MenuBar() {
-  const [loadMessage, setLoadMessage] = useState<string>("");
+  const { i18n } = useTranslation();
   const { nodes, edges, setCanvasState } = useCanvasData();
 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -46,21 +47,18 @@ export default function MenuBar() {
   }, [isSettingsOpen]);
 
   const combinedStatus = useMemo(() => {
-    return [loadMessage, saveMessage, settingsMessage].filter(Boolean).join(" · ");
-  }, [loadMessage, saveMessage, settingsMessage]);
+    return [saveMessage, settingsMessage].filter(Boolean).join(" · ");
+  }, [saveMessage, settingsMessage]);
 
   const handleLoadClick = useCallback(async () => {
-    setLoadMessage("");
     const filePath = await window.fileSystem.openFile({
       filters: [{ name: "Pak Files", extensions: ["pak"] }],
     });
     if (!filePath) {
-      setLoadMessage("No file selected.");
       return;
     }
 
     try {
-      setLoadMessage(`Loading ${filePath}...`);
       const result = await window.projectPak.load(filePath);
       const loadedNodes = Array.isArray(result.canvas?.nodes)
         ? (result.canvas.nodes as typeof nodes)
@@ -69,13 +67,8 @@ export default function MenuBar() {
         ? (result.canvas.edges as typeof edges)
         : [];
       setCanvasState(loadedNodes, loadedEdges);
-
-      const manifestName =
-        (result.manifest as { name?: string } | undefined)?.name || filePath;
-      setLoadMessage(`Loaded ${manifestName}`);
     } catch (error) {
       console.error("Failed to load project", error);
-      setLoadMessage("Failed to load project.");
     }
   }, [setCanvasState]);
 
@@ -135,22 +128,22 @@ export default function MenuBar() {
 
   return (
     <div className="border-b border-border bg-background/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/75">
-      <div className="mx-auto flex max-w-5xl items-center justify-between px-4">
+      <div className="flex max-w-5xl items-center px-4">
         <Menubar className="border-none bg-transparent p-0 shadow-none">
           <MenubarMenu>
-            <MenubarTrigger>File</MenubarTrigger>
+            <MenubarTrigger>{i18n.t("menuBar.file")}</MenubarTrigger>
             <MenubarContent>
-              <MenubarItem onClick={handleLoadClick}>Load</MenubarItem>
+              <MenubarItem onClick={handleLoadClick}>{i18n.t("menuBar.load")}</MenubarItem>
               <MenubarItem onClick={() => setIsSaveModalOpen(true)}>
-                Save
+                {i18n.t("menuBar.save")}
               </MenubarItem>
             </MenubarContent>
           </MenubarMenu>
           <MenubarMenu>
-            <MenubarTrigger>Settings</MenubarTrigger>
+            <MenubarTrigger>{i18n.t("menuBar.settings")}</MenubarTrigger>
             <MenubarContent>
               <MenubarItem onClick={() => setIsSettingsOpen(true)}>
-                LLM
+                {i18n.t("menuBar.llm")}
               </MenubarItem>
             </MenubarContent>
           </MenubarMenu>

@@ -6,16 +6,14 @@ i18n.use(initReactI18next).init({
   resources: {
     en: {
       translation: {
-        appName: "electron-shadcn",
-        titleHomePage: "Home Page",
-        titleSecondPage: "Second Page",
-      },
-    },
-    "pt-BR": {
-      translation: {
-        appName: "electron-shadcn",
-        titleHomePage: "Página Inicial",
-        titleSecondPage: "Segunda Página",
+        menuBar: {
+          file: "File",
+          load: "Load",
+          save: "Save",
+          llm: "LLM",
+          settings: "Settings",
+        },
+        appName: "DeepElegant - Kavim",
       },
     },
   },
