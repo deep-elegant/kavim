@@ -1,5 +1,5 @@
 import { useRef, useCallback, useMemo } from 'react';
-import type { MouseEvent as ReactMouseEvent } from 'react';
+import type { XYPosition } from '@xyflow/react';
 import { useWebRTC } from './WebRTCContext';
 import type { CollaboratorInteraction } from './useWebRTCManual';
 
@@ -19,9 +19,7 @@ export type RemoteNodeInteractionState = {
   typing: RemoteCollaboratorPresence[];
 };
 
-export const useCanvasCollaboration = (
-  reactFlowWrapperRef: React.RefObject<HTMLDivElement>,
-) => {
+export const useCanvasCollaboration = () => {
   const { updatePresence, remotePresenceByClient, dataChannelState } = useWebRTC();
   const mouseThrottleRef = useRef<number>(0);
   const collaboratorIdentitiesRef = useRef(
@@ -101,8 +99,10 @@ export const useCanvasCollaboration = (
   }, [remoteCollaborators]);
 
   const collaborationPaneMouseMove = useCallback(
-    (event: ReactMouseEvent) => {
-      if (!reactFlowWrapperRef.current) {
+    (position: XYPosition | null) => {
+      if (!position) {
+        updatePresence({ hasPosition: false });
+        mouseThrottleRef.current = 0;
         return;
       }
 
@@ -111,14 +111,10 @@ export const useCanvasCollaboration = (
         return;
       }
 
-      const rect = reactFlowWrapperRef.current.getBoundingClientRect();
-      const x = event.clientX - rect.left;
-      const y = event.clientY - rect.top;
-
-      updatePresence({ x, y, hasPosition: true });
+      updatePresence({ x: position.x, y: position.y, hasPosition: true });
       mouseThrottleRef.current = now;
     },
-    [reactFlowWrapperRef, updatePresence],
+    [updatePresence],
   );
 
   const broadcastSelection = useCallback(

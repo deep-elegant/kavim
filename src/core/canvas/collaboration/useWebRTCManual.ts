@@ -518,12 +518,18 @@ export function useWebRTCManual(doc: Y.Doc) {
         const existing = presenceMap.get(localClientKey);
         const hasNewPosition =
           typeof update.x === 'number' && typeof update.y === 'number';
+        const nextHasPosition =
+          typeof update.hasPosition === 'boolean'
+            ? update.hasPosition
+            : hasNewPosition
+              ? true
+              : existing?.hasPosition ?? false;
         const next: CursorPresence = {
           x: hasNewPosition ? update.x! : existing?.x ?? 0,
           y: hasNewPosition ? update.y! : existing?.y ?? 0,
           nodeId: update.nodeId ?? existing?.nodeId ?? null,
           interaction: update.interaction ?? existing?.interaction ?? 'pointer',
-          hasPosition: hasNewPosition ? true : existing?.hasPosition ?? false,
+          hasPosition: nextHasPosition,
           updatedAt: Date.now(),
         };
 
