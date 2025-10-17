@@ -38,10 +38,10 @@ import {
 
 import '@xyflow/react/dist/style.css';
 
-import StickyNoteNode, { stickyNoteDrawable, type StickyNoteNodeType } from './nodes/StickyNoteNode';
-import AiNode, { aiNodeDrawable, type AiNodeType } from './nodes/AINode';
-import ShapeNodeComponent, { shapeDrawable, type ShapeNode } from './nodes/ShapeNode';
-import TextNodeComponent, { textDrawable, type TextNode } from './nodes/TextNode';
+import StickyNoteNode, { stickyNoteDrawable } from './nodes/StickyNoteNode';
+import AiNode, { aiNodeDrawable } from './nodes/AINode';
+import ShapeNodeComponent, { shapeDrawable } from './nodes/ShapeNode';
+import TextNodeComponent, { textDrawable } from './nodes/TextNode';
 import ImageNode, {
   IMAGE_NODE_MIN_HEIGHT,
   IMAGE_NODE_MIN_WIDTH,
@@ -57,10 +57,8 @@ import { useCanvasData } from './CanvasDataContext';
 import { RemoteCursor } from './collaboration/RemoteCursor';
 import { RemoteNodePresenceProvider } from './collaboration/RemoteNodePresenceContext';
 import { useCanvasCollaboration } from './collaboration/useCanvasCollaboration';
-
-type ToolId = 'sticky-note' | 'shape' | 'arrow' | 'prompt-node' | 'text' | 'image';
-
-type CanvasNode = StickyNoteNodeType | ShapeNode | TextNode | AiNodeType | ImageNodeType;
+import { useCanvasCopyPaste } from './hooks/useCanvasCopyPaste';
+import type { CanvasNode, ToolId } from './types';
 
 const tools: { id: ToolId; label: string; icon: ComponentType<{ className?: string }> }[] = [
   { id: 'sticky-note', label: 'Sticky Note', icon: StickyNote },
@@ -149,7 +147,6 @@ const CanvasInner = () => {
   } | null>(null);
   const reactFlowWrapperRef = useRef<HTMLDivElement | null>(null);
   const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow();
-  const copiedNodesRef = useRef<Node<CanvasNode>[]>([]);
   const lastSelectionBroadcastRef = useRef<string | null>(null);
   const currentSelectedNodeRef = useRef<string | null>(null);
   const lastTypingNodeRef = useRef<string | null>(null);
@@ -161,34 +158,6 @@ const CanvasInner = () => {
     broadcastSelection,
     broadcastTyping,
   } = useCanvasCollaboration(reactFlowWrapperRef);
-
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement;
-      if (
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.isContentEditable
-      ) {
-        return;
-      }
-
-      if ((event.ctrlKey || event.metaKey) && event.code === 'KeyC') {
-        const selectedNodes = nodes.filter((node) => node.selected);
-        if (selectedNodes.length > 0) {
-          copiedNodesRef.current = JSON.parse(JSON.stringify(selectedNodes));
-          navigator.clipboard.writeText('__COL_AI_NODES_COPY__').catch((err) => {
-            console.error('Failed to write to clipboard:', err);
-          });
-        }
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [nodes]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -539,84 +508,16 @@ const CanvasInner = () => {
     [addImageNode, screenToFlowPosition, setSelectedTool],
   );
 
-  const handlePaste = useCallback(
-    async (event: React.ClipboardEvent) => {
-      const clipboardText = event.clipboardData.getData('text/plain');
-
-      if (clipboardText === '__COL_AI_NODES_COPY__' && copiedNodesRef.current.length > 0) {
-        event.preventDefault();
-        setSelectedTool(null);
-
-        const newNodes: Node<CanvasNode>[] = [];
-        const updatedCopiedNodes: Node<CanvasNode>[] = [];
-
-        copiedNodesRef.current.forEach((nodeToCopy) => {
-          const offset = 20;
-          const newPosition = {
-            x: nodeToCopy.position.x + offset,
-            y: nodeToCopy.position.y + offset,
-          };
-
-          const newNode: Node<CanvasNode> = {
-            ...nodeToCopy,
-            id: crypto.randomUUID(),
-            position: newPosition,
-            selected: true,
-            data: JSON.parse(JSON.stringify(nodeToCopy.data)),
-          };
-          newNodes.push(newNode);
-
-          const updatedNode = JSON.parse(JSON.stringify(nodeToCopy));
-          updatedNode.position = newPosition;
-          updatedCopiedNodes.push(updatedNode);
-        });
-
-        copiedNodesRef.current = updatedCopiedNodes;
-
-        setNodes((currentNodes) => {
-          const deselected = currentNodes.map((node) =>
-            node.selected ? { ...node, selected: false } : node,
-          );
-          return [...deselected, ...newNodes];
-        });
-        return;
-      }
-
-      const files = Array.from(event.clipboardData?.files ?? []).filter(isImageFile);
-
-      if (files.length > 0) {
-        event.preventDefault();
-        setSelectedTool(null);
-
-        const pastePosition = getCanvasCenterPosition();
-
-        for (const [index, file] of files.entries()) {
-          try {
-            const dataUrl = await readFileAsDataUrl(file);
-            const base64Data = dataUrl.split(',')[1];
-            if (!base64Data) {
-              continue;
-            }
-
-            const extension = file.type.split('/')[1] ?? 'png';
-            const filePath = await window.fileSystem.saveClipboardImage(base64Data, extension);
-            const newSrc = await window.fileSystem.readFileAsDataUrl(filePath);
-            const fileName = getFileName(filePath);
-
-            const offset = index * 24;
-            await addImageNode(
-              newSrc,
-              { x: pastePosition.x + offset, y: pastePosition.y + offset },
-              fileName,
-            );
-          } catch (error) {
-            console.error('Failed to paste image', error);
-          }
-        }
-      }
-    },
-    [addImageNode, getCanvasCenterPosition, setSelectedTool, setNodes],
-  );
+  const { handlePaste } = useCanvasCopyPaste({
+    nodes,
+    setNodes,
+    setSelectedTool,
+    addImageNode,
+    getCanvasCenterPosition,
+    readFileAsDataUrl,
+    getFileName,
+    isImageFile,
+  });
 
   return (
     <div
