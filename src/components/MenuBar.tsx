@@ -52,6 +52,10 @@ export default function MenuBar() {
   }, [saveMessage, settingsMessage]);
 
   const connectionStatus = useMemo(() => {
+    if (dataChannelState === "not-initiated") {
+      return null;
+    }
+
     if (connectionState === "connected" && dataChannelState === "open") {
       return { label: "Connected", className: "text-green-500" };
     }
@@ -68,7 +72,8 @@ export default function MenuBar() {
       connectionState === "failed" ||
       connectionState === "disconnected" ||
       connectionState === "closed" ||
-      dataChannelState === "closed"
+      dataChannelState === "closed" ||
+      dataChannelState === "closing"
     ) {
       return { label: "Failure / Disconnected", className: "text-red-500" };
     }
@@ -186,9 +191,11 @@ export default function MenuBar() {
           </MenubarMenu>
         </Menubar>
         <div className="flex items-center gap-3">
-          <span className={`text-sm font-medium ${connectionStatus.className}`}>
-            {connectionStatus.label}
-          </span>
+          {connectionStatus ? (
+            <span className={`text-sm font-medium ${connectionStatus.className}`}>
+              {connectionStatus.label}
+            </span>
+          ) : null}
           {combinedStatus ? (
             <span className="text-sm text-muted-foreground">{combinedStatus}</span>
           ) : null}

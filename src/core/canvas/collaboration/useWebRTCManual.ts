@@ -2,6 +2,12 @@ import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import * as Y from 'yjs';
 
 type ConnectionState = 'new' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed';
+type DataChannelState =
+  | 'not-initiated'
+  | 'connecting'
+  | 'open'
+  | 'closing'
+  | 'closed';
 
 export interface WebRTCChatMessage {
   type: 'chat';
@@ -84,7 +90,7 @@ export function useWebRTCManual(doc: Y.Doc) {
   const [localAnswer, setLocalAnswer] = useState<string>('');
   const [localCandidates, setLocalCandidates] = useState<string[]>([]);
   const [connectionState, setConnectionState] = useState<ConnectionState>('new');
-  const [dataChannelState, setDataChannelState] = useState<'connecting' | 'open' | 'closing' | 'closed'>('closed');
+  const [dataChannelState, setDataChannelState] = useState<DataChannelState>('not-initiated');
   const [messages, setMessages] = useState<WebRTCChatMessage[]>([]);
   const [remotePresenceByClient, setRemotePresenceByClient] = useState<
     Record<string, CursorPresence>
@@ -312,6 +318,7 @@ export function useWebRTCManual(doc: Y.Doc) {
   // Setup data channel with message handlers
   const setupDataChannel = useCallback((channel: RTCDataChannel) => {
     channel.binaryType = 'arraybuffer';
+    setDataChannelState(channel.readyState as DataChannelState);
 
     channel.onopen = () => {
       setDataChannelState('open');
@@ -360,7 +367,15 @@ export function useWebRTCManual(doc: Y.Doc) {
 
       console.warn('Received unsupported data channel message type:', data);
     };
-  }, [applyYUpdate, flushLocalUpdates, flushPendingYUpdates, handleStringMessage, sendStateVector]);
+  }, [
+    applyYUpdate,
+    flushLocalUpdates,
+    flushPendingYUpdates,
+    handleStringMessage,
+    sendStateVector,
+    setDataChannelState,
+    setRemotePresenceByClient,
+  ]);
 
   useEffect(() => {
     const handleDocUpdate = (update: Uint8Array, origin: unknown) => {
