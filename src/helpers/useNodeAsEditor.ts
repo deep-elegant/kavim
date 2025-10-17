@@ -2,7 +2,6 @@ import { useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { useCallback, useEffect, useMemo, useRef, type MouseEvent, type FocusEvent } from 'react';
 import { cn } from '@/utils/tailwind';
-import { TextStyleKit } from '@tiptap/extension-text-style';
 import {
   DEFAULT_FONT_SIZE,
   FontSize,
@@ -68,7 +67,6 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
         bulletList: { keepMarks: true, keepAttributes: false },
         orderedList: { keepMarks: true, keepAttributes: false },
       }),
-      TextStyleKit,
       FontSize.configure({
         initialMode: initialFontSizeMode.current,
         initialValue: initialFontSizeValue.current,
