@@ -13,6 +13,8 @@ import * as Y from 'yjs';
 import type { Edge, Node } from '@xyflow/react';
 import type { EditableEdgeData } from './edges/EditableEdge';
 
+const TRANSIENT_NODE_DATA_KEYS = new Set(['isTyping', 'isEditing', 'isActive']);
+
 export type CanvasDataContextValue = {
   nodes: Node[];
   edges: Edge<EditableEdgeData>[];
@@ -33,6 +35,50 @@ export const CanvasDataProvider = ({
   doc?: Y.Doc;
   children: React.ReactNode;
 }) => {
+  const sanitizeNodeDataForSync = useCallback((data: Node['data']) => {
+    if (!data || typeof data !== 'object') {
+      return data;
+    }
+
+    let hasTransientKey = false;
+
+    const sanitizedEntries = Object.entries(data).filter(([key]) => {
+      if (TRANSIENT_NODE_DATA_KEYS.has(key)) {
+        hasTransientKey = true;
+        return false;
+      }
+      return true;
+    });
+
+    if (!hasTransientKey) {
+      return data;
+    }
+
+    return Object.fromEntries(sanitizedEntries) as Node['data'];
+  }, []);
+
+  const sanitizeNodeForSync = useCallback(
+    (node: Node) => {
+      const sanitizedData = sanitizeNodeDataForSync(node.data);
+
+      if (sanitizedData === node.data && node.selected === undefined) {
+        return node;
+      }
+
+      const { selected: _selected, ...rest } = node;
+      return {
+        ...rest,
+        data: sanitizedData,
+      } as Node;
+    },
+    [sanitizeNodeDataForSync],
+  );
+
+  const serializeNodeForSync = useCallback(
+    (node: Node) => JSON.stringify(sanitizeNodeForSync(node)),
+    [sanitizeNodeForSync],
+  );
+
   const canvasDoc = useMemo(() => doc ?? new Y.Doc(), [doc]);
   const nodesMap = useMemo(() => canvasDoc.getMap<Node>('nodes'), [canvasDoc]);
   const nodeOrder = useMemo(() => canvasDoc.getArray<string>('node-order'), [canvasDoc]);
@@ -285,8 +331,14 @@ export const CanvasDataProvider = ({
 
       updateLocalNodesState(next);
 
+      const sanitizedCurrentById = new Map(
+        current.map((node) => [node.id, serializeNodeForSync(node)]),
+      );
+      const sanitizedNext = next.map((node) => sanitizeNodeForSync(node));
+      const sanitizedNextSerialized = sanitizedNext.map((node) => JSON.stringify(node));
+
       canvasDoc.transact(() => {
-        const nextIds = next.map((node) => node.id);
+        const nextIds = sanitizedNext.map((node) => node.id);
         const currentOrder = current.map((node) => node.id);
         const orderChanged =
           nextIds.length !== currentOrder.length ||
@@ -299,7 +351,6 @@ export const CanvasDataProvider = ({
           }
         }
 
-        const previousById = new Map(current.map((node) => [node.id, node]));
         const nextIdSet = new Set(nextIds);
 
         Array.from(nodesMap.keys()).forEach((id) => {
@@ -308,14 +359,16 @@ export const CanvasDataProvider = ({
           }
         });
 
-        next.forEach((node) => {
-          if (previousById.get(node.id) !== node) {
+        sanitizedNext.forEach((node, index) => {
+          const serializedNode = sanitizedNextSerialized[index];
+          if (sanitizedCurrentById.get(node.id) !== serializedNode) {
             nodesMap.set(node.id, node);
+            sanitizedCurrentById.set(node.id, serializedNode);
           }
         });
       }, 'canvas');
     },
-    [canvasDoc, nodeOrder, nodesMap, updateLocalNodesState],
+    [canvasDoc, nodeOrder, nodesMap, sanitizeNodeForSync, serializeNodeForSync, updateLocalNodesState],
   );
 
   const setEdges = useCallback<Dispatch<SetStateAction<Edge<EditableEdgeData>[]>>>(
@@ -378,10 +431,12 @@ export const CanvasDataProvider = ({
         edgeOrder.delete(0, edgeOrder.length);
         edgesMap.clear();
 
-        if (nextNodes.length > 0) {
-          const nodeIds = nextNodes.map((node) => node.id);
+        const sanitizedNodes = nextNodes.map((node) => sanitizeNodeForSync(node));
+
+        if (sanitizedNodes.length > 0) {
+          const nodeIds = sanitizedNodes.map((node) => node.id);
           nodeOrder.insert(0, nodeIds);
-          nextNodes.forEach((node) => {
+          sanitizedNodes.forEach((node) => {
             nodesMap.set(node.id, node);
           });
         }
@@ -395,7 +450,16 @@ export const CanvasDataProvider = ({
         }
       }, 'canvas');
     },
-    [canvasDoc, edgeOrder, edgesMap, nodeOrder, nodesMap, updateLocalEdgesState, updateLocalNodesState],
+    [
+      canvasDoc,
+      edgeOrder,
+      edgesMap,
+      nodeOrder,
+      nodesMap,
+      sanitizeNodeForSync,
+      updateLocalEdgesState,
+      updateLocalNodesState,
+    ],
   );
 
   const getNodes = useCallback(() => nodesRef.current, []);
