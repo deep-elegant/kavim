@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { FocusEventHandler, memo, useCallback, useEffect, useMemo, useRef, useState, type FocusEvent } from 'react';
 import { type NodeProps, type Node, type Edge } from '@xyflow/react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -51,8 +51,10 @@ const htmlToPlainText = (value: string): string =>
     .replace(/\s+/g, ' ')
     .trim();
 
+const AI_MODEL_VALUES = AI_MODELS.map((option) => option.value) as [AiModel, ...AiModel[]];
+
 const aiNodeFormSchema = z.object({
-  model: z.enum(Object.keys(AI_MODELS) as [string, ...string[]]),
+  model: z.enum(AI_MODEL_VALUES),
   prompt: z.string(),
 });
 
@@ -442,6 +444,23 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     return response;
   }, [result]);
 
+  const customOnBlur = useCallback(
+    (event: FocusEvent<HTMLDivElement>) => {
+      const { relatedTarget } = event;
+      if (
+        (relatedTarget instanceof Element &&
+          relatedTarget.closest('[data-radix-popper-content-wrapper]')) ||
+        (contentRef.current &&
+          relatedTarget instanceof Node &&
+          contentRef.current.contains(relatedTarget))
+      ) {
+        return;
+      }
+      handleBlur(event);
+    },
+    [handleBlur],
+  );
+
   return (
     <NodeInteractionOverlay
       nodeId={id}
@@ -467,7 +486,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
         ref={contentRef}
         className="flex h-full w-full flex-col gap-3 rounded-lg border border-border bg-white p-3 shadow"
         onDoubleClick={handleDoubleClick}
-        onBlur={handleBlur}
+        onBlur={customOnBlur}
         role="presentation"
       >
         {isTyping ? (
@@ -496,7 +515,9 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                   <FormItem className="flex h-full flex-col space-y-0">
                     <FormLabel className="text-xs font-medium text-slate-600">Prompt</FormLabel>
                     <FormControl className="mt-1 min-h-[120px] flex-1">
-                      <div className="h-full overflow-hidden rounded-md border border-slate-300">
+                      <div
+                        className="h-full overflow-hidden rounded-md border border-slate-300"
+                      >
                         <MinimalTiptap
                           editor={editor}
                           theme="transparent"

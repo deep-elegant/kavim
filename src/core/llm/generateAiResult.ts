@@ -1,4 +1,4 @@
-import { type AiModel } from '@/core/llm/aiModels';
+import { AI_MODELS, AI_PROVIDER_METADATA, type AiModel, type AiProvider } from '@/core/llm/aiModels';
 import { ChatOpenAI } from '@langchain/openai';
 import { type AIMessage, type AIMessageChunk } from '@langchain/core/messages';
 
@@ -7,22 +7,49 @@ export type ChatMessage = {
   content: string;
 };
 
-const MODEL_SETTINGS: Record<
-  AiModel,
-  { envKey: () => string; placeholder: string; modelName: string; baseURL?: string }
-> = {
-  chatgpt: {
-    envKey: () => window.settingsStore.get('chatgpt')?.apiKey ?? '',
-    placeholder: 'YOUR_OPENAI_API_KEY',
-    modelName: 'gpt-4o-mini',
-  },
-  deepseek: {
-    envKey: () => window.settingsStore.get('deepseek')?.apiKey ?? '',
-    placeholder: 'YOUR_DEEPSEEK_API_KEY',
-    modelName: 'deepseek-chat',
-    baseURL: 'https://api.deepseek.com/v1',
-  },
+type ProviderSettings = {
+  envKey: () => string;
+  placeholder: string;
+  baseURL?: string;
 };
+
+type ModelSettings = ProviderSettings & {
+  modelName: string;
+};
+
+const PROVIDER_SETTINGS: Record<AiProvider, ProviderSettings> = AI_PROVIDER_METADATA.reduce(
+  (accumulator, provider) => {
+    const { value, apiKeyPlaceholder, baseURL } = provider;
+
+    accumulator[value] = {
+      envKey: () => window.settingsStore.get(value)?.apiKey ?? '',
+      placeholder: apiKeyPlaceholder,
+      baseURL,
+    };
+
+    return accumulator;
+  },
+  {} as Record<AiProvider, ProviderSettings>,
+);
+
+const MODEL_SETTINGS: Record<AiModel, ModelSettings> = AI_MODELS.reduce(
+  (accumulator, model) => {
+    const providerSettings = PROVIDER_SETTINGS[model.provider];
+
+    if (!providerSettings) {
+      throw new Error(`Provider settings not found for model ${model.value}`);
+    }
+
+    accumulator[model.value] = {
+      ...providerSettings,
+      modelName: model.modelId,
+      baseURL: model.baseURL ?? providerSettings.baseURL,
+    };
+
+    return accumulator;
+  },
+  {} as Record<AiModel, ModelSettings>,
+);
 
 const extractMessageContent = (message: AIMessage | AIMessageChunk): string => {
   const { content } = message;
@@ -64,6 +91,11 @@ export const generateAiResult = async ({
   onChunk: (chunk: string) => void;
 }): Promise<void> => {
   const settings = MODEL_SETTINGS[model];
+
+  if (!settings) {
+    throw new Error(`Unknown AI model: ${model}`);
+  }
+
   const apiKey = settings.envKey();
 
   const configuration = settings.baseURL ? { configuration: { baseURL: settings.baseURL } } : {};

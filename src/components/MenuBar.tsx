@@ -12,6 +12,15 @@ import { PeerConnectionModal } from "@/core/canvas/collaboration/PeerConnectionM
 import { useCanvasData } from "@/core/canvas/CanvasDataContext";
 import { useWebRTC } from "@/core/canvas/collaboration/WebRTCContext";
 import { useTranslation } from "react-i18next";
+import { AI_PROVIDER_METADATA, type AiProvider } from "@/core/llm/aiModels";
+
+type ProviderKeyState = Record<AiProvider, string>;
+
+const createProviderKeyState = (): ProviderKeyState =>
+  AI_PROVIDER_METADATA.reduce((accumulator, provider) => {
+    accumulator[provider.value] = window.settingsStore.get(provider.value)?.apiKey ?? "";
+    return accumulator;
+  }, {} as ProviderKeyState);
 
 export default function MenuBar() {
   const { i18n } = useTranslation();
@@ -27,22 +36,12 @@ export default function MenuBar() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPeerConnectionOpen, setIsPeerConnectionOpen] = useState(false);
   const [connectionRole, setConnectionRole] = useState<'initiator' | 'responder'>('initiator');
-  const [deepseekKey, setDeepseekKey] = useState(
-    () => window.settingsStore.get("deepseek")?.apiKey ?? "",
-  );
-  const [chatgptKey, setChatgptKey] = useState(
-    () => window.settingsStore.get("chatgpt")?.apiKey ?? "",
-  );
+  const [providerKeys, setProviderKeys] = useState<ProviderKeyState>(() => createProviderKeyState());
   const [settingsMessage, setSettingsMessage] = useState<string>("");
 
   React.useEffect(() => {
     if (isSettingsOpen) {
-      const storedDeepseekKey =
-        window.settingsStore.get("deepseek")?.apiKey ?? "";
-      const storedChatgptKey =
-        window.settingsStore.get("chatgpt")?.apiKey ?? "";
-      setDeepseekKey(storedDeepseekKey);
-      setChatgptKey(storedChatgptKey);
+      setProviderKeys(createProviderKeyState());
       setSettingsMessage("");
     }
   }, [isSettingsOpen]);
@@ -80,6 +79,13 @@ export default function MenuBar() {
 
     return { label: "Idle", className: "text-muted-foreground" };
   }, [connectionState, dataChannelState]);
+
+  const handleProviderKeyChange = useCallback((provider: AiProvider, value: string) => {
+    setProviderKeys((previous) => ({
+      ...previous,
+      [provider]: value,
+    }));
+  }, []);
 
   const handleLoadClick = useCallback(async () => {
     const filePath = await window.fileSystem.openFile({
@@ -147,8 +153,9 @@ export default function MenuBar() {
 
   const handleSettingsSave = () => {
     try {
-      window.settingsStore.set("deepseek", { apiKey: deepseekKey });
-      window.settingsStore.set("chatgpt", { apiKey: chatgptKey });
+      AI_PROVIDER_METADATA.forEach(({ value: provider }) => {
+        window.settingsStore.set(provider, { apiKey: providerKeys[provider] ?? "" });
+      });
       setIsSettingsOpen(false);
       setSettingsMessage("API keys saved locally.");
     } catch (error) {
@@ -217,10 +224,8 @@ export default function MenuBar() {
       <SettingsModal
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
-        deepseekKey={deepseekKey}
-        setDeepseekKey={setDeepseekKey}
-        chatgptKey={chatgptKey}
-        setChatgptKey={setChatgptKey}
+        providerKeys={providerKeys}
+        setProviderKey={handleProviderKeyChange}
         handleSettingsSave={handleSettingsSave}
       />
 

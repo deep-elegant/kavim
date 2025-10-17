@@ -8,35 +8,49 @@ import {
   DialogFooter,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { AI_PROVIDER_METADATA, type AiProvider } from "@/core/llm/aiModels";
+
+type ProviderKeyMap = Record<AiProvider, string>;
+
+type ProviderVisibilityMap = Record<AiProvider, boolean>;
+
+const createInitialVisibilityMap = (): ProviderVisibilityMap =>
+  AI_PROVIDER_METADATA.reduce((accumulator, provider) => {
+    accumulator[provider.value] = false;
+    return accumulator;
+  }, {} as ProviderVisibilityMap);
 
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  deepseekKey: string;
-  setDeepseekKey: (value: string) => void;
-  chatgptKey: string;
-  setChatgptKey: (value: string) => void;
+  providerKeys: ProviderKeyMap;
+  setProviderKey: (provider: AiProvider, value: string) => void;
   handleSettingsSave: () => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   isOpen,
   onClose,
-  deepseekKey,
-  setDeepseekKey,
-  chatgptKey,
-  setChatgptKey,
+  providerKeys,
+  setProviderKey,
   handleSettingsSave,
 }) => {
-  const [isDeepseekVisible, setIsDeepseekVisible] = React.useState(false);
-  const [isChatgptVisible, setIsChatgptVisible] = React.useState(false);
+  const [visibleProviders, setVisibleProviders] = React.useState<ProviderVisibilityMap>(
+    () => createInitialVisibilityMap(),
+  );
 
   React.useEffect(() => {
     if (!isOpen) {
-      setIsDeepseekVisible(false);
-      setIsChatgptVisible(false);
+      setVisibleProviders(createInitialVisibilityMap());
     }
   }, [isOpen]);
+
+  const toggleProviderVisibility = (provider: AiProvider) => {
+    setVisibleProviders((previous) => ({
+      ...previous,
+      [provider]: !previous[provider],
+    }));
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -46,54 +60,37 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="flex flex-col gap-1 text-sm">
-              DeepSeek API Key
-              <div className="relative">
-                <input
-                  value={deepseekKey}
-                  onChange={(event) => setDeepseekKey(event.target.value)}
-                  type={isDeepseekVisible ? "text" : "password"}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  placeholder="Enter your DeepSeek key"
-                />
-                <button
-                  type="button"
-                  onClick={() => setIsDeepseekVisible((value) => !value)}
-                  className="absolute inset-y-0 right-2 flex items-center text-muted-foreground hover:text-foreground"
-                  aria-label={isDeepseekVisible ? "Hide DeepSeek API key" : "Show DeepSeek API key"}
-                >
-                  {isDeepseekVisible ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              ChatGPT API Key
-              <div className="relative">
-                <input
-                  value={chatgptKey}
-                  onChange={(event) => setChatgptKey(event.target.value)}
-                  type={isChatgptVisible ? "text" : "password"}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                  placeholder="Enter your ChatGPT key"
-                />
-                <button
-                  type="button"
-                  onClick={() => setIsChatgptVisible((value) => !value)}
-                  className="absolute inset-y-0 right-2 flex items-center text-muted-foreground hover:text-foreground"
-                  aria-label={isChatgptVisible ? "Hide ChatGPT API key" : "Show ChatGPT API key"}
-                >
-                  {isChatgptVisible ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            </label>
+            {AI_PROVIDER_METADATA.map(({ value: provider, label, inputPlaceholder }) => {
+              const isVisible = visibleProviders[provider];
+              const providerKey = providerKeys[provider] ?? "";
+
+              return (
+                <label key={provider} className="flex flex-col gap-1 text-sm">
+                  {label} API Key
+                  <div className="relative">
+                    <input
+                      value={providerKey}
+                      onChange={(event) => setProviderKey(provider, event.target.value)}
+                      type={isVisible ? "text" : "password"}
+                      className="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                      placeholder={inputPlaceholder}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleProviderVisibility(provider)}
+                      className="absolute inset-y-0 right-2 flex items-center text-muted-foreground hover:text-foreground"
+                      aria-label={
+                        isVisible
+                          ? `Hide ${label} API key`
+                          : `Show ${label} API key`
+                      }
+                    >
+                      {isVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                </label>
+              );
+            })}
           </div>
           <p className="text-xs text-muted-foreground">
             These API keys are stored locally using electron-store. Replace this storage approach when your secure backend is ready.
