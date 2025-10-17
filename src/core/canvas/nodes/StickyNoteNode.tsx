@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo } from 'react';
+import React, { memo, useCallback, useMemo, useRef } from 'react';
 import { type NodeProps, type Node } from '@xyflow/react';
 
 import NodeInteractionOverlay from './NodeInteractionOverlay';
@@ -14,11 +14,15 @@ import {
   SimpleColorPicker,
   type ColorStyle,
 } from '@/components/ui/simple-color-picker';
+import { DEFAULT_FONT_SIZE, type FontSizeMode } from '@/helpers/FontSize';
+import { useAutoFontSizeObserver } from './useAutoFontSizeObserver';
 
 export type StickyNoteData = {
   label: string;
   isTyping?: boolean;
   color?: ColorStyle;
+  fontSizeMode?: FontSizeMode;
+  fontSizeValue?: number;
 };
 
 export type StickyNoteNodeType = Node<StickyNoteData, 'sticky-note'>;
@@ -37,7 +41,13 @@ export const stickyNoteDrawable: DrawableNode<StickyNoteNodeType> = {
     id,
     type: 'sticky-note',
     position,
-    data: { label: '', isTyping: false, color: defaultColor },
+    data: {
+      label: '',
+      isTyping: false,
+      color: defaultColor,
+      fontSizeMode: 'auto',
+      fontSizeValue: DEFAULT_FONT_SIZE,
+    },
     width: MIN_WIDTH,
     height: MIN_HEIGHT,
     style: { width: MIN_WIDTH, height: MIN_HEIGHT },
@@ -98,6 +108,22 @@ const StickyNoteNode = memo(
       useNodeAsEditor({ id, data });
     const label = data.label ?? '';
     const color = data.color ?? defaultColor;
+    const fontSizeMode = data.fontSizeMode ?? 'auto';
+    const fontSizeValue = data.fontSizeValue ?? DEFAULT_FONT_SIZE;
+    const containerRef = useRef<HTMLDivElement>(null);
+    const measurementRef = useRef<HTMLDivElement>(null);
+    const displayHtml = useMemo(
+      () => label || '<p>Click to add text</p>',
+      [label],
+    );
+
+    useAutoFontSizeObserver({
+      editor,
+      mode: fontSizeMode,
+      html: displayHtml,
+      containerRef,
+      measurementRef,
+    });
 
     const handleColorChange = useCallback(
       (value: ColorStyle) => {
@@ -143,25 +169,58 @@ const StickyNoteNode = memo(
           onBlur={handleBlur}
           role="presentation"
         >
-          <div
-            className={cn('flex h-full w-full')}
-            style={{ color: color.text }}
-          >
-            {isTyping ? (
-              <div
-                className="h-full w-full"
-                onMouseDown={(e) => e.stopPropagation()}
-              >
-                <MinimalTiptap
-                  editor={editor}
-                  theme="transparent"
-                  className={cn('h-full w-full')}
-                  style={{ color: color.text }}
+          <div className={cn('flex h-full w-full')} style={{ color: color.text }}>
+            <div ref={containerRef} className="relative h-full w-full">
+              {isTyping ? (
+                <div
+                  className="h-full w-full"
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <MinimalTiptap
+                    editor={editor}
+                    theme="transparent"
+                    className={cn('h-full w-full')}
+                    style={{ color: color.text, fontSize: `${fontSizeValue}px` }}
+                  />
+                </div>
+              ) : (
+                <div
+                  className={cn(
+                    'prose prose-sm w-full max-w-none',
+                    'prose-h1:text-xl prose-h1:leading-tight',
+                    'prose-h2:text-lg prose-h2:leading-snug',
+                    'prose-h3:text-base prose-h3:leading-snug',
+                    'prose-p:my-1 prose-p:leading-normal',
+                    'prose-ul:my-1 prose-ol:my-1',
+                    'prose-li:my-0',
+                    'min-h-[1.5rem] px-3 py-2',
+                    'break-words',
+                  )}
+                  style={{
+                    '--tw-prose-body': color.text,
+                    '--tw-prose-headings': color.text,
+                    '--tw-prose-links': color.text,
+                    '--tw-prose-bold': color.text,
+                    '--tw-prose-counters': color.text,
+                    '--tw-prose-bullets': color.text,
+                    '--tw-prose-hr': color.border,
+                    '--tw-prose-quotes': color.text,
+                    '--tw-prose-quote-borders': color.border,
+                    '--tw-prose-captions': color.text,
+                    color: color.text,
+                    fontSize: `${fontSizeValue}px`,
+                  }}
+                  dangerouslySetInnerHTML={{
+                    __html: displayHtml,
+                  }}
                 />
-              </div>
-            ) : (
+              )}
+
               <div
+                ref={measurementRef}
+                aria-hidden
                 className={cn(
+                  'pointer-events-none absolute inset-0 box-border overflow-hidden opacity-0',
                   'prose prose-sm w-full max-w-none',
                   'prose-h1:text-xl prose-h1:leading-tight',
                   'prose-h2:text-lg prose-h2:leading-snug',
@@ -183,13 +242,12 @@ const StickyNoteNode = memo(
                   '--tw-prose-quotes': color.text,
                   '--tw-prose-quote-borders': color.border,
                   '--tw-prose-captions': color.text,
-                  color: color.text,
                 }}
                 dangerouslySetInnerHTML={{
-                  __html: label || '<p>Click to add text</p>',
+                  __html: displayHtml,
                 }}
               />
-            )}
+            </div>
           </div>
         </div>
       </NodeInteractionOverlay>
