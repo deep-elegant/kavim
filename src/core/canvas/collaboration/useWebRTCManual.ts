@@ -14,7 +14,24 @@ type SyncMessage = {
   vector: string;
 };
 
-type ChannelMessage = WebRTCChatMessage | SyncMessage;
+type YjsUpdateMessage = {
+  type: 'yjs-update';
+  update: string;
+};
+
+type YjsUpdateChunkMessage = {
+  type: 'yjs-update-chunk';
+  id: string;
+  index: number;
+  total: number;
+  chunk: string;
+};
+
+type ChannelMessage =
+  | WebRTCChatMessage
+  | SyncMessage
+  | YjsUpdateMessage
+  | YjsUpdateChunkMessage;
 
 type CursorPresence = {
   x: number;
@@ -23,6 +40,13 @@ type CursorPresence = {
 };
 
 const BASE64_CHUNK_SIZE = 0x8000;
+const MAX_MESSAGE_CHUNK_SIZE = 15_000;
+
+type PendingChunk = {
+  total: number;
+  received: number;
+  parts: string[];
+};
 
 const encodeToBase64 = (bytes: Uint8Array): string => {
   if (bytes.length === 0) {
@@ -63,30 +87,11 @@ export function useWebRTCManual(doc: Y.Doc) {
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const candidatesBuffer = useRef<RTCIceCandidate[]>([]);
   const pendingYUpdatesRef = useRef<Uint8Array[]>([]);
+  const incomingChunksRef = useRef<Map<string, PendingChunk>>(new Map());
   const pendingLocalUpdatesRef = useRef<Uint8Array[]>([]);
   const localFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const localClientKey = useMemo(() => String(doc.clientID), [doc]);
   const presenceMap = useMemo(() => doc.getMap<CursorPresence>('presence'), [doc]);
-
-  const flushPendingYUpdates = useCallback(() => {
-    const channel = dataChannelRef.current;
-    if (!channel || channel.readyState !== 'open') {
-      return;
-    }
-
-    if (pendingYUpdatesRef.current.length === 0) {
-      return;
-    }
-
-    pendingYUpdatesRef.current.forEach((update) => {
-      try {
-        channel.send(update);
-      } catch (error) {
-        console.error('Failed to flush Yjs update:', error);
-      }
-    });
-    pendingYUpdatesRef.current = [];
-  }, []);
 
   const sendStateVector = useCallback(() => {
     const channel = dataChannelRef.current;
@@ -113,13 +118,63 @@ export function useWebRTCManual(doc: Y.Doc) {
       return;
     }
 
-    try {
-      channel.send(updateCopy);
-    } catch (error) {
-      console.error('Failed to send Yjs update:', error);
-      pendingYUpdatesRef.current.push(updateCopy);
+    const encoded = encodeToBase64(updateCopy);
+
+    const sendMessage = (message: ChannelMessage) => {
+      try {
+        channel.send(JSON.stringify(message));
+        return true;
+      } catch (error) {
+        console.error('Failed to send Yjs update message:', error);
+        pendingYUpdatesRef.current.push(updateCopy);
+        return false;
+      }
+    };
+
+    if (encoded.length <= MAX_MESSAGE_CHUNK_SIZE) {
+      void sendMessage({ type: 'yjs-update', update: encoded });
+      return;
+    }
+
+    const chunkId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    const totalChunks = Math.ceil(encoded.length / MAX_MESSAGE_CHUNK_SIZE);
+
+    for (let index = 0; index < totalChunks; index += 1) {
+      const start = index * MAX_MESSAGE_CHUNK_SIZE;
+      const end = start + MAX_MESSAGE_CHUNK_SIZE;
+      const chunk = encoded.slice(start, end);
+      const success = sendMessage({
+        type: 'yjs-update-chunk',
+        id: chunkId,
+        index,
+        total: totalChunks,
+        chunk,
+      });
+      if (!success) {
+        break;
+      }
     }
   }, []);
+
+  const flushPendingYUpdates = useCallback(() => {
+    const channel = dataChannelRef.current;
+    if (!channel || channel.readyState !== 'open') {
+      return;
+    }
+
+    if (pendingYUpdatesRef.current.length === 0) {
+      return;
+    }
+
+    const updates = pendingYUpdatesRef.current;
+    pendingYUpdatesRef.current = [];
+    updates.forEach((update) => {
+      sendYUpdate(update);
+    });
+  }, [sendYUpdate]);
 
   const flushLocalUpdates = useCallback(() => {
     if (pendingLocalUpdatesRef.current.length === 0) {
@@ -144,6 +199,14 @@ export function useWebRTCManual(doc: Y.Doc) {
     }, 80);
   }, [flushLocalUpdates]);
 
+  const applyYUpdate = useCallback((update: Uint8Array) => {
+    try {
+      Y.applyUpdate(doc, update, 'webrtc');
+    } catch (error) {
+      console.error('Failed to apply Yjs update:', error);
+    }
+  }, [doc]);
+
   const handleStringMessage = useCallback((raw: string) => {
     let message: ChannelMessage;
     try {
@@ -165,16 +228,49 @@ export function useWebRTCManual(doc: Y.Doc) {
         sendYUpdate(diff);
       }
       flushPendingYUpdates();
+      return;
     }
-  }, [doc, flushPendingYUpdates, sendYUpdate]);
 
-  const applyYUpdate = useCallback((update: Uint8Array) => {
-    try {
-      Y.applyUpdate(doc, update, 'webrtc');
-    } catch (error) {
-      console.error('Failed to apply Yjs update:', error);
+    if (message.type === 'yjs-update') {
+      applyYUpdate(decodeFromBase64(message.update));
+      return;
     }
-  }, [doc]);
+
+    if (message.type === 'yjs-update-chunk') {
+      const { id, index, total, chunk } = message;
+
+      if (index < 0 || index >= total) {
+        console.warn('Received Yjs chunk with invalid index', message);
+        return;
+      }
+
+      let entry = incomingChunksRef.current.get(id);
+      if (!entry || entry.total !== total) {
+        entry = {
+          total,
+          received: 0,
+          parts: new Array<string>(total),
+        };
+      }
+
+      if (!entry) {
+        return;
+      }
+
+      if (entry.parts[index] === undefined) {
+        entry.parts[index] = chunk;
+        entry.received += 1;
+      }
+
+      incomingChunksRef.current.set(id, entry);
+
+      if (entry.received === entry.total) {
+        incomingChunksRef.current.delete(id);
+        const combined = entry.parts.join('');
+        applyYUpdate(decodeFromBase64(combined));
+      }
+    }
+  }, [applyYUpdate, doc, flushPendingYUpdates, sendYUpdate]);
 
   // Initialize peer connection
   const initializePeerConnection = useCallback(() => {
@@ -220,6 +316,8 @@ export function useWebRTCManual(doc: Y.Doc) {
     channel.onclose = () => {
       setDataChannelState('closed');
       setRemoteMouse(null);
+      incomingChunksRef.current.clear();
+      pendingYUpdatesRef.current = [];
     };
 
     channel.onmessage = (event) => {
@@ -455,6 +553,8 @@ export function useWebRTCManual(doc: Y.Doc) {
       if (pcRef.current) {
         pcRef.current.close();
       }
+      incomingChunksRef.current.clear();
+      pendingYUpdatesRef.current = [];
     };
   }, [flushLocalUpdates]);
 
