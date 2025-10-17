@@ -51,7 +51,6 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
         orderedList: { keepMarks: true, keepAttributes: false },
       }),
       TextStyleKit,
-      FontSize,
     ],
     content: label,
     onUpdate: ({ editor: updatedEditor }) => {
