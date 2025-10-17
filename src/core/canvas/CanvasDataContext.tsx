@@ -18,6 +18,8 @@ export type CanvasDataContextValue = {
   edges: Edge<EditableEdgeData>[];
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setEdges: Dispatch<SetStateAction<Edge<EditableEdgeData>[]>>;
+  getNodes: () => Node[];
+  getEdges: () => Edge<EditableEdgeData>[];
   setCanvasState: (nodes: Node[], edges: Edge<EditableEdgeData>[]) => void;
   doc: Y.Doc;
 };
@@ -295,16 +297,21 @@ export const CanvasDataProvider = ({
     [doc, edgeOrder, edgesMap, nodeOrder, nodesMap],
   );
 
+  const getNodes = useCallback(() => nodesRef.current, []);
+  const getEdges = useCallback(() => edgesRef.current, []);
+
   const value = useMemo(
     () => ({
       nodes,
       edges,
       setNodes,
       setEdges,
+      getNodes,
+      getEdges,
       setCanvasState,
       doc,
     }),
-    [doc, edges, nodes, setCanvasState, setEdges, setNodes],
+    [doc, edges, getEdges, getNodes, nodes, setCanvasState, setEdges, setNodes],
   );
 
   return (

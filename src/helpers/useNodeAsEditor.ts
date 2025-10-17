@@ -1,10 +1,10 @@
-import { useReactFlow } from '@xyflow/react';
 import { useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import { useCallback, useEffect, type MouseEvent, type FocusEvent } from 'react';
 import { cn } from '@/utils/tailwind';
 import { TextStyleKit } from '@tiptap/extension-text-style';
 import { FontSize } from './FontSize';
+import { useCanvasData } from '@/core/canvas/CanvasDataContext';
 
 export type NodeDataWithLabel = {
   label: string;
@@ -17,7 +17,7 @@ export type UseNodeAsEditorParams<T extends NodeDataWithLabel> = {
 };
 
 export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNodeAsEditorParams<T>) => {
-  const { setNodes } = useReactFlow();
+  const { setNodes } = useCanvasData();
   const isTyping = Boolean(data.isTyping);
   const label = data.label ?? '';
 
