@@ -6,7 +6,6 @@ const HEADER_SIZE = 12;
 
 export const readPak = async (filePath: string): Promise<PakReadResult> => {
   const fd = await fs.promises.open(filePath, "r");
-  console.log('reading pak...')
 
   try {
     const header = Buffer.alloc(HEADER_SIZE);

@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useReactFlow, type NodeProps, type Node, type Edge } from '@xyflow/react';
+import { type NodeProps, type Node, type Edge } from '@xyflow/react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -23,6 +23,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { createDefaultEditableEdgeData } from '../edges/EditableEdge';
+import { useCanvasData } from '../CanvasDataContext';
 
 export type AiStatus = 'not-started' | 'in-progress' | 'done';
 
@@ -121,7 +122,7 @@ const STATUS_STYLES: Record<AiStatus, string> = {
 };
 
 const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
-  const { setNodes, setEdges, getNodes, getEdges } = useReactFlow();
+  const { setNodes, setEdges, getNodes, getEdges } = useCanvasData();
   const contentRef = useRef<HTMLDivElement>(null);
   const { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData } = useNodeAsEditor({
     id,
@@ -425,7 +426,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
   const resultHtml = useMemo(() => {
     const response = marked.parse(result || '');
-    console.log('markdown',  result, response)
     return response;
   }, [result]);
 

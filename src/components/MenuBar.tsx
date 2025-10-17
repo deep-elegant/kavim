@@ -8,16 +8,15 @@ import {
 } from "@/components/ui/menubar";
 import { SaveModal } from "./SaveModal";
 import { SettingsModal } from "./SettingsModal";
+import { PeerConnectionModal } from "@/core/canvas/collaboration/PeerConnectionModal";
 import { useCanvasData } from "@/core/canvas/CanvasDataContext";
+import { useWebRTC } from "@/core/canvas/collaboration/WebRTCContext";
 import { useTranslation } from "react-i18next";
-
-type DirectoryHandle = {
-  name?: string;
-};
 
 export default function MenuBar() {
   const { i18n } = useTranslation();
   const { nodes, edges, setCanvasState } = useCanvasData();
+  const { connectionState, dataChannelState } = useWebRTC();
 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [saveFileName, setSaveFileName] = useState("untitled.pak");
@@ -26,6 +25,8 @@ export default function MenuBar() {
   const [folderPickerMessage, setFolderPickerMessage] = useState<string>("");
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isPeerConnectionOpen, setIsPeerConnectionOpen] = useState(false);
+  const [connectionRole, setConnectionRole] = useState<'initiator' | 'responder'>('initiator');
   const [deepseekKey, setDeepseekKey] = useState(
     () => window.settingsStore.get("deepseek")?.apiKey ?? "",
   );
@@ -49,6 +50,36 @@ export default function MenuBar() {
   const combinedStatus = useMemo(() => {
     return [saveMessage, settingsMessage].filter(Boolean).join(" · ");
   }, [saveMessage, settingsMessage]);
+
+  const connectionStatus = useMemo(() => {
+    if (dataChannelState === "not-initiated") {
+      return null;
+    }
+
+    if (connectionState === "connected" && dataChannelState === "open") {
+      return { label: "Connected", className: "text-green-500" };
+    }
+
+    if (
+      connectionState === "connecting" ||
+      connectionState === "new" ||
+      dataChannelState === "connecting"
+    ) {
+      return { label: "Connecting…", className: "text-yellow-500" };
+    }
+
+    if (
+      connectionState === "failed" ||
+      connectionState === "disconnected" ||
+      connectionState === "closed" ||
+      dataChannelState === "closed" ||
+      dataChannelState === "closing"
+    ) {
+      return { label: "Failure / Disconnected", className: "text-red-500" };
+    }
+
+    return { label: "Idle", className: "text-muted-foreground" };
+  }, [connectionState, dataChannelState]);
 
   const handleLoadClick = useCallback(async () => {
     const filePath = await window.fileSystem.openFile({
@@ -128,7 +159,7 @@ export default function MenuBar() {
 
   return (
     <div className="border-b border-border bg-background/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/75">
-      <div className="flex max-w-5xl items-center px-4">
+      <div className="flex max-w-5xl items-center justify-between gap-3 px-4">
         <Menubar className="border-none bg-transparent p-0 shadow-none">
           <MenubarMenu>
             <MenubarTrigger>{i18n.t("menuBar.file")}</MenubarTrigger>
@@ -147,10 +178,28 @@ export default function MenuBar() {
               </MenubarItem>
             </MenubarContent>
           </MenubarMenu>
+          <MenubarMenu>
+            <MenubarTrigger>Connect</MenubarTrigger>
+            <MenubarContent>
+              <MenubarItem onClick={() => { setIsPeerConnectionOpen(true); setConnectionRole('initiator'); }}>
+                Connect as Initiator
+              </MenubarItem>
+              <MenubarItem onClick={() => { setIsPeerConnectionOpen(true); setConnectionRole('responder'); }}>
+                Connect as Responder
+              </MenubarItem>
+            </MenubarContent>
+          </MenubarMenu>
         </Menubar>
-        {combinedStatus ? (
-          <span className="text-sm text-muted-foreground">{combinedStatus}</span>
-        ) : null}
+        <div className="flex items-center gap-3">
+          {connectionStatus ? (
+            <span className={`text-sm font-medium ${connectionStatus.className}`}>
+              {connectionStatus.label}
+            </span>
+          ) : null}
+          {combinedStatus ? (
+            <span className="text-sm text-muted-foreground">{combinedStatus}</span>
+          ) : null}
+        </div>
       </div>
 
       <SaveModal
@@ -173,6 +222,12 @@ export default function MenuBar() {
         chatgptKey={chatgptKey}
         setChatgptKey={setChatgptKey}
         handleSettingsSave={handleSettingsSave}
+      />
+
+      <PeerConnectionModal
+        isOpen={isPeerConnectionOpen}
+        onClose={() => setIsPeerConnectionOpen(false)}
+        role={connectionRole}
       />
     </div>
   );
