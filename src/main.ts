@@ -13,6 +13,14 @@ import {
 
 const inDevelopment = process.env.NODE_ENV === "development";
 
+function getIcon() {
+    const baseDir = app.isPackaged ? process.resourcesPath : app.getAppPath();
+    if (process.platform === "darwin") {
+        return path.join(baseDir, "assets", "icon.png");
+    }
+    return path.join(baseDir, "assets", "icon.ico");
+}
+
 function createWindow() {
   const preload = path.join(__dirname, "preload.js");
   const mainWindow = new BrowserWindow({
@@ -29,6 +37,7 @@ function createWindow() {
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
     trafficLightPosition:
       process.platform === "darwin" ? { x: 5, y: 5 } : undefined,
+    icon: getIcon(),
   });
   registerListeners(mainWindow);
 
