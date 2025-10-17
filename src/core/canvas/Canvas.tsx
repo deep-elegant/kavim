@@ -105,7 +105,7 @@ const CanvasInner = () => {
     dataChannelState,
     broadcastSelection,
     broadcastTyping,
-  } = useCanvasCollaboration(reactFlowWrapperRef);
+  } = useCanvasCollaboration();
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -258,7 +258,8 @@ const CanvasInner = () => {
 
   const handlePaneMouseMove = useCallback(
     (event: ReactMouseEvent) => {
-      collaborationPaneMouseMove(event);
+      const current = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      collaborationPaneMouseMove(current);
 
       if (!drawingState.current || !selectedTool) {
         return;
@@ -269,7 +270,6 @@ const CanvasInner = () => {
       }
 
       const { nodeId, start } = drawingState.current;
-      const current = screenToFlowPosition({ x: event.clientX, y: event.clientY });
 
       setNodes((currentNodes) =>
         currentNodes.map((node) => {
@@ -282,6 +282,18 @@ const CanvasInner = () => {
     },
     [screenToFlowPosition, selectedTool, setNodes, collaborationPaneMouseMove],
   );
+
+  const handleWrapperMouseMove = useCallback(
+    (event: ReactMouseEvent) => {
+      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      collaborationPaneMouseMove(position);
+    },
+    [collaborationPaneMouseMove, screenToFlowPosition],
+  );
+
+  const handleWrapperMouseLeave = useCallback(() => {
+    collaborationPaneMouseMove(null);
+  }, [collaborationPaneMouseMove]);
 
   const handlePaneMouseUp = useCallback(() => {
     if (!drawingState.current || !selectedTool) {
@@ -355,7 +367,8 @@ const CanvasInner = () => {
       style={{ height: '100%', width: '100%' }}
       ref={reactFlowWrapperRef}
       onPaste={handlePaste}
-      onMouseMove={collaborationPaneMouseMove}
+      onMouseMove={handleWrapperMouseMove}
+      onMouseLeave={handleWrapperMouseLeave}
     >
       <RemoteNodePresenceProvider value={remoteNodeInteractions}>
         <ReactFlow
