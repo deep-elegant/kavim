@@ -7,7 +7,7 @@ import {
   FontSize,
   type FontSizeMode,
   type FontSizeStorage,
-} from './FontSize';
+} from '../components/ui/minimal-tiptap/FontSizePlugin';
 import { useCanvasData } from '@/core/canvas/CanvasDataContext';
 
 export type NodeDataWithLabel = {

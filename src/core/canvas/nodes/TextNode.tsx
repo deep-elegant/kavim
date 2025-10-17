@@ -6,7 +6,7 @@ import { type DrawableNode } from './DrawableNode';
 import { MinimalTiptap } from '@/components/ui/minimal-tiptap';
 import { cn } from '@/utils/tailwind';
 import { useNodeAsEditor } from '@/helpers/useNodeAsEditor';
-import { DEFAULT_FONT_SIZE, type FontSizeMode } from '@/helpers/FontSize';
+import { DEFAULT_FONT_SIZE, type FontSizeMode } from '@/components/ui/minimal-tiptap/FontSizePlugin';
 import { useAutoFontSizeObserver } from './useAutoFontSizeObserver';
 
 export type TextNodeData = {

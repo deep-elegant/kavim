@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import {
   DEFAULT_FONT_SIZE,
   type FontSizeStorage,
-} from '@/helpers/FontSize';
+} from '@/components/ui/minimal-tiptap/FontSizePlugin';
 
 type PresetSize = { label: string; value: number | 'auto' };
 

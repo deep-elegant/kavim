@@ -15,7 +15,7 @@ import {
   SimpleColorPicker,
   type ColorStyle,
 } from '@/components/ui/simple-color-picker';
-import { DEFAULT_FONT_SIZE, type FontSizeMode } from '@/helpers/FontSize';
+import { DEFAULT_FONT_SIZE, type FontSizeMode } from '@/components/ui/minimal-tiptap/FontSizePlugin';
 import { useAutoFontSizeObserver } from './useAutoFontSizeObserver';
 
 export type ShapeType = 'circle' | 'rectangle';

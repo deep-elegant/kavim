@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect } from 'react';
 import type { Editor } from '@tiptap/react';
 
-import type { FontSizeMode } from '@/helpers/FontSize';
+import type { FontSizeMode } from '@/components/ui/minimal-tiptap/FontSizePlugin';
 
 export interface UseAutoFontSizeObserverOptions {
   editor: Editor | null;
