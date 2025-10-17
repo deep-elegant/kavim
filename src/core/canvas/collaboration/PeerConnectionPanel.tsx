@@ -60,7 +60,7 @@ export function PeerConnectionPanel({ role }: PeerConnectionPanelProps) {
       alert('Please paste the offer from Initiator first');
       return;
     }
-    
+
     try {
       await setRemoteOffer(remoteOfferInput);
       await createAnswer();
@@ -149,8 +149,8 @@ export function PeerConnectionPanel({ role }: PeerConnectionPanelProps) {
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-blue-400">Step 1: Create Offer</h3>
               </div>
-              <Button 
-                onClick={handleCreateOffer} 
+              <Button
+                onClick={handleCreateOffer}
                 className="w-full bg-blue-600 hover:bg-blue-700"
                 size="sm"
               >
@@ -197,8 +197,8 @@ export function PeerConnectionPanel({ role }: PeerConnectionPanelProps) {
                 placeholder="Paste answer JSON here..."
                 className="w-full h-32 bg-gray-800 border border-gray-600 rounded p-2 text-xs resize-none font-mono"
               />
-              <Button 
-                onClick={handleSetRemoteAnswer} 
+              <Button
+                onClick={handleSetRemoteAnswer}
                 className="w-full bg-green-600 hover:bg-green-700"
                 size="sm"
                 disabled={!remoteAnswerInput.trim()}
@@ -247,8 +247,8 @@ export function PeerConnectionPanel({ role }: PeerConnectionPanelProps) {
                 placeholder="Paste offer JSON here..."
                 className="w-full h-32 bg-gray-800 border border-gray-600 rounded p-2 text-xs resize-none font-mono"
               />
-              <Button 
-                onClick={handleCreateAnswer} 
+              <Button
+                onClick={handleCreateAnswer}
                 className="w-full bg-purple-600 hover:bg-purple-700"
                 size="sm"
                 disabled={!remoteOfferInput.trim()}
@@ -296,8 +296,8 @@ export function PeerConnectionPanel({ role }: PeerConnectionPanelProps) {
                 placeholder="Paste candidate JSON here..."
                 className="w-full h-20 bg-gray-800 border border-gray-600 rounded p-2 text-xs resize-none font-mono"
               />
-              <Button 
-                onClick={handleAddCandidate} 
+              <Button
+                onClick={handleAddCandidate}
                 className="w-full"
                 size="sm"
                 variant="secondary"
@@ -315,7 +315,7 @@ export function PeerConnectionPanel({ role }: PeerConnectionPanelProps) {
         <div className="border-t border-gray-700 p-4 space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-400">💬 Chat (Test Connection)</h3>
-            <Button 
+            <Button
               onClick={() => {
                 const testX = Math.floor(Math.random() * 800);
                 const testY = Math.floor(Math.random() * 600);
@@ -324,7 +324,7 @@ export function PeerConnectionPanel({ role }: PeerConnectionPanelProps) {
                   data: { x: testX, y: testY },
                   timestamp: Date.now(),
                 });
-                console.log('🧪 Test mouse sent:', { x: testX, y: testY });
+                // console.log('🧪 Test mouse sent:', { x: testX, y: testY });
               }}
               size="sm"
               variant="outline"

@@ -40,10 +40,10 @@ export function useWebRTCManual() {
 
     pc.onconnectionstatechange = () => {
       setConnectionState(pc.connectionState as ConnectionState);
-      console.log('🔌 Connection state:', pc.connectionState);
-      
+      // console.log('🔌 Connection state:', pc.connectionState);
+
       if (pc.connectionState === 'connected') {
-        console.log('✅ WebRTC connection established successfully!');
+        // console.log('✅ WebRTC connection established successfully!');
       }
     };
 
@@ -54,12 +54,12 @@ export function useWebRTCManual() {
   // Setup data channel with message handlers
   const setupDataChannel = useCallback((channel: RTCDataChannel, role: 'initiator' | 'responder') => {
     channel.onopen = () => {
-      console.log(`📡 Data channel open (${role})`);
+    //   console.log(`📡 Data channel open (${role})`);
       setDataChannelState('open');
     };
 
     channel.onclose = () => {
-      console.log(`📡 Data channel closed (${role})`);
+    //   console.log(`📡 Data channel closed (${role})`);
       setDataChannelState('closed');
       setRemoteMouse(null);
     };
@@ -67,10 +67,10 @@ export function useWebRTCManual() {
     channel.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data) as WebRTCMessage;
-        
+
         // Handle mouse messages separately
         if (msg.type === 'mouse' && typeof msg.data !== 'string') {
-          console.log('📍 Received mouse position:', msg.data);
+        //   console.log('📍 Received mouse position:', msg.data);
           setRemoteMouse(msg.data);
         } else if (msg.type === 'chat') {
           setMessages(prev => [...prev, msg]);
@@ -84,7 +84,7 @@ export function useWebRTCManual() {
   // Create offer (User A)
   const createOffer = useCallback(async () => {
     const pc = initializePeerConnection();
-    
+
     // Create data channel
     const channel = pc.createDataChannel('chat');
     dataChannelRef.current = channel;
@@ -168,7 +168,7 @@ export function useWebRTCManual() {
     try {
       const candidateObj = JSON.parse(candidateJson);
       const candidate = new RTCIceCandidate(candidateObj);
-      
+
       if (pc.remoteDescription) {
         await pc.addIceCandidate(candidate);
       } else {

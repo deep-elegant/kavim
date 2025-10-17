@@ -10,8 +10,8 @@ export function RemoteCursor({ position, color = '#3b82f6', label = 'Remote User
   const cursorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    console.log('🎯 RemoteCursor render - position:', position);
-    
+    // console.log('🎯 RemoteCursor render - position:', position);
+
     if (!position || !cursorRef.current) {
       if (cursorRef.current) {
         cursorRef.current.style.opacity = '0';
@@ -22,7 +22,7 @@ export function RemoteCursor({ position, color = '#3b82f6', label = 'Remote User
     const cursor = cursorRef.current;
     cursor.style.opacity = '1';
     cursor.style.transform = `translate(${position.x}px, ${position.y}px)`;
-    console.log('✅ Cursor positioned at:', position);
+    // console.log('✅ Cursor positioned at:', position);
   }, [position]);
 
   return (
@@ -41,7 +41,7 @@ export function RemoteCursor({ position, color = '#3b82f6', label = 'Remote User
             strokeWidth="1.5"
           />
         </svg>
-        
+
         {/* Label */}
         <div
           className="absolute left-6 -top-1 px-2 py-1 rounded text-xs text-white whitespace-nowrap shadow-lg"

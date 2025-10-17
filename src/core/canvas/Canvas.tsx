@@ -156,7 +156,7 @@ const CanvasInner = () => {
 
   // Debug log
   useEffect(() => {
-    console.log('🔍 Canvas state - remoteMouse:', remoteMouse, 'dataChannelState:', dataChannelState);
+    // console.log('🔍 Canvas state - remoteMouse:', remoteMouse, 'dataChannelState:', dataChannelState);
   }, [remoteMouse, dataChannelState]);
 
   useEffect(() => {
@@ -201,20 +201,26 @@ const CanvasInner = () => {
   );
 
   const onPaneClick = useCallback(() => {
-    setNodes((currentNodes) =>
-      currentNodes.map((node) => {
-        if (node.data.isTyping) {
-          return {
-            ...node,
-            data: {
-              ...node.data,
-              isTyping: false,
-            },
-          };
+    setNodes((currentNodes) => {
+      const hasTypingNode = currentNodes.some((node) => node.data.isTyping);
+      if (!hasTypingNode) {
+        return currentNodes;
+      }
+
+      return currentNodes.map((node) => {
+        if (!node.data.isTyping) {
+          return node;
         }
-        return node;
-      }),
-    );
+
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            isTyping: false,
+          },
+        };
+      });
+    });
   }, [setNodes]);
 
   const onConnect = useCallback(
@@ -236,21 +242,36 @@ const CanvasInner = () => {
 
   const handleEdgeUpdate = useCallback(
     (oldEdge: Edge<EditableEdgeData>, newConnection: Connection) => {
-      setEdges((currentEdges) =>
-        currentEdges.map((edge) => {
-          if (edge.id !== oldEdge.id) {
-            return edge;
-          }
+      setEdges((currentEdges) => {
+        const index = currentEdges.findIndex((edge) => edge.id === oldEdge.id);
+        if (index === -1) {
+          return currentEdges;
+        }
 
-          return {
-            ...edge,
-            source: newConnection.source ?? edge.source,
-            target: newConnection.target ?? edge.target,
-            sourceHandle: newConnection.sourceHandle,
-            targetHandle: newConnection.targetHandle,
-          };
-        }),
-      );
+        const edge = currentEdges[index];
+        const nextEdge: Edge<EditableEdgeData> = {
+          ...edge,
+          source: newConnection.source ?? edge.source,
+          target: newConnection.target ?? edge.target,
+          sourceHandle: newConnection.sourceHandle,
+          targetHandle: newConnection.targetHandle,
+        };
+
+        const isSameSource =
+          nextEdge.source === edge.source &&
+          nextEdge.sourceHandle === edge.sourceHandle;
+        const isSameTarget =
+          nextEdge.target === edge.target &&
+          nextEdge.targetHandle === edge.targetHandle;
+
+        if (isSameSource && isSameTarget) {
+          return currentEdges;
+        }
+
+        const next = [...currentEdges];
+        next[index] = nextEdge;
+        return next;
+      });
     },
     [setEdges],
   );
@@ -642,7 +663,7 @@ const CanvasInner = () => {
         </Controls>
         <Background />
       </ReactFlow>
-      
+
       {/* Remote cursor overlay - positioned relative to the canvas wrapper */}
       {remoteMouse && dataChannelState === 'open' && (
         <RemoteCursor position={remoteMouse} color="#8b5cf6" label="Remote User" />

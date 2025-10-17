@@ -425,7 +425,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
   const resultHtml = useMemo(() => {
     const response = marked.parse(result || '');
-    console.log('markdown',  result, response)
     return response;
   }, [result]);
 

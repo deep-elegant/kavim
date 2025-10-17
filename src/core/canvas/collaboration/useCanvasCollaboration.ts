@@ -18,7 +18,7 @@ export const useCanvasCollaboration = (
           const rect = reactFlowWrapperRef.current.getBoundingClientRect();
           const x = event.clientX - rect.left;
           const y = event.clientY - rect.top;
-          console.log('🖱️ Sending mouse position:', { x, y });
+        //   console.log('🖱️ Sending mouse position:', { x, y });
           sendMousePosition(x, y);
           mouseThrottleRef.current = now;
         }
