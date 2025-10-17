@@ -23,12 +23,10 @@ import {
   applyNodeChanges,
   type NodeChange,
   type Node,
+  type OnSelectionChangeParams,
 } from '@xyflow/react';
 import {
-  ArrowRight,
-  MessageSquareDashed,
   StickyNote,
-  Square,
   Type,
   ZoomIn,
   ZoomOut,
@@ -57,6 +55,7 @@ import EditableEdge, {
 } from './edges/EditableEdge';
 import { useCanvasData } from './CanvasDataContext';
 import { RemoteCursor } from './collaboration/RemoteCursor';
+import { RemoteNodePresenceProvider } from './collaboration/RemoteNodePresenceContext';
 import { useCanvasCollaboration } from './collaboration/useCanvasCollaboration';
 
 type ToolId = 'sticky-note' | 'shape' | 'arrow' | 'prompt-node' | 'text' | 'image';
@@ -151,13 +150,17 @@ const CanvasInner = () => {
   const reactFlowWrapperRef = useRef<HTMLDivElement | null>(null);
   const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow();
   const copiedNodesRef = useRef<Node<CanvasNode>[]>([]);
-  const { collaborationPaneMouseMove, remoteMouse, dataChannelState } =
-    useCanvasCollaboration(reactFlowWrapperRef);
-
-  // Debug log
-  useEffect(() => {
-    // console.log('🔍 Canvas state - remoteMouse:', remoteMouse, 'dataChannelState:', dataChannelState);
-  }, [remoteMouse, dataChannelState]);
+  const lastSelectionBroadcastRef = useRef<string | null>(null);
+  const currentSelectedNodeRef = useRef<string | null>(null);
+  const lastTypingNodeRef = useRef<string | null>(null);
+  const {
+    collaborationPaneMouseMove,
+    remoteCollaborators,
+    remoteNodeInteractions,
+    dataChannelState,
+    broadcastSelection,
+    broadcastTyping,
+  } = useCanvasCollaboration(reactFlowWrapperRef);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -465,6 +468,36 @@ const CanvasInner = () => {
 
   const isDrawingToolSelected = selectedTool != null && drawingTools.includes(selectedTool);
 
+  const handleSelectionChange = useCallback(
+    ({ nodes: selectedNodes }: OnSelectionChangeParams) => {
+      const nextSelectedId = selectedNodes[0]?.id ?? null;
+      currentSelectedNodeRef.current = nextSelectedId;
+
+      if (lastSelectionBroadcastRef.current !== nextSelectedId) {
+        lastSelectionBroadcastRef.current = nextSelectedId;
+        broadcastSelection(nextSelectedId);
+      }
+    },
+    [broadcastSelection],
+  );
+
+  useEffect(() => {
+    const typingNode = nodes.find((node) => node.data && (node.data as { isTyping?: boolean }).isTyping);
+    const typingNodeId = typingNode?.id ?? null;
+
+    if (lastTypingNodeRef.current === typingNodeId) {
+      return;
+    }
+
+    lastTypingNodeRef.current = typingNodeId;
+    broadcastTyping(typingNodeId);
+
+    if (!typingNodeId && currentSelectedNodeRef.current) {
+      broadcastSelection(currentSelectedNodeRef.current);
+      lastSelectionBroadcastRef.current = currentSelectedNodeRef.current;
+    }
+  }, [broadcastSelection, broadcastTyping, nodes]);
+
   const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     if (event.dataTransfer) {
@@ -586,88 +619,104 @@ const CanvasInner = () => {
   );
 
   return (
-    <div style={{ height: '100%', width: '100%' }} ref={reactFlowWrapperRef} onPaste={handlePaste}>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onEdgeUpdate={handleEdgeUpdate}
-        edgeTypes={edgeTypes}
-        onPaneClick={onPaneClick}
-        onMouseDown={handlePaneMouseDown}
-        onPaneMouseMove={handlePaneMouseMove}
-        onMouseUp={handlePaneMouseUp}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        // Panning with the right mouse button
-        panOnDrag={[2]}
-        selectionOnDrag={!isDrawingToolSelected}
-        nodeTypes={nodeTypes}
-        edgesReconnectable
-        defaultEdgeOptions={{ type: 'editable', deletable: true, reconnectable: true }}
-        deleteKeyCode={['Delete', 'Backspace']}
-        connectionRadius={50}
-        className={isDrawingToolSelected ? 'cursor-crosshair' : undefined}
-        style={{ cursor: isDrawingToolSelected ? 'cursor-crosshair' : undefined }}
-      >
-        <MiniMap />
-        <Controls
-          position="bottom-center"
-          showZoom={false}
-          showInteractive={false}
-          showFitView={false}
-          orientation="horizontal"
+    <div
+      style={{ height: '100%', width: '100%' }}
+      ref={reactFlowWrapperRef}
+      onPaste={handlePaste}
+      onMouseMove={collaborationPaneMouseMove}
+    >
+      <RemoteNodePresenceProvider value={remoteNodeInteractions}>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onEdgeUpdate={handleEdgeUpdate}
+          edgeTypes={edgeTypes}
+          onPaneClick={onPaneClick}
+          onMouseDown={handlePaneMouseDown}
+          onPaneMouseMove={handlePaneMouseMove}
+          onMouseUp={handlePaneMouseUp}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          // Panning with the right mouse button
+          panOnDrag={[2]}
+          selectionOnDrag={!isDrawingToolSelected}
+          nodeTypes={nodeTypes}
+          edgesReconnectable
+          defaultEdgeOptions={{ type: 'editable', deletable: true, reconnectable: true }}
+          deleteKeyCode={['Delete', 'Backspace']}
+          connectionRadius={50}
+          className={isDrawingToolSelected ? 'cursor-crosshair' : undefined}
+          style={{ cursor: isDrawingToolSelected ? 'cursor-crosshair' : undefined }}
+          onSelectionChange={handleSelectionChange}
         >
-          <div className="flex flex-row items-center gap-2 rounded-lg bg-background/95 p-2 shadow-lg">
-            <Button
-              onClick={() => zoomIn()}
-              aria-label="zoom in"
-              title="zoom in"
-              variant="ghost"
-            >
-              <ZoomIn className="h-5 w-5" />
-            </Button>
-            <Button
-              onClick={() => zoomOut()}
-              aria-label="zoom out"
-              title="zoom out"
-              variant="ghost"
-              className=""
-            >
-              <ZoomOut className="h-5 w-5" />
-            </Button>
-            <Button
-              onClick={() => fitView()}
-              aria-label="fit view"
-              title="fit view"
-              variant="ghost"
-            >
-              <Maximize className="h-5 w-5" />
-            </Button>
-            <div className="mx-1 h-6 border-r border-border" />
-            {tools.map(({ id, label, icon: Icon }) => (
+          <MiniMap />
+          <Controls
+            position="bottom-center"
+            showZoom={false}
+            showInteractive={false}
+            showFitView={false}
+            orientation="horizontal"
+          >
+            <div className="flex flex-row items-center gap-2 rounded-lg bg-background/95 p-2 shadow-lg">
               <Button
-                key={id}
-                aria-label={label}
+                onClick={() => zoomIn()}
+                aria-label="zoom in"
+                title="zoom in"
                 variant="ghost"
-                title={label}
-                onClick={() => handleToolSelect(id)}
               >
-                <Icon className="h-5 w-5" />
-                <span className="sr-only">{label}</span>
+                <ZoomIn className="h-5 w-5" />
               </Button>
-            ))}
-          </div>
-        </Controls>
-        <Background />
-      </ReactFlow>
+              <Button
+                onClick={() => zoomOut()}
+                aria-label="zoom out"
+                title="zoom out"
+                variant="ghost"
+                className=""
+              >
+                <ZoomOut className="h-5 w-5" />
+              </Button>
+              <Button
+                onClick={() => fitView()}
+                aria-label="fit view"
+                title="fit view"
+                variant="ghost"
+              >
+                <Maximize className="h-5 w-5" />
+              </Button>
+              <div className="mx-1 h-6 border-r border-border" />
+              {tools.map(({ id, label, icon: Icon }) => (
+                <Button
+                  key={id}
+                  aria-label={label}
+                  variant="ghost"
+                  title={label}
+                  onClick={() => handleToolSelect(id)}
+                >
+                  <Icon className="h-5 w-5" />
+                  <span className="sr-only">{label}</span>
+                </Button>
+              ))}
+            </div>
+          </Controls>
+          <Background />
+        </ReactFlow>
+      </RemoteNodePresenceProvider>
 
       {/* Remote cursor overlay - positioned relative to the canvas wrapper */}
-      {remoteMouse && dataChannelState === 'open' && (
-        <RemoteCursor position={remoteMouse} color="#8b5cf6" label="Remote User" />
-      )}
+      {dataChannelState === 'open' &&
+        remoteCollaborators.map((collaborator) =>
+          collaborator.position ? (
+            <RemoteCursor
+              key={collaborator.clientId}
+              position={collaborator.position}
+              color={collaborator.color}
+              label={collaborator.label}
+            />
+          ) : null,
+        )}
     </div>
   );
 };

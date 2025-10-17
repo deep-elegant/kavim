@@ -11,6 +11,7 @@ import { type Editor } from '@tiptap/react';
 
 import { cn } from '@/utils/tailwind';
 import { TiptapToolbar, type ToolbarItem } from '@/components/ui/minimal-tiptap/TiptapToolbar';
+import { useRemoteNodeCollaborators } from '../collaboration/RemoteNodePresenceContext';
 
 const HANDLE_SIZE = 12;
 const HANDLE_OFFSET = 10;
@@ -70,6 +71,8 @@ const NodeInteractionOverlay = ({
   editor,
   toolbarItems,
 }: NodeInteractionOverlayProps) => {
+  const { selecting: remoteSelecting, typing: remoteTyping } =
+    useRemoteNodeCollaborators(nodeId);
   const shouldShowInteractions = isActive && !isEditing;
   const connectionRadius = useStore(
     (state) => state.connectionRadius ?? DEFAULT_CONNECTION_RADIUS,
@@ -133,6 +136,61 @@ const NodeInteractionOverlay = ({
       {shouldShowInteractions && (
         <div className="pointer-events-none absolute inset-0 -m-2">
           <div className="absolute inset-0 rounded-xl border-2 border-sky-500/80" />
+        </div>
+      )}
+
+      {remoteSelecting.length > 0 && (
+        <div className="pointer-events-none absolute inset-0 -m-3">
+          {remoteSelecting.map((collaborator, index) => (
+            <div
+              key={`${collaborator.clientId}-${index}`}
+              className="absolute inset-0 rounded-xl border-2 border-dashed"
+              style={{
+                borderColor: collaborator.color,
+                boxShadow: `0 0 0 1px ${collaborator.color}1A`,
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      {remoteTyping.length > 0 && (
+        <div className="pointer-events-none absolute left-1/2 top-0 z-10 -translate-x-1/2">
+          {remoteTyping.map((collaborator, index) => (
+            <div
+              key={`${collaborator.clientId}-typing-${index}`}
+              className={cn(
+                'flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium text-white shadow-lg',
+              )}
+              style={{
+                backgroundColor: collaborator.color,
+                transform: `translateY(calc(-100% - ${index * 8}px))`,
+              }}
+            >
+              <span>{collaborator.label}</span>
+              <span className="opacity-80">typing…</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {remoteTyping.length === 0 && remoteSelecting.length > 0 && (
+        <div className="pointer-events-none absolute left-1/2 top-0 z-10 -translate-x-1/2">
+          {remoteSelecting.map((collaborator, index) => (
+            <div
+              key={`${collaborator.clientId}-selecting-${index}`}
+              className={cn(
+                'flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium text-white shadow-lg',
+              )}
+              style={{
+                backgroundColor: collaborator.color,
+                transform: `translateY(calc(-100% - ${index * 8}px))`,
+              }}
+            >
+              <span>{collaborator.label}</span>
+              <span className="opacity-80">selecting</span>
+            </div>
+          ))}
         </div>
       )}
 

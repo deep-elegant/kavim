@@ -33,10 +33,15 @@ type ChannelMessage =
   | YjsUpdateMessage
   | YjsUpdateChunkMessage;
 
-type CursorPresence = {
+export type CollaboratorInteraction = 'pointer' | 'selecting' | 'typing';
+
+export type CursorPresence = {
   x: number;
   y: number;
   updatedAt: number;
+  nodeId?: string | null;
+  interaction?: CollaboratorInteraction;
+  hasPosition?: boolean;
 };
 
 const BASE64_CHUNK_SIZE = 0x8000;
@@ -81,7 +86,9 @@ export function useWebRTCManual(doc: Y.Doc) {
   const [connectionState, setConnectionState] = useState<ConnectionState>('new');
   const [dataChannelState, setDataChannelState] = useState<'connecting' | 'open' | 'closing' | 'closed'>('closed');
   const [messages, setMessages] = useState<WebRTCChatMessage[]>([]);
-  const [remoteMouse, setRemoteMouse] = useState<{ x: number; y: number } | null>(null);
+  const [remotePresenceByClient, setRemotePresenceByClient] = useState<
+    Record<string, CursorPresence>
+  >({});
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
@@ -315,7 +322,7 @@ export function useWebRTCManual(doc: Y.Doc) {
 
     channel.onclose = () => {
       setDataChannelState('closed');
-      setRemoteMouse(null);
+      setRemotePresenceByClient({});
       incomingChunksRef.current.clear();
       pendingYUpdatesRef.current = [];
     };
@@ -490,33 +497,42 @@ export function useWebRTCManual(doc: Y.Doc) {
     }
   }, []);
 
-  // Send mouse position
-  const sendMousePosition = useCallback((x: number, y: number) => {
-    doc.transact(() => {
-      presenceMap.set(localClientKey, { x, y, updatedAt: Date.now() });
-    }, 'presence');
-    return true;
-  }, [doc, localClientKey, presenceMap]);
+  const updatePresence = useCallback(
+    (update: Partial<Omit<CursorPresence, 'updatedAt'>>) => {
+      doc.transact(() => {
+        const existing = presenceMap.get(localClientKey);
+        const hasNewPosition =
+          typeof update.x === 'number' && typeof update.y === 'number';
+        const next: CursorPresence = {
+          x: hasNewPosition ? update.x! : existing?.x ?? 0,
+          y: hasNewPosition ? update.y! : existing?.y ?? 0,
+          nodeId: update.nodeId ?? existing?.nodeId ?? null,
+          interaction: update.interaction ?? existing?.interaction ?? 'pointer',
+          hasPosition: hasNewPosition ? true : existing?.hasPosition ?? false,
+          updatedAt: Date.now(),
+        };
+
+        presenceMap.set(localClientKey, next);
+      }, 'presence');
+
+      return true;
+    },
+    [doc, localClientKey, presenceMap],
+  );
 
   useEffect(() => {
     const updateRemotePresence = () => {
-      let latest: CursorPresence | null = null;
+      const nextPresence: Record<string, CursorPresence> = {};
 
       presenceMap.forEach((value, key) => {
         if (key === localClientKey || !value) {
           return;
         }
 
-        if (!latest || value.updatedAt > latest.updatedAt) {
-          latest = value;
-        }
+        nextPresence[key] = value;
       });
 
-      if (latest) {
-        setRemoteMouse({ x: latest.x, y: latest.y });
-      } else {
-        setRemoteMouse(null);
-      }
+      setRemotePresenceByClient(nextPresence);
     };
 
     const observer = (event: Y.YMapEvent<CursorPresence>) => {
@@ -565,13 +581,13 @@ export function useWebRTCManual(doc: Y.Doc) {
     setRemoteAnswer,
     addCandidate,
     sendMessage,
-    sendMousePosition,
+    updatePresence,
     localOffer,
     localAnswer,
     localCandidates,
     connectionState,
     dataChannelState,
     messages,
-    remoteMouse,
+    remotePresenceByClient,
   };
 }
