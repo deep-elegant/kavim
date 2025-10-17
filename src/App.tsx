@@ -5,6 +5,7 @@ import { updateAppLanguage } from "./helpers/language_helpers";
 import BaseLayout from "./layouts/BaseLayout";
 import Canvas from "./core/canvas/Canvas";
 import { CanvasDataProvider } from "./core/canvas/CanvasDataContext";
+import { WebRTCProvider } from "./core/canvas/collaboration/WebRTCContext";
 import "./localization/i18n";
 
 export default function App() {
@@ -15,13 +16,15 @@ export default function App() {
   }, [i18n]);
 
   return (
-    <CanvasDataProvider>
-      <BaseLayout>
-        <div className="h-full w-full">
-          <Canvas />
-        </div>
-      </BaseLayout>
-    </CanvasDataProvider>
+    <WebRTCProvider>
+      <CanvasDataProvider>
+        <BaseLayout>
+          <div className="h-full w-full">
+            <Canvas />
+          </div>
+        </BaseLayout>
+      </CanvasDataProvider>
+    </WebRTCProvider>
   );
 }
 

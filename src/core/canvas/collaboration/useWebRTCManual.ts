@@ -15,6 +15,7 @@ export function useWebRTCManual() {
   const [connectionState, setConnectionState] = useState<ConnectionState>('new');
   const [dataChannelState, setDataChannelState] = useState<'connecting' | 'open' | 'closing' | 'closed'>('closed');
   const [messages, setMessages] = useState<WebRTCMessage[]>([]);
+  const [remoteMouse, setRemoteMouse] = useState<{ x: number; y: number } | null>(null);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
@@ -50,6 +51,36 @@ export function useWebRTCManual() {
     return pc;
   }, []);
 
+  // Setup data channel with message handlers
+  const setupDataChannel = useCallback((channel: RTCDataChannel, role: 'initiator' | 'responder') => {
+    channel.onopen = () => {
+      console.log(`📡 Data channel open (${role})`);
+      setDataChannelState('open');
+    };
+
+    channel.onclose = () => {
+      console.log(`📡 Data channel closed (${role})`);
+      setDataChannelState('closed');
+      setRemoteMouse(null);
+    };
+
+    channel.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data) as WebRTCMessage;
+        
+        // Handle mouse messages separately
+        if (msg.type === 'mouse' && typeof msg.data !== 'string') {
+          console.log('📍 Received mouse position:', msg.data);
+          setRemoteMouse(msg.data);
+        } else if (msg.type === 'chat') {
+          setMessages(prev => [...prev, msg]);
+        }
+      } catch (err) {
+        console.error('Failed to parse message:', err);
+      }
+    };
+  }, []);
+
   // Create offer (User A)
   const createOffer = useCallback(async () => {
     const pc = initializePeerConnection();
@@ -57,25 +88,7 @@ export function useWebRTCManual() {
     // Create data channel
     const channel = pc.createDataChannel('chat');
     dataChannelRef.current = channel;
-
-    channel.onopen = () => {
-      console.log('📡 Data channel open (Initiator)');
-      setDataChannelState('open');
-    };
-
-    channel.onclose = () => {
-      console.log('📡 Data channel closed (Initiator)');
-      setDataChannelState('closed');
-    };
-
-    channel.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data) as WebRTCMessage;
-        setMessages(prev => [...prev, msg]);
-      } catch (err) {
-        console.error('Failed to parse message:', err);
-      }
-    };
+    setupDataChannel(channel, 'initiator');
 
     // Create offer
     const offer = await pc.createOffer();
@@ -87,7 +100,7 @@ export function useWebRTCManual() {
     const offerStr = JSON.stringify(pc.localDescription);
     setLocalOffer(offerStr);
     return offerStr;
-  }, [initializePeerConnection]);
+  }, [initializePeerConnection, setupDataChannel]);
 
   // Set remote offer (User B)
   const setRemoteOffer = useCallback(async (offerJson: string) => {
@@ -97,25 +110,7 @@ export function useWebRTCManual() {
     pc.ondatachannel = (e) => {
       const channel = e.channel;
       dataChannelRef.current = channel;
-
-      channel.onopen = () => {
-        console.log('📡 Data channel open (Responder)');
-        setDataChannelState('open');
-      };
-
-      channel.onclose = () => {
-        console.log('📡 Data channel closed (Responder)');
-        setDataChannelState('closed');
-      };
-
-      channel.onmessage = (e) => {
-        try {
-          const msg = JSON.parse(e.data) as WebRTCMessage;
-          setMessages(prev => [...prev, msg]);
-        } catch (err) {
-          console.error('Failed to parse message:', err);
-        }
-      };
+      setupDataChannel(channel, 'responder');
     };
 
     const offer = JSON.parse(offerJson);
@@ -126,7 +121,7 @@ export function useWebRTCManual() {
       await pc.addIceCandidate(candidate);
     }
     candidatesBuffer.current = [];
-  }, [initializePeerConnection]);
+  }, [initializePeerConnection, setupDataChannel]);
 
   // Create answer (User B)
   const createAnswer = useCallback(async () => {
@@ -196,10 +191,33 @@ export function useWebRTCManual() {
 
     try {
       channel.send(JSON.stringify(message));
-      setMessages(prev => [...prev, message]);
+      if (message.type === 'chat') {
+        setMessages(prev => [...prev, message]);
+      }
       return true;
     } catch (err) {
       console.error('Failed to send message:', err);
+      return false;
+    }
+  }, []);
+
+  // Send mouse position
+  const sendMousePosition = useCallback((x: number, y: number) => {
+    const channel = dataChannelRef.current;
+    if (!channel || channel.readyState !== 'open') {
+      return false;
+    }
+
+    try {
+      const message: WebRTCMessage = {
+        type: 'mouse',
+        data: { x, y },
+        timestamp: Date.now(),
+      };
+      channel.send(JSON.stringify(message));
+      return true;
+    } catch (err) {
+      console.error('Failed to send mouse position:', err);
       return false;
     }
   }, []);
@@ -223,11 +241,13 @@ export function useWebRTCManual() {
     setRemoteAnswer,
     addCandidate,
     sendMessage,
+    sendMousePosition,
     localOffer,
     localAnswer,
     localCandidates,
     connectionState,
     dataChannelState,
     messages,
+    remoteMouse,
   };
 }

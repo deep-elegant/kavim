@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useWebRTCManual } from './useWebRTCManual';
+import { useWebRTC } from './WebRTCContext';
 import { Button } from '@/components/ui/button';
 import { Copy, Check } from 'lucide-react';
 
@@ -21,7 +21,7 @@ export function PeerConnectionPanel({ role }: PeerConnectionPanelProps) {
     connectionState,
     dataChannelState,
     messages,
-  } = useWebRTCManual();
+  } = useWebRTC();
 
   const [remoteOfferInput, setRemoteOfferInput] = useState('');
   const [remoteAnswerInput, setRemoteAnswerInput] = useState('');
@@ -313,7 +313,26 @@ export function PeerConnectionPanel({ role }: PeerConnectionPanelProps) {
       {/* Chat Section */}
       {dataChannelState === 'open' && (
         <div className="border-t border-gray-700 p-4 space-y-2">
-          <h3 className="text-sm font-semibold text-gray-400">💬 Chat (Test Connection)</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-400">💬 Chat (Test Connection)</h3>
+            <Button 
+              onClick={() => {
+                const testX = Math.floor(Math.random() * 800);
+                const testY = Math.floor(Math.random() * 600);
+                sendMessage({
+                  type: 'mouse',
+                  data: { x: testX, y: testY },
+                  timestamp: Date.now(),
+                });
+                console.log('🧪 Test mouse sent:', { x: testX, y: testY });
+              }}
+              size="sm"
+              variant="outline"
+              className="h-6 text-xs"
+            >
+              Test Mouse
+            </Button>
+          </div>
           <div className="flex gap-2">
             <input
               type="text"

@@ -56,6 +56,8 @@ import EditableEdge, {
   type EditableEdgeData,
 } from './edges/EditableEdge';
 import { useCanvasData } from './CanvasDataContext';
+import { useWebRTC } from './collaboration/WebRTCContext';
+import { RemoteCursor } from './collaboration/RemoteCursor';
 
 type ToolId = 'sticky-note' | 'shape' | 'arrow' | 'prompt-node' | 'text' | 'image';
 
@@ -141,12 +143,20 @@ const isImageFile = (file: File) => {
 
 const CanvasInner = () => {
   const { nodes, edges, setNodes, setEdges } = useCanvasData();
+  const { sendMousePosition, remoteMouse, dataChannelState } = useWebRTC();
+  
+  // Debug log
+  useEffect(() => {
+    console.log('🔍 Canvas state - remoteMouse:', remoteMouse, 'dataChannelState:', dataChannelState);
+  }, [remoteMouse, dataChannelState]);
+  
   const [selectedTool, setSelectedTool] = useState<ToolId | null>(null);
   const drawingState = useRef<{
     nodeId: string;
     start: XYPosition;
   } | null>(null);
   const reactFlowWrapperRef = useRef<HTMLDivElement | null>(null);
+  const mouseThrottleRef = useRef<number>(0);
   const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow();
   const copiedNodesRef = useRef<Node<CanvasNode>[]>([]);
 
@@ -384,6 +394,19 @@ const CanvasInner = () => {
 
   const handlePaneMouseMove = useCallback(
     (event: ReactMouseEvent) => {
+      // Send mouse position to peer (throttled)
+      if (dataChannelState === 'open' && reactFlowWrapperRef.current) {
+        const now = Date.now();
+        if (now - mouseThrottleRef.current >= 16) { // ~60fps
+          const rect = reactFlowWrapperRef.current.getBoundingClientRect();
+          const x = event.clientX - rect.left;
+          const y = event.clientY - rect.top;
+          console.log('🖱️ Sending mouse position:', { x, y });
+          sendMousePosition(x, y);
+          mouseThrottleRef.current = now;
+        }
+      }
+
       if (!drawingState.current || !selectedTool) {
         return;
       }
@@ -404,7 +427,7 @@ const CanvasInner = () => {
         }),
       );
     },
-    [screenToFlowPosition, selectedTool, setNodes],
+    [screenToFlowPosition, selectedTool, setNodes, dataChannelState, sendMousePosition],
   );
 
   const handlePaneMouseUp = useCallback(() => {
@@ -631,6 +654,11 @@ const CanvasInner = () => {
         </Controls>
         <Background />
       </ReactFlow>
+      
+      {/* Remote cursor overlay - positioned relative to the canvas wrapper */}
+      {remoteMouse && dataChannelState === 'open' && (
+        <RemoteCursor position={remoteMouse} color="#8b5cf6" label="Remote User" />
+      )}
     </div>
   );
 };
