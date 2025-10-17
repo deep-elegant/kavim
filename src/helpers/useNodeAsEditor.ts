@@ -1,14 +1,20 @@
 import { useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { useCallback, useEffect, type MouseEvent, type FocusEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type MouseEvent, type FocusEvent } from 'react';
 import { cn } from '@/utils/tailwind';
-import { TextStyleKit } from '@tiptap/extension-text-style';
-import { FontSize } from './FontSize';
+import {
+  DEFAULT_FONT_SIZE,
+  FontSize,
+  type FontSizeMode,
+  type FontSizeStorage,
+} from '../components/ui/minimal-tiptap/FontSizePlugin';
 import { useCanvasData } from '@/core/canvas/CanvasDataContext';
 
 export type NodeDataWithLabel = {
   label: string;
   isTyping?: boolean;
+  fontSizeMode?: FontSizeMode;
+  fontSizeValue?: number;
 };
 
 export type UseNodeAsEditorParams<T extends NodeDataWithLabel> = {
@@ -20,6 +26,8 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
   const { setNodes } = useCanvasData();
   const isTyping = Boolean(data.isTyping);
   const label = data.label ?? '';
+  const fontSizeMode = data.fontSizeMode ?? 'auto';
+  const fontSizeValue = data.fontSizeValue ?? DEFAULT_FONT_SIZE;
 
   const updateNodeData = useCallback(
     (partial: Partial<T>) => {
@@ -40,19 +48,41 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
     [id, setNodes],
   );
 
+  const updateNodeDataRef = useRef(updateNodeData);
+
+  useEffect(() => {
+    updateNodeDataRef.current = updateNodeData;
+  }, [updateNodeData]);
+
   const handleLabelChange = (value: string) => {
     updateNodeData({ label: value } as Partial<T>);
   };
 
-  const editor = useEditor({
-    extensions: [
+  const initialFontSizeMode = useRef<FontSizeMode>(fontSizeMode);
+  const initialFontSizeValue = useRef<number>(fontSizeValue);
+
+  const extensions = useMemo(
+    () => [
       StarterKit.configure({
         bulletList: { keepMarks: true, keepAttributes: false },
         orderedList: { keepMarks: true, keepAttributes: false },
       }),
-      TextStyleKit,
-      FontSize,
+      FontSize.configure({
+        initialMode: initialFontSizeMode.current,
+        initialValue: initialFontSizeValue.current,
+        onChange: (mode, value) => {
+          updateNodeDataRef.current({
+            fontSizeMode: mode,
+            fontSizeValue: value,
+          } as Partial<T>);
+        },
+      }),
     ],
+    [],
+  );
+
+  const editor = useEditor({
+    extensions,
     content: label,
     onUpdate: ({ editor: updatedEditor }) => {
       handleLabelChange(updatedEditor.getHTML());
@@ -72,6 +102,35 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
       },
     },
   });
+
+  useEffect(() => {
+    if (!data.fontSizeMode || typeof data.fontSizeValue !== 'number') {
+      updateNodeData({
+        fontSizeMode: fontSizeMode,
+        fontSizeValue: fontSizeValue,
+      } as Partial<T>);
+    }
+  }, [data.fontSizeMode, data.fontSizeValue, fontSizeMode, fontSizeValue, updateNodeData]);
+
+  useEffect(() => {
+    if (!editor) {
+      return;
+    }
+
+    const storage = (editor.storage.fontSize ?? {}) as Partial<FontSizeStorage>;
+    if (fontSizeMode === 'auto') {
+      if (storage.mode !== 'auto') {
+        editor.commands.setAutoFontSize();
+      }
+      if (typeof fontSizeValue === 'number') {
+        editor.commands.updateAutoFontSize(fontSizeValue);
+      }
+    } else {
+      if (storage.mode !== 'fixed' || storage.value !== fontSizeValue) {
+        editor.commands.setFontSize(fontSizeValue);
+      }
+    }
+  }, [editor, fontSizeMode, fontSizeValue]);
 
   useEffect(() => {
     if (editor && label !== editor.getHTML()) {

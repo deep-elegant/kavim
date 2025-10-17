@@ -1,10 +1,11 @@
 'use client';
 
+import { type CSSProperties } from 'react';
 import {
   EditorContent,
   type Editor,
 } from '@tiptap/react';
-import { cn } from "@/utils/tailwind";
+import { cn } from '@/utils/tailwind';
 
 
 interface MinimalTiptapProps {
@@ -12,6 +13,7 @@ interface MinimalTiptapProps {
   placeholder?: string;
   className?: string;
   theme?: 'default' | 'readonly' | 'disabled' | 'transparent';
+  style?: CSSProperties;
 }
 
 function MinimalTiptap({
@@ -19,6 +21,7 @@ function MinimalTiptap({
   placeholder = 'Start typing...',
   className,
   theme = 'default',
+  style,
 }: MinimalTiptapProps) {
 
   if (!editor) {
@@ -26,7 +29,7 @@ function MinimalTiptap({
   }
 
   return (
-    <div className={cn('relative', className)}>
+    <div className={cn('relative', className)} style={style}>
       <div
         className={cn(
           'relative',

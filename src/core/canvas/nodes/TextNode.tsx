@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useMemo, useRef } from 'react';
 import { type NodeProps, type Node } from '@xyflow/react';
 
 import NodeInteractionOverlay from './NodeInteractionOverlay';
@@ -6,10 +6,14 @@ import { type DrawableNode } from './DrawableNode';
 import { MinimalTiptap } from '@/components/ui/minimal-tiptap';
 import { cn } from '@/utils/tailwind';
 import { useNodeAsEditor } from '@/helpers/useNodeAsEditor';
+import { DEFAULT_FONT_SIZE, type FontSizeMode } from '@/components/ui/minimal-tiptap/FontSizePlugin';
+import { useAutoFontSizeObserver } from './useAutoFontSizeObserver';
 
 export type TextNodeData = {
   label: string;
   isTyping?: boolean;
+  fontSizeMode?: FontSizeMode;
+  fontSizeValue?: number;
 };
 
 export type TextNode = Node<TextNodeData, 'text-node'>;
@@ -22,7 +26,12 @@ export const textDrawable: DrawableNode<TextNode> = {
     id,
     type: 'text-node',
     position,
-    data: { label: '', isTyping: false },
+    data: {
+      label: '',
+      isTyping: false,
+      fontSizeMode: 'auto',
+      fontSizeValue: DEFAULT_FONT_SIZE,
+    },
     width: MIN_WIDTH,
     height: MIN_HEIGHT,
     style: { width: MIN_WIDTH, height: MIN_HEIGHT },
@@ -74,6 +83,22 @@ export const textDrawable: DrawableNode<TextNode> = {
 const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => {
   const { editor, isTyping, handleDoubleClick, handleBlur } = useNodeAsEditor({ id, data });
   const label = data.label ?? '';
+  const fontSizeMode = data.fontSizeMode ?? 'auto';
+  const fontSizeValue = data.fontSizeValue ?? DEFAULT_FONT_SIZE;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const measurementRef = useRef<HTMLDivElement>(null);
+  const displayHtml = useMemo(
+    () => label || '<p>Click to add text</p>',
+    [label],
+  );
+
+  useAutoFontSizeObserver({
+    editor,
+    mode: fontSizeMode,
+    html: displayHtml,
+    containerRef,
+    measurementRef,
+  });
 
   return (
     <NodeInteractionOverlay
@@ -91,17 +116,40 @@ const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => 
         onBlur={handleBlur}
         role="presentation"
       >
-        {isTyping ? (
-          <div className="h-full w-full" onMouseDown={(e) => e.stopPropagation()}>
-            <MinimalTiptap
-              editor={editor}
-              theme="transparent"
-              className="h-full w-full"
+        <div ref={containerRef} className="relative h-full w-full">
+          {isTyping ? (
+            <div className="h-full w-full" onMouseDown={(e) => e.stopPropagation()}>
+              <MinimalTiptap
+                editor={editor}
+                theme="transparent"
+                className="h-full w-full"
+                style={{ fontSize: `${fontSizeValue}px` }}
+              />
+            </div>
+          ) : (
+            <div
+              className={cn(
+                'prose prose-sm w-full max-w-none',
+                'prose-h1:text-xl prose-h1:leading-tight',
+                'prose-h2:text-lg prose-h2:leading-snug',
+                'prose-h3:text-base prose-h3:leading-snug',
+                'prose-p:my-1 prose-p:leading-normal',
+                'prose-ul:my-1 prose-ol:my-1',
+                'prose-li:my-0',
+                'min-h-[1.5rem] px-3 py-2',
+                'text-slate-900',
+                'break-words',
+              )}
+              style={{ fontSize: `${fontSizeValue}px` }}
+              dangerouslySetInnerHTML={{ __html: displayHtml }}
             />
-          </div>
-        ) : (
+          )}
+
           <div
+            ref={measurementRef}
+            aria-hidden
             className={cn(
+              'pointer-events-none absolute inset-0 box-border overflow-hidden opacity-0',
               'prose prose-sm w-full max-w-none',
               'prose-h1:text-xl prose-h1:leading-tight',
               'prose-h2:text-lg prose-h2:leading-snug',
@@ -110,12 +158,11 @@ const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => 
               'prose-ul:my-1 prose-ol:my-1',
               'prose-li:my-0',
               'min-h-[1.5rem] px-3 py-2',
-              'text-slate-900',
               'break-words',
             )}
-            dangerouslySetInnerHTML={{ __html: label || '<p>Click to add text</p>' }}
+            dangerouslySetInnerHTML={{ __html: displayHtml }}
           />
-        )}
+        </div>
       </div>
     </NodeInteractionOverlay>
   );
