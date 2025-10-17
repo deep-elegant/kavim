@@ -1,25 +1,180 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import * as Y from 'yjs';
 
 type ConnectionState = 'new' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed';
 
-export interface WebRTCMessage {
-  type: 'chat' | 'mouse';
-  data: string | { x: number; y: number };
+export interface WebRTCChatMessage {
+  type: 'chat';
+  data: string;
   timestamp: number;
 }
 
-export function useWebRTCManual() {
+type SyncMessage = {
+  type: 'yjs-sync';
+  vector: string;
+};
+
+type ChannelMessage = WebRTCChatMessage | SyncMessage;
+
+type CursorPresence = {
+  x: number;
+  y: number;
+  updatedAt: number;
+};
+
+const BASE64_CHUNK_SIZE = 0x8000;
+
+const encodeToBase64 = (bytes: Uint8Array): string => {
+  if (bytes.length === 0) {
+    return '';
+  }
+
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += BASE64_CHUNK_SIZE) {
+    const chunk = bytes.subarray(i, i + BASE64_CHUNK_SIZE);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
+};
+
+const decodeFromBase64 = (encoded: string): Uint8Array => {
+  if (!encoded) {
+    return new Uint8Array(0);
+  }
+
+  const binary = atob(encoded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
+};
+
+export function useWebRTCManual(doc: Y.Doc) {
   const [localOffer, setLocalOffer] = useState<string>('');
   const [localAnswer, setLocalAnswer] = useState<string>('');
   const [localCandidates, setLocalCandidates] = useState<string[]>([]);
   const [connectionState, setConnectionState] = useState<ConnectionState>('new');
   const [dataChannelState, setDataChannelState] = useState<'connecting' | 'open' | 'closing' | 'closed'>('closed');
-  const [messages, setMessages] = useState<WebRTCMessage[]>([]);
+  const [messages, setMessages] = useState<WebRTCChatMessage[]>([]);
   const [remoteMouse, setRemoteMouse] = useState<{ x: number; y: number } | null>(null);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const candidatesBuffer = useRef<RTCIceCandidate[]>([]);
+  const pendingYUpdatesRef = useRef<Uint8Array[]>([]);
+  const pendingLocalUpdatesRef = useRef<Uint8Array[]>([]);
+  const localFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const localClientKey = useMemo(() => String(doc.clientID), [doc]);
+  const presenceMap = useMemo(() => doc.getMap<CursorPresence>('presence'), [doc]);
+
+  const flushPendingYUpdates = useCallback(() => {
+    const channel = dataChannelRef.current;
+    if (!channel || channel.readyState !== 'open') {
+      return;
+    }
+
+    if (pendingYUpdatesRef.current.length === 0) {
+      return;
+    }
+
+    pendingYUpdatesRef.current.forEach((update) => {
+      try {
+        channel.send(update);
+      } catch (error) {
+        console.error('Failed to flush Yjs update:', error);
+      }
+    });
+    pendingYUpdatesRef.current = [];
+  }, []);
+
+  const sendStateVector = useCallback(() => {
+    const channel = dataChannelRef.current;
+    if (!channel || channel.readyState !== 'open') {
+      return;
+    }
+
+    const vector = encodeToBase64(Y.encodeStateVector(doc));
+    const message: SyncMessage = { type: 'yjs-sync', vector };
+
+    try {
+      channel.send(JSON.stringify(message));
+    } catch (error) {
+      console.error('Failed to send state vector:', error);
+    }
+  }, [doc]);
+
+  const sendYUpdate = useCallback((update: Uint8Array) => {
+    const channel = dataChannelRef.current;
+    const updateCopy = update.slice();
+
+    if (!channel || channel.readyState !== 'open') {
+      pendingYUpdatesRef.current.push(updateCopy);
+      return;
+    }
+
+    try {
+      channel.send(updateCopy);
+    } catch (error) {
+      console.error('Failed to send Yjs update:', error);
+      pendingYUpdatesRef.current.push(updateCopy);
+    }
+  }, []);
+
+  const flushLocalUpdates = useCallback(() => {
+    if (pendingLocalUpdatesRef.current.length === 0) {
+      return;
+    }
+
+    const updates = pendingLocalUpdatesRef.current;
+    pendingLocalUpdatesRef.current = [];
+    const mergedUpdate =
+      updates.length === 1 ? updates[0] : Y.mergeUpdates(updates);
+    sendYUpdate(mergedUpdate);
+  }, [sendYUpdate]);
+
+  const scheduleLocalFlush = useCallback(() => {
+    if (localFlushTimerRef.current !== null) {
+      return;
+    }
+
+    localFlushTimerRef.current = setTimeout(() => {
+      localFlushTimerRef.current = null;
+      flushLocalUpdates();
+    }, 80);
+  }, [flushLocalUpdates]);
+
+  const handleStringMessage = useCallback((raw: string) => {
+    let message: ChannelMessage;
+    try {
+      message = JSON.parse(raw) as ChannelMessage;
+    } catch (error) {
+      console.error('Failed to parse message:', error);
+      return;
+    }
+
+    if (message.type === 'chat') {
+      setMessages((prev) => [...prev, message]);
+      return;
+    }
+
+    if (message.type === 'yjs-sync') {
+      const remoteVector = decodeFromBase64(message.vector);
+      const diff = Y.encodeStateAsUpdate(doc, remoteVector);
+      if (diff.byteLength > 0) {
+        sendYUpdate(diff);
+      }
+      flushPendingYUpdates();
+    }
+  }, [doc, flushPendingYUpdates, sendYUpdate]);
+
+  const applyYUpdate = useCallback((update: Uint8Array) => {
+    try {
+      Y.applyUpdate(doc, update, 'webrtc');
+    } catch (error) {
+      console.error('Failed to apply Yjs update:', error);
+    }
+  }, [doc]);
 
   // Initialize peer connection
   const initializePeerConnection = useCallback(() => {
@@ -52,34 +207,72 @@ export function useWebRTCManual() {
   }, []);
 
   // Setup data channel with message handlers
-  const setupDataChannel = useCallback((channel: RTCDataChannel, role: 'initiator' | 'responder') => {
+  const setupDataChannel = useCallback((channel: RTCDataChannel) => {
+    channel.binaryType = 'arraybuffer';
+
     channel.onopen = () => {
-    //   console.log(`📡 Data channel open (${role})`);
       setDataChannelState('open');
+      sendStateVector();
+      flushLocalUpdates();
+      flushPendingYUpdates();
     };
 
     channel.onclose = () => {
-    //   console.log(`📡 Data channel closed (${role})`);
       setDataChannelState('closed');
       setRemoteMouse(null);
     };
 
-    channel.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data) as WebRTCMessage;
+    channel.onmessage = (event) => {
+      const { data } = event;
 
-        // Handle mouse messages separately
-        if (msg.type === 'mouse' && typeof msg.data !== 'string') {
-        //   console.log('📍 Received mouse position:', msg.data);
-          setRemoteMouse(msg.data);
-        } else if (msg.type === 'chat') {
-          setMessages(prev => [...prev, msg]);
-        }
-      } catch (err) {
-        console.error('Failed to parse message:', err);
+      if (typeof data === 'string') {
+        handleStringMessage(data);
+        return;
       }
+
+      if (data instanceof ArrayBuffer) {
+        applyYUpdate(new Uint8Array(data));
+        return;
+      }
+
+      if (data instanceof Blob) {
+        data
+          .arrayBuffer()
+          .then((buffer) => {
+            applyYUpdate(new Uint8Array(buffer));
+          })
+          .catch((error) => {
+            console.error('Failed to read binary message:', error);
+          });
+        return;
+      }
+
+      if (ArrayBuffer.isView(data)) {
+        const view = data as ArrayBufferView;
+        applyYUpdate(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+        return;
+      }
+
+      console.warn('Received unsupported data channel message type:', data);
     };
-  }, []);
+  }, [applyYUpdate, flushLocalUpdates, flushPendingYUpdates, handleStringMessage, sendStateVector]);
+
+  useEffect(() => {
+    const handleDocUpdate = (update: Uint8Array, origin: unknown) => {
+      if (origin === 'webrtc') {
+        return;
+      }
+
+      pendingLocalUpdatesRef.current.push(update.slice());
+      scheduleLocalFlush();
+    };
+
+    doc.on('update', handleDocUpdate);
+
+    return () => {
+      doc.off('update', handleDocUpdate);
+    };
+  }, [doc, scheduleLocalFlush]);
 
   // Create offer (User A)
   const createOffer = useCallback(async () => {
@@ -88,7 +281,7 @@ export function useWebRTCManual() {
     // Create data channel
     const channel = pc.createDataChannel('chat');
     dataChannelRef.current = channel;
-    setupDataChannel(channel, 'initiator');
+    setupDataChannel(channel);
 
     // Create offer
     const offer = await pc.createOffer();
@@ -110,7 +303,7 @@ export function useWebRTCManual() {
     pc.ondatachannel = (e) => {
       const channel = e.channel;
       dataChannelRef.current = channel;
-      setupDataChannel(channel, 'responder');
+      setupDataChannel(channel);
     };
 
     const offer = JSON.parse(offerJson);
@@ -182,7 +375,7 @@ export function useWebRTCManual() {
   }, []);
 
   // Send message
-  const sendMessage = useCallback((message: WebRTCMessage) => {
+  const sendMessage = useCallback((message: WebRTCChatMessage) => {
     const channel = dataChannelRef.current;
     if (!channel || channel.readyState !== 'open') {
       console.warn('Data channel not open');
@@ -191,9 +384,7 @@ export function useWebRTCManual() {
 
     try {
       channel.send(JSON.stringify(message));
-      if (message.type === 'chat') {
-        setMessages(prev => [...prev, message]);
-      }
+      setMessages(prev => [...prev, message]);
       return true;
     } catch (err) {
       console.error('Failed to send message:', err);
@@ -203,28 +394,61 @@ export function useWebRTCManual() {
 
   // Send mouse position
   const sendMousePosition = useCallback((x: number, y: number) => {
-    const channel = dataChannelRef.current;
-    if (!channel || channel.readyState !== 'open') {
-      return false;
-    }
+    doc.transact(() => {
+      presenceMap.set(localClientKey, { x, y, updatedAt: Date.now() });
+    }, 'presence');
+    return true;
+  }, [doc, localClientKey, presenceMap]);
 
-    try {
-      const message: WebRTCMessage = {
-        type: 'mouse',
-        data: { x, y },
-        timestamp: Date.now(),
-      };
-      channel.send(JSON.stringify(message));
-      return true;
-    } catch (err) {
-      console.error('Failed to send mouse position:', err);
-      return false;
-    }
-  }, []);
+  useEffect(() => {
+    const updateRemotePresence = () => {
+      let latest: CursorPresence | null = null;
+
+      presenceMap.forEach((value, key) => {
+        if (key === localClientKey || !value) {
+          return;
+        }
+
+        if (!latest || value.updatedAt > latest.updatedAt) {
+          latest = value;
+        }
+      });
+
+      if (latest) {
+        setRemoteMouse({ x: latest.x, y: latest.y });
+      } else {
+        setRemoteMouse(null);
+      }
+    };
+
+    const observer = (event: Y.YMapEvent<CursorPresence>) => {
+      void event;
+      updateRemotePresence();
+    };
+
+    updateRemotePresence();
+    presenceMap.observe(observer);
+
+    return () => {
+      presenceMap.unobserve(observer);
+    };
+  }, [localClientKey, presenceMap]);
+
+  useEffect(() => () => {
+    doc.transact(() => {
+      presenceMap.delete(localClientKey);
+    }, 'presence');
+  }, [doc, localClientKey, presenceMap]);
 
   // Cleanup
   useEffect(() => {
     return () => {
+      if (localFlushTimerRef.current !== null) {
+        clearTimeout(localFlushTimerRef.current);
+        localFlushTimerRef.current = null;
+      }
+
+      flushLocalUpdates();
       if (dataChannelRef.current) {
         dataChannelRef.current.close();
       }
@@ -232,7 +456,7 @@ export function useWebRTCManual() {
         pcRef.current.close();
       }
     };
-  }, []);
+  }, [flushLocalUpdates]);
 
   return {
     createOffer,

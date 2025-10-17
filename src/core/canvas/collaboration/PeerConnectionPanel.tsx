@@ -115,10 +115,7 @@ export function PeerConnectionPanel({ role }: PeerConnectionPanelProps) {
     }
   };
 
-  const formatMessageData = (data: string | { x: number; y: number }): string => {
-    if (typeof data === 'string') return data;
-    return `Mouse: (${data.x}, ${data.y})`;
-  };
+  const formatMessageData = (data: string): string => data;
 
   return (
     <div className="flex h-full flex-col bg-gray-900 text-gray-100 font-mono text-sm">
@@ -315,23 +312,6 @@ export function PeerConnectionPanel({ role }: PeerConnectionPanelProps) {
         <div className="border-t border-gray-700 p-4 space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-gray-400">💬 Chat (Test Connection)</h3>
-            <Button
-              onClick={() => {
-                const testX = Math.floor(Math.random() * 800);
-                const testY = Math.floor(Math.random() * 600);
-                sendMessage({
-                  type: 'mouse',
-                  data: { x: testX, y: testY },
-                  timestamp: Date.now(),
-                });
-                // console.log('🧪 Test mouse sent:', { x: testX, y: testY });
-              }}
-              size="sm"
-              variant="outline"
-              className="h-6 text-xs"
-            >
-              Test Mouse
-            </Button>
           </div>
           <div className="flex gap-2">
             <input

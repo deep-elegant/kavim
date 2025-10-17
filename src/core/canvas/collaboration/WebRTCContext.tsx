@@ -1,12 +1,13 @@
 import React, { createContext, useContext, ReactNode } from 'react';
+import * as Y from 'yjs';
 import { useWebRTCManual } from './useWebRTCManual';
 
 type WebRTCContextType = ReturnType<typeof useWebRTCManual>;
 
 const WebRTCContext = createContext<WebRTCContextType | null>(null);
 
-export function WebRTCProvider({ children }: { children: ReactNode }) {
-  const webrtc = useWebRTCManual();
+export function WebRTCProvider({ doc, children }: { doc: Y.Doc; children: ReactNode }) {
+  const webrtc = useWebRTCManual(doc);
 
   return (
     <WebRTCContext.Provider value={webrtc}>

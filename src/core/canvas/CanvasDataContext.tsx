@@ -27,20 +27,22 @@ export type CanvasDataContextValue = {
 const CanvasDataContext = createContext<CanvasDataContextValue | undefined>(undefined);
 
 export const CanvasDataProvider = ({
+  doc,
   children,
 }: {
+  doc?: Y.Doc;
   children: React.ReactNode;
 }) => {
-  const doc = useMemo(() => new Y.Doc(), []);
-  const nodesMap = useMemo(() => doc.getMap<Node>('nodes'), [doc]);
-  const nodeOrder = useMemo(() => doc.getArray<string>('node-order'), [doc]);
+  const canvasDoc = useMemo(() => doc ?? new Y.Doc(), [doc]);
+  const nodesMap = useMemo(() => canvasDoc.getMap<Node>('nodes'), [canvasDoc]);
+  const nodeOrder = useMemo(() => canvasDoc.getArray<string>('node-order'), [canvasDoc]);
   const edgesMap = useMemo(
-    () => doc.getMap<Edge<EditableEdgeData>>('edges'),
-    [doc],
+    () => canvasDoc.getMap<Edge<EditableEdgeData>>('edges'),
+    [canvasDoc],
   );
   const edgeOrder = useMemo(
-    () => doc.getArray<string>('edge-order'),
-    [doc],
+    () => canvasDoc.getArray<string>('edge-order'),
+    [canvasDoc],
   );
 
   const nodeIndexRef = useRef<Map<string, number>>(new Map());
@@ -48,17 +50,38 @@ export const CanvasDataProvider = ({
   const nodesRef = useRef<Node[]>([]);
   const edgesRef = useRef<Edge<EditableEdgeData>[]>([]);
 
-  const computeNodesFromDoc = useCallback(() => {
+  const arraysShallowEqual = useCallback(<T,>(a: T[], b: T[]) => {
+    if (a === b) {
+      return true;
+    }
+
+    if (a.length !== b.length) {
+      return false;
+    }
+
+    for (let index = 0; index < a.length; index += 1) {
+      if (a[index] !== b[index]) {
+        return false;
+      }
+    }
+
+    return true;
+  }, []);
+
+  const snapshotNodesFromDoc = useCallback(() => {
     const order = nodeOrder.toArray();
     const indexMap = new Map<string, number>();
     const nextNodes: Node[] = [];
 
-    order.forEach((id, index) => {
-      indexMap.set(id, index);
+    order.forEach((id) => {
       const node = nodesMap.get(id);
-      if (node) {
-        nextNodes.push(node);
+      if (!node) {
+        return;
       }
+
+      const index = nextNodes.length;
+      nextNodes.push(node);
+      indexMap.set(id, index);
     });
 
     nodeIndexRef.current = indexMap;
@@ -66,17 +89,20 @@ export const CanvasDataProvider = ({
     return nextNodes;
   }, [nodeOrder, nodesMap]);
 
-  const computeEdgesFromDoc = useCallback(() => {
+  const snapshotEdgesFromDoc = useCallback(() => {
     const order = edgeOrder.toArray();
     const indexMap = new Map<string, number>();
     const nextEdges: Edge<EditableEdgeData>[] = [];
 
-    order.forEach((id, index) => {
-      indexMap.set(id, index);
+    order.forEach((id) => {
       const edge = edgesMap.get(id);
-      if (edge) {
-        nextEdges.push(edge);
+      if (!edge) {
+        return;
       }
+
+      const index = nextEdges.length;
+      nextEdges.push(edge);
+      indexMap.set(id, index);
     });
 
     edgeIndexRef.current = indexMap;
@@ -84,25 +110,75 @@ export const CanvasDataProvider = ({
     return nextEdges;
   }, [edgeOrder, edgesMap]);
 
-  const [nodes, setNodesState] = useState<Node[]>(() => computeNodesFromDoc());
+  const [nodes, setNodesState] = useState<Node[]>(() => snapshotNodesFromDoc());
   const [edges, setEdgesState] = useState<Edge<EditableEdgeData>[]>(() =>
-    computeEdgesFromDoc(),
+    snapshotEdgesFromDoc(),
   );
 
-  useEffect(() => () => doc.destroy(), [doc]);
+  const updateLocalNodesState = useCallback(
+    (nextNodes: Node[]) => {
+      const indexMap = new Map<string, number>();
+      nextNodes.forEach((node, index) => {
+        indexMap.set(node.id, index);
+      });
+
+      nodeIndexRef.current = indexMap;
+      nodesRef.current = nextNodes;
+      setNodesState((current) => (arraysShallowEqual(current, nextNodes) ? current : nextNodes));
+    },
+    [arraysShallowEqual],
+  );
+
+  const updateLocalEdgesState = useCallback(
+    (nextEdges: Edge<EditableEdgeData>[]) => {
+      const indexMap = new Map<string, number>();
+      nextEdges.forEach((edge, index) => {
+        indexMap.set(edge.id, index);
+      });
+
+      edgeIndexRef.current = indexMap;
+      edgesRef.current = nextEdges;
+      setEdgesState((current) => (arraysShallowEqual(current, nextEdges) ? current : nextEdges));
+    },
+    [arraysShallowEqual],
+  );
+
+  const ownsDoc = doc === undefined;
 
   useEffect(() => {
-    const handleNodeOrderChange = () => {
-      setNodesState(computeNodesFromDoc());
+    if (!ownsDoc) {
+      return;
+    }
+
+    return () => {
+      canvasDoc.destroy();
+    };
+  }, [canvasDoc, ownsDoc]);
+
+  useEffect(() => {
+    const handleNodeOrderChange = (event: Y.YArrayEvent<string>) => {
+      if (event.transaction?.origin === 'canvas') {
+        return;
+      }
+
+      const snapshot = snapshotNodesFromDoc();
+      setNodesState((current) =>
+        arraysShallowEqual(current, snapshot) ? current : snapshot,
+      );
     };
 
     const handleNodesMapChange = (event: Y.YMapEvent<Node>) => {
+      if (event.transaction?.origin === 'canvas') {
+        return;
+      }
+
       if (event.keysChanged.size === 0) {
         return;
       }
 
       setNodesState((current) => {
         let next: Node[] | undefined;
+        let changed = false;
 
         event.keysChanged.forEach((key) => {
           const index = nodeIndexRef.current.get(key);
@@ -116,10 +192,13 @@ export const CanvasDataProvider = ({
           if (!next) {
             next = [...current];
           }
-          next[index] = value;
+          if (next[index] !== value) {
+            next[index] = value;
+            changed = true;
+          }
         });
 
-        if (!next) {
+        if (!next || !changed) {
           return current;
         }
 
@@ -128,17 +207,29 @@ export const CanvasDataProvider = ({
       });
     };
 
-    const handleEdgeOrderChange = () => {
-      setEdgesState(computeEdgesFromDoc());
+    const handleEdgeOrderChange = (event: Y.YArrayEvent<string>) => {
+      if (event.transaction?.origin === 'canvas') {
+        return;
+      }
+
+      const snapshot = snapshotEdgesFromDoc();
+      setEdgesState((current) =>
+        arraysShallowEqual(current, snapshot) ? current : snapshot,
+      );
     };
 
     const handleEdgesMapChange = (event: Y.YMapEvent<Edge<EditableEdgeData>>) => {
+      if (event.transaction?.origin === 'canvas') {
+        return;
+      }
+
       if (event.keysChanged.size === 0) {
         return;
       }
 
       setEdgesState((current) => {
         let next: Edge<EditableEdgeData>[] | undefined;
+        let changed = false;
 
         event.keysChanged.forEach((key) => {
           const index = edgeIndexRef.current.get(key);
@@ -152,10 +243,13 @@ export const CanvasDataProvider = ({
           if (!next) {
             next = [...current];
           }
-          next[index] = value;
+          if (next[index] !== value) {
+            next[index] = value;
+            changed = true;
+          }
         });
 
-        if (!next) {
+        if (!next || !changed) {
           return current;
         }
 
@@ -175,23 +269,25 @@ export const CanvasDataProvider = ({
       edgeOrder.unobserve(handleEdgeOrderChange);
       edgesMap.unobserve(handleEdgesMapChange);
     };
-  }, [computeEdgesFromDoc, computeNodesFromDoc, edgeOrder, edgesMap, nodeOrder, nodesMap]);
+  }, [arraysShallowEqual, edgeOrder, edgesMap, nodeOrder, nodesMap, snapshotEdgesFromDoc, snapshotNodesFromDoc]);
 
   const setNodes = useCallback<Dispatch<SetStateAction<Node[]>>>(
     (updater) => {
-      doc.transact(() => {
-        const current = nodesRef.current;
-        const next =
-          typeof updater === 'function'
-            ? (updater as (prevState: Node[]) => Node[])(current)
-            : updater;
+      const current = nodesRef.current;
+      const next =
+        typeof updater === 'function'
+          ? (updater as (prevState: Node[]) => Node[])(current)
+          : updater;
 
-        if (!Array.isArray(next)) {
-          return;
-        }
+      if (!Array.isArray(next)) {
+        return;
+      }
 
+      updateLocalNodesState(next);
+
+      canvasDoc.transact(() => {
         const nextIds = next.map((node) => node.id);
-        const currentOrder = nodesRef.current.map((node) => node.id);
+        const currentOrder = current.map((node) => node.id);
         const orderChanged =
           nextIds.length !== currentOrder.length ||
           nextIds.some((id, index) => currentOrder[index] !== id);
@@ -217,28 +313,30 @@ export const CanvasDataProvider = ({
             nodesMap.set(node.id, node);
           }
         });
-      });
+      }, 'canvas');
     },
-    [doc, nodeOrder, nodesMap],
+    [canvasDoc, nodeOrder, nodesMap, updateLocalNodesState],
   );
 
   const setEdges = useCallback<Dispatch<SetStateAction<Edge<EditableEdgeData>[]>>>(
     (updater) => {
-      doc.transact(() => {
-        const current = edgesRef.current;
-        const next =
-          typeof updater === 'function'
-            ? (updater as (prevState: Edge<EditableEdgeData>[]) => Edge<EditableEdgeData>[])(
-                current,
-              )
-            : updater;
+      const current = edgesRef.current;
+      const next =
+        typeof updater === 'function'
+          ? (updater as (prevState: Edge<EditableEdgeData>[]) => Edge<EditableEdgeData>[])(
+              current,
+            )
+          : updater;
 
-        if (!Array.isArray(next)) {
-          return;
-        }
+      if (!Array.isArray(next)) {
+        return;
+      }
 
+      updateLocalEdgesState(next);
+
+      canvasDoc.transact(() => {
         const nextIds = next.map((edge) => edge.id);
-        const currentOrder = edgesRef.current.map((edge) => edge.id);
+        const currentOrder = current.map((edge) => edge.id);
         const orderChanged =
           nextIds.length !== currentOrder.length ||
           nextIds.some((id, index) => currentOrder[index] !== id);
@@ -264,14 +362,17 @@ export const CanvasDataProvider = ({
             edgesMap.set(edge.id, edge);
           }
         });
-      });
+      }, 'canvas');
     },
-    [doc, edgeOrder, edgesMap],
+    [canvasDoc, edgeOrder, edgesMap, updateLocalEdgesState],
   );
 
   const setCanvasState = useCallback(
     (nextNodes: Node[], nextEdges: Edge<EditableEdgeData>[]) => {
-      doc.transact(() => {
+      updateLocalNodesState(nextNodes);
+      updateLocalEdgesState(nextEdges);
+
+      canvasDoc.transact(() => {
         nodeOrder.delete(0, nodeOrder.length);
         nodesMap.clear();
         edgeOrder.delete(0, edgeOrder.length);
@@ -292,9 +393,9 @@ export const CanvasDataProvider = ({
             edgesMap.set(edge.id, edge);
           });
         }
-      });
+      }, 'canvas');
     },
-    [doc, edgeOrder, edgesMap, nodeOrder, nodesMap],
+    [canvasDoc, edgeOrder, edgesMap, nodeOrder, nodesMap, updateLocalEdgesState, updateLocalNodesState],
   );
 
   const getNodes = useCallback(() => nodesRef.current, []);
@@ -309,9 +410,9 @@ export const CanvasDataProvider = ({
       getNodes,
       getEdges,
       setCanvasState,
-      doc,
+      doc: canvasDoc,
     }),
-    [doc, edges, getEdges, getNodes, nodes, setCanvasState, setEdges, setNodes],
+    [canvasDoc, edges, getEdges, getNodes, nodes, setCanvasState, setEdges, setNodes],
   );
 
   return (
