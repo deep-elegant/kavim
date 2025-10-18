@@ -18,6 +18,7 @@ import {
   type AiGateway,
   type AiProvider,
 } from "@/core/llm/aiModels";
+import { useDraftManager } from "@/core/drafts/DraftManagerContext";
 
 type ProviderKeyState = Record<AiProvider, string>;
 
@@ -55,6 +56,7 @@ export default function MenuBar() {
   const { i18n } = useTranslation();
   const { nodes, edges, setCanvasState } = useCanvasData();
   const { connectionState, dataChannelState } = useWebRTC();
+  const { activeDraftId, setActiveDraftId, deleteDraft, saveDraft } = useDraftManager();
 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [saveFileName, setSaveFileName] = useState("untitled.pak");
@@ -79,9 +81,11 @@ export default function MenuBar() {
     }
   }, [isSettingsOpen]);
 
+  const draftStatus = activeDraftId ? "Working from draft" : "";
+
   const combinedStatus = useMemo(() => {
-    return [saveMessage, settingsMessage].filter(Boolean).join(" · ");
-  }, [saveMessage, settingsMessage]);
+    return [draftStatus, saveMessage, settingsMessage].filter(Boolean).join(" · ");
+  }, [draftStatus, saveMessage, settingsMessage]);
 
   const connectionStatus = useMemo(() => {
     if (dataChannelState === "not-initiated") {
@@ -150,10 +154,11 @@ export default function MenuBar() {
         ? (result.canvas.edges as typeof edges)
         : [];
       setCanvasState(loadedNodes, loadedEdges);
+      setActiveDraftId(null);
     } catch (error) {
       console.error("Failed to load project", error);
     }
-  }, [setCanvasState]);
+  }, [setActiveDraftId, setCanvasState]);
 
   const handleFolderBrowse = useCallback(async () => {
     try {
@@ -191,11 +196,41 @@ export default function MenuBar() {
       });
       setIsSaveModalOpen(false);
       setSaveMessage(`Saved project to ${result.filePath}`);
+      if (activeDraftId) {
+        await deleteDraft(activeDraftId);
+        setActiveDraftId(null);
+      }
     } catch (error) {
       console.error("Failed to save project", error);
       setSaveMessage("Failed to save project.");
     }
   };
+
+  const handleSaveDraft = useCallback(async () => {
+    const sanitizedNodes = JSON.parse(JSON.stringify(nodes));
+    const sanitizedEdges = JSON.parse(JSON.stringify(edges));
+
+    const projectName = saveFileName.trim() || "Untitled draft";
+
+    const draft = await saveDraft({
+      draftId: activeDraftId ?? undefined,
+      projectName,
+      canvas: {
+        nodes: Array.isArray(sanitizedNodes) ? sanitizedNodes : [],
+        edges: Array.isArray(sanitizedEdges) ? sanitizedEdges : [],
+      },
+    });
+
+    if (draft) {
+      setActiveDraftId(draft.id);
+      const updatedAt = Date.parse(draft.updatedAt);
+      const formatted =
+        Number.isNaN(updatedAt) ? draft.updatedAt : new Date(updatedAt).toLocaleTimeString();
+      setSaveMessage(`Draft saved (${formatted})`);
+    } else {
+      setSaveMessage("Failed to save draft.");
+    }
+  }, [activeDraftId, nodes, edges, saveDraft, saveFileName, setActiveDraftId]);
 
   const handleSettingsSave = () => {
     try {
@@ -240,6 +275,9 @@ export default function MenuBar() {
               <MenubarItem onClick={handleLoadClick}>{i18n.t("menuBar.load")}</MenubarItem>
               <MenubarItem onClick={() => setIsSaveModalOpen(true)}>
                 {i18n.t("menuBar.save")}
+              </MenubarItem>
+              <MenubarItem onClick={handleSaveDraft}>
+                {i18n.t("menuBar.saveDraft")}
               </MenubarItem>
             </MenubarContent>
           </MenubarMenu>

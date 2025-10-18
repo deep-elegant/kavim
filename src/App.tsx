@@ -7,6 +7,7 @@ import BaseLayout from "./layouts/BaseLayout";
 import Canvas from "./core/canvas/Canvas";
 import { CanvasDataProvider } from "./core/canvas/CanvasDataContext";
 import { WebRTCProvider } from "./core/canvas/collaboration/WebRTCContext";
+import { DraftManagerProvider } from "./core/drafts/DraftManagerContext";
 import "./localization/i18n";
 import * as Y from "yjs";
 
@@ -20,14 +21,16 @@ export default function App() {
 
   return (
     <WebRTCProvider doc={doc}>
-      <CanvasDataProvider doc={doc}>
-        <Toaster />
-        <BaseLayout>
-          <div className="h-full w-full">
-            <Canvas />
-          </div>
-        </BaseLayout>
-      </CanvasDataProvider>
+      <DraftManagerProvider>
+        <CanvasDataProvider doc={doc}>
+          <Toaster />
+          <BaseLayout>
+            <div className="h-full w-full">
+              <Canvas />
+            </div>
+          </BaseLayout>
+        </CanvasDataProvider>
+      </DraftManagerProvider>
     </WebRTCProvider>
   );
 }
