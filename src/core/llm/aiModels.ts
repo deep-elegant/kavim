@@ -83,7 +83,7 @@ export const AI_MODELS = [
     value: 'gemini-2-5-flash',
     label: 'Google: Gemini 2.5 Flash',
     provider: 'google',
-    modelId: 'gemini-2.0-flash',
+    modelId: 'gemini-2.5-flash',
   },
   {
     value: 'gemini-2-5-pro',
