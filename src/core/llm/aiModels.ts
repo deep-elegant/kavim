@@ -57,19 +57,25 @@ export const AI_MODELS = [
     value: 'gpt-5-mini',
     label: 'OpenAI: GPT-5 Mini',
     provider: 'openai',
-    modelId: 'gpt-5-mini',
+    modelId: 'gpt-5-mini-2025-08-07',
   },
   {
     value: 'gpt-5',
     label: 'OpenAI: GPT-5',
     provider: 'openai',
-    modelId: 'gpt-5',
+    modelId: 'gpt-5-2025-08-07',
   },
   {
     value: 'gpt-5-pro',
     label: 'OpenAI: GPT-5 Pro',
     provider: 'openai',
-    modelId: 'gpt-5-pro',
+    modelId: 'gpt-5-pro-2025-10-06',
+  },
+  {
+    value: 'gpt-5-chat-latest',
+    label: 'OpenAI: GPT-5 Chat',
+    provider: 'openai',
+    modelId: 'gpt-5-chat-latest',
   },
   {
     value: 'gemini-2-5-flash',
