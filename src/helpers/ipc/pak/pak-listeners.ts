@@ -10,7 +10,7 @@ import {
   type PakOperationResult,
   type SavePakRequest,
 } from "@/core/pak/types";
-import { registerPakProtocol, setActivePak } from "@/core/pak/pak-manager";
+import { getActivePak, registerPakProtocol, setActivePak } from "@/core/pak/pak-manager";
 import { PAK_LOAD_CHANNEL, PAK_SAVE_CHANNEL } from "./pak-channels";
 import { type Node } from '@xyflow/react';
 import { ImageNodeType } from "@/core/canvas/nodes/ImageNode";
@@ -67,7 +67,7 @@ const prepareAssetFiles = (
   manifest: PakManifest,
   assets: PakAssetInput[] = [],
 ) => {
-  const processedAssets: { path: string; data: Buffer }[] = assets.map(
+  let processedAssets: { path: string; data: Buffer }[] = assets.map(
     ({ path: assetPath, data }) => ({
       path: assetPath,
       data: toBuffer(data),
@@ -101,6 +101,21 @@ const prepareAssetFiles = (
     }
   }
 
+  /** Check the previous assets are actually in the canvas rightnow */
+  const usedCanvasAssetPaths = (canvas.nodes as Node[])
+    .filter((node) => node.type === "image-node")
+    .map((node) => (node as ImageNodeType).data.src.split("pak://")[1]);
+
+  // Efficent way to remove elements from array, because files can be large - optimization is required here.
+  let writeIndex = 0;
+  for (let readIndex = 0; readIndex < processedAssets.length; readIndex++) {
+    const file = processedAssets[readIndex];
+    if (usedCanvasAssetPaths.includes(file.path)) {
+      processedAssets[writeIndex++] = file;
+    }
+  }
+  processedAssets.length = writeIndex;
+
   const serializedCanvas = Buffer.from(JSON.stringify(ensureCanvas(canvas)));
   const manifestBuffer = Buffer.from(JSON.stringify(manifest));
 
@@ -111,7 +126,7 @@ const prepareAssetFiles = (
   ];
 };
 
-const savePakFile = async (payload: SavePakRequest): Promise<PakOperationResult> => {
+const savePakFile = async (payload: SavePakRequest, previousAssets: PakAssetInput[]): Promise<PakOperationResult> => {
   const baseDirectory = app.getPath("documents");
   const outputPath = resolveOutputPath(baseDirectory, payload.fileName, payload.directory);
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
@@ -120,7 +135,7 @@ const savePakFile = async (payload: SavePakRequest): Promise<PakOperationResult>
   const assetFiles = prepareAssetFiles(
     payload.canvas,
     manifest,
-    payload.assets ?? [],
+    previousAssets,
   );
   await createPak(outputPath, assetFiles, manifest);
 
@@ -142,7 +157,13 @@ export const addPakEventListeners = () => {
   registerPakProtocol();
 
   ipcMain.handle(PAK_SAVE_CHANNEL, async (_event, payload: SavePakRequest) => {
-    const result = await savePakFile(payload);
+    const activePak = getActivePak();
+    let previousAssets: PakAssetInput[] = [];
+    if (activePak) {
+      previousAssets = Object.entries(activePak.files).filter(([path]) => path.startsWith("assets/"))
+        .map(([path, data]) => ({ path, data }));
+    }
+    const result = await savePakFile(payload, previousAssets);
     return result;
   });
 
