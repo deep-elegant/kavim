@@ -1,7 +1,13 @@
 import { ipcMain } from 'electron';
 import { ChatOpenAI } from '@langchain/openai';
 import { GoogleGenAI } from '@google/genai';
-import type { AIMessage, AIMessageChunk } from '@langchain/core/messages';
+import { ChatAnthropic } from '@langchain/anthropic';
+import {
+  AIMessage,
+  AIMessageChunk,
+  HumanMessage,
+} from '@langchain/core/messages';
+import type { BaseMessage } from '@langchain/core/messages';
 import {
   LLM_STREAM_CHANNEL,
   LLM_STREAM_CHUNK_CHANNEL,
@@ -40,10 +46,14 @@ const extractMessageContent = (message: AIMessage | AIMessageChunk): string => {
   return '';
 };
 
-const formatPrompt = (messages: LlmStreamRequestPayload['messages']): string =>
-  messages
-    .map(({ role, content }) => `${role === 'user' ? 'User' : 'Assistant'}: ${content}`)
-    .join('\n\n');
+const mapMessagesToLangChain = (
+  messages: LlmStreamRequestPayload['messages'],
+): BaseMessage[] =>
+  messages.map((message) =>
+    message.role === 'user'
+      ? new HumanMessage({ content: message.content })
+      : new AIMessage({ content: message.content }),
+  );
 
 const mapMessagesToGeminiContents = (
   messages: LlmStreamRequestPayload['messages'],
@@ -85,7 +95,7 @@ export const addLlmEventListeners = () => {
             throw new Error('Custom base URLs are not supported for Google Gemini');
           }
 
-          const genAI = new GoogleGenAI({apiKey});
+          const genAI = new GoogleGenAI({ apiKey });
           const contents = mapMessagesToGeminiContents(messages);
           const response = await genAI.models.generateContentStream({ model: modelName, contents });
 
@@ -103,10 +113,28 @@ export const addLlmEventListeners = () => {
           }
 
           await response;
+        } else if (provider === 'anthropic') {
+          const llm = new ChatAnthropic({
+            apiKey,
+            model: modelName,
+            streaming: true,
+          });
+          const stream = await llm.stream(mapMessagesToLangChain(messages));
+
+          for await (const chunk of stream) {
+            const content = extractMessageContent(chunk);
+            if (!content) {
+              continue;
+            }
+
+            event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
+              requestId: payload.requestId,
+              content,
+            });
+          }
         } else {
           const llm = createOpenAiChatClient(payload);
-          const prompt = formatPrompt(messages);
-          const stream = await llm.stream(prompt);
+          const stream = await llm.stream(mapMessagesToLangChain(messages));
 
           for await (const chunk of stream) {
             const content = extractMessageContent(chunk);
