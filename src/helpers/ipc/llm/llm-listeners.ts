@@ -2,6 +2,7 @@ import { ipcMain } from 'electron';
 import { ChatOpenAI } from '@langchain/openai';
 import { GoogleGenAI } from '@google/genai';
 import { ChatAnthropic } from '@langchain/anthropic';
+import { ChatXAI } from '@langchain/xai';
 import {
   AIMessage,
   AIMessageChunk,
@@ -132,7 +133,28 @@ export const addLlmEventListeners = () => {
               content,
             });
           }
-        } else {
+        } else if (provider === 'grok') {
+          const xaiConfiguration = baseURL ? { baseURL } : {};
+          const llm = new ChatXAI({
+            apiKey,
+            model: modelName,
+            streaming: true,
+            ...xaiConfiguration,
+          });
+          const stream = await llm.stream(mapMessagesToLangChain(messages));
+
+          for await (const chunk of stream) {
+            const content = extractMessageContent(chunk);
+            if (!content) {
+              continue;
+            }
+
+            event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
+              requestId: payload.requestId,
+              content,
+            });
+          }
+        } else if (provider === 'openai' || provider === 'deepseek') {
           const llm = createOpenAiChatClient(payload);
           const stream = await llm.stream(mapMessagesToLangChain(messages));
 
@@ -147,6 +169,8 @@ export const addLlmEventListeners = () => {
               content,
             });
           }
+        } else {
+          throw new Error(`Unsupported provider ${provider}`);
         }
 
         event.sender.send(LLM_STREAM_COMPLETE_CHANNEL, {
