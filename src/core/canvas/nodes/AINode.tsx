@@ -458,7 +458,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   }, [result]);
 
   const handleCopyAiResponse = useCallback(async () => {
-    const plainText = htmlToPlainText(resultHtml);
+    const plainText = result
     if (!plainText) {
       toast.info('No AI response to copy yet.');
       return;
