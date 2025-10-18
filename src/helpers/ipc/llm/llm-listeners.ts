@@ -65,13 +65,29 @@ const mapMessagesToGeminiContents = (
   }));
 
 const createOpenAiChatClient = (payload: LlmStreamRequestPayload) => {
-  const { provider, apiKey, modelName, baseURL } = payload;
+  const { provider, apiKey, modelName, baseURL, headers } = payload;
 
   if (!apiKey) {
     throw new Error(`Missing API key for provider ${provider}`);
   }
 
-  const openAIConfiguration = baseURL ? { configuration: { baseURL } } : {};
+  const configuration: {
+    baseURL?: string;
+    defaultHeaders?: Record<string, string>;
+  } = {};
+
+  if (baseURL) {
+    configuration.baseURL = baseURL;
+  }
+
+  if (headers) {
+    configuration.defaultHeaders = headers;
+  }
+
+  const openAIConfiguration =
+    configuration.baseURL || configuration.defaultHeaders
+      ? { configuration }
+      : {};
 
   return new ChatOpenAI({
     apiKey,
@@ -154,7 +170,7 @@ export const addLlmEventListeners = () => {
               content,
             });
           }
-        } else if (provider === 'openai' || provider === 'deepseek') {
+        } else if (provider === 'openai' || provider === 'deepseek' || provider === 'openrouter') {
           const llm = createOpenAiChatClient(payload);
           const stream = await llm.stream(mapMessagesToLangChain(messages));
 

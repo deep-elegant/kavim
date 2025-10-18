@@ -1,6 +1,8 @@
 import {
+  AI_GATEWAY_METADATA,
   AI_MODELS,
   AI_PROVIDER_METADATA,
+  type AiGateway,
   type AiModel,
   type AiProvider,
 } from '@/core/llm/aiModels';
@@ -23,6 +25,7 @@ type ProviderSettings = {
 type ModelSettings = ProviderSettings & {
   modelName: string;
   provider: AiProvider;
+  gatewayModelOverrides?: Partial<Record<AiGateway, string>>;
 };
 
 const PROVIDER_SETTINGS: Record<AiProvider, ProviderSettings> = AI_PROVIDER_METADATA.reduce(
@@ -30,7 +33,7 @@ const PROVIDER_SETTINGS: Record<AiProvider, ProviderSettings> = AI_PROVIDER_META
     const { value, apiKeyPlaceholder, baseURL } = provider;
 
     accumulator[value] = {
-      envKey: () => window.settingsStore.get(value)?.apiKey ?? '',
+      envKey: () => window.settingsStore.getProvider(value)?.apiKey ?? '',
       placeholder: apiKeyPlaceholder,
       baseURL,
     };
@@ -53,6 +56,7 @@ const MODEL_SETTINGS: Record<AiModel, ModelSettings> = AI_MODELS.reduce(
       modelName: model.modelId,
       baseURL: model.baseURL ?? providerSettings.baseURL,
       provider: model.provider,
+      gatewayModelOverrides: model.gatewayModelOverrides,
     };
 
     return accumulator;
@@ -60,18 +64,33 @@ const MODEL_SETTINGS: Record<AiModel, ModelSettings> = AI_MODELS.reduce(
   {} as Record<AiModel, ModelSettings>,
 );
 
-const buildStreamPayload = (
-  settings: ModelSettings,
-  messages: ChatMessage[],
-  apiKey: string,
-  requestId: string,
-): LlmStreamRequestPayload => ({
-  requestId,
-  provider: settings.provider,
-  modelName: settings.modelName,
-  baseURL: settings.baseURL,
+const buildStreamPayload = ({
+  provider,
+  resolvedProvider,
+  modelName,
+  baseURL,
   apiKey,
   messages,
+  requestId,
+  headers,
+}: {
+  provider: AiProvider | AiGateway;
+  resolvedProvider: AiProvider;
+  modelName: string;
+  baseURL?: string;
+  apiKey: string;
+  messages: ChatMessage[];
+  requestId: string;
+  headers?: Record<string, string>;
+}): LlmStreamRequestPayload => ({
+  requestId,
+  provider,
+  resolvedProvider,
+  modelName,
+  baseURL,
+  apiKey,
+  messages,
+  headers,
 });
 
 const assertLlmBridgeAvailable = (): asserts window is Window & {
@@ -154,7 +173,59 @@ export const generateAiResult = async ({
     cleanupCallbacks.push(window.llm.onComplete(handleComplete));
 
     try {
-      const payload = buildStreamPayload(settings, messages, apiKey, requestId);
+      let gatewayPreference:
+        | {
+            gateway: (typeof AI_GATEWAY_METADATA)[number];
+            stored: NonNullable<
+              ReturnType<typeof window.settingsStore.getGateway>
+            >;
+            headers?: Record<string, string>;
+          }
+        | undefined;
+
+      for (const gateway of AI_GATEWAY_METADATA) {
+        const stored = window.settingsStore.getGateway(gateway.value);
+
+        if (!stored?.useForAllModels || !stored.apiKey) {
+          continue;
+        }
+
+        const headerMap: Record<string, string> = {};
+
+        if (stored.headers?.referer) {
+          headerMap['HTTP-Referer'] = stored.headers.referer;
+        }
+
+        if (stored.headers?.title) {
+          headerMap['X-Title'] = stored.headers.title;
+        }
+
+        gatewayPreference = {
+          gateway,
+          stored,
+          headers: Object.keys(headerMap).length > 0 ? headerMap : undefined,
+        };
+        break;
+      }
+
+      const effectiveProvider = gatewayPreference?.gateway.value ?? settings.provider;
+      const effectiveModelName = gatewayPreference?.gateway.value
+        ? settings.gatewayModelOverrides?.[gatewayPreference.gateway.value] ?? settings.modelName
+        : settings.modelName;
+      const effectiveBaseURL = gatewayPreference?.gateway.baseURL ?? settings.baseURL;
+      const effectiveApiKey = gatewayPreference?.stored.apiKey ?? apiKey;
+      const headers = gatewayPreference?.headers;
+
+      const payload = buildStreamPayload({
+        provider: effectiveProvider,
+        resolvedProvider: settings.provider,
+        modelName: effectiveModelName,
+        baseURL: effectiveBaseURL,
+        apiKey: effectiveApiKey,
+        messages,
+        requestId,
+        headers,
+      });
       window.llm.stream(payload);
     } catch (error) {
       cleanup();
