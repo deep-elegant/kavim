@@ -1,13 +1,15 @@
-import type { AiProvider } from '@/core/llm/aiModels';
+import type { AiGateway, AiProvider } from '@/core/llm/aiModels';
 import type { ChatMessage } from '@/core/llm/chatTypes';
 
 export type LlmStreamRequestPayload = {
   requestId: string;
-  provider: AiProvider;
+  provider: AiProvider | AiGateway;
+  resolvedProvider: AiProvider;
   modelName: string;
   baseURL?: string;
   apiKey: string;
   messages: ChatMessage[];
+  headers?: Record<string, string>;
 };
 
 export type LlmChunkPayload = {

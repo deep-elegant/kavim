@@ -12,15 +12,44 @@ import { PeerConnectionModal } from "@/core/canvas/collaboration/PeerConnectionM
 import { useCanvasData } from "@/core/canvas/CanvasDataContext";
 import { useWebRTC } from "@/core/canvas/collaboration/WebRTCContext";
 import { useTranslation } from "react-i18next";
-import { AI_PROVIDER_METADATA, type AiProvider } from "@/core/llm/aiModels";
+import {
+  AI_GATEWAY_METADATA,
+  AI_PROVIDER_METADATA,
+  type AiGateway,
+  type AiProvider,
+} from "@/core/llm/aiModels";
 
 type ProviderKeyState = Record<AiProvider, string>;
 
+type GatewayFormState = {
+  apiKey: string;
+  useForAllModels: boolean;
+  referer: string;
+  title: string;
+};
+
+type GatewaySettingsState = Record<AiGateway, GatewayFormState>;
+
 const createProviderKeyState = (): ProviderKeyState =>
   AI_PROVIDER_METADATA.reduce((accumulator, provider) => {
-    accumulator[provider.value] = window.settingsStore.get(provider.value)?.apiKey ?? "";
+    accumulator[provider.value] =
+      window.settingsStore.getProvider(provider.value)?.apiKey ?? "";
     return accumulator;
   }, {} as ProviderKeyState);
+
+const createGatewaySettingsState = (): GatewaySettingsState =>
+  AI_GATEWAY_METADATA.reduce((accumulator, gateway) => {
+    const stored = window.settingsStore.getGateway(gateway.value);
+
+    accumulator[gateway.value] = {
+      apiKey: stored?.apiKey ?? "",
+      useForAllModels: stored?.useForAllModels ?? false,
+      referer: stored?.headers?.referer ?? "",
+      title: stored?.headers?.title ?? "",
+    } satisfies GatewayFormState;
+
+    return accumulator;
+  }, {} as GatewaySettingsState);
 
 export default function MenuBar() {
   const { i18n } = useTranslation();
@@ -38,10 +67,14 @@ export default function MenuBar() {
   const [connectionRole, setConnectionRole] = useState<'initiator' | 'responder'>('initiator');
   const [providerKeys, setProviderKeys] = useState<ProviderKeyState>(() => createProviderKeyState());
   const [settingsMessage, setSettingsMessage] = useState<string>("");
+  const [gatewaySettings, setGatewaySettings] = useState<GatewaySettingsState>(
+    () => createGatewaySettingsState(),
+  );
 
   React.useEffect(() => {
     if (isSettingsOpen) {
       setProviderKeys(createProviderKeyState());
+      setGatewaySettings(createGatewaySettingsState());
       setSettingsMessage("");
     }
   }, [isSettingsOpen]);
@@ -86,6 +119,19 @@ export default function MenuBar() {
       [provider]: value,
     }));
   }, []);
+
+  const handleGatewaySettingChange = useCallback(
+    (gateway: AiGateway, updates: Partial<GatewayFormState>) => {
+      setGatewaySettings((previous) => ({
+        ...previous,
+        [gateway]: {
+          ...previous[gateway],
+          ...updates,
+        },
+      }));
+    },
+    [],
+  );
 
   const handleLoadClick = useCallback(async () => {
     const filePath = await window.fileSystem.openFile({
@@ -154,7 +200,27 @@ export default function MenuBar() {
   const handleSettingsSave = () => {
     try {
       AI_PROVIDER_METADATA.forEach(({ value: provider }) => {
-        window.settingsStore.set(provider, { apiKey: providerKeys[provider] ?? "" });
+        window.settingsStore.setProvider(provider, {
+          apiKey: providerKeys[provider] ?? "",
+        });
+      });
+
+      AI_GATEWAY_METADATA.forEach(({ value: gateway }) => {
+        const current = gatewaySettings[gateway];
+        const referer = current?.referer.trim();
+        const title = current?.title.trim();
+
+        window.settingsStore.setGateway(gateway, {
+          apiKey: current?.apiKey ?? "",
+          useForAllModels: current?.useForAllModels ?? false,
+          headers:
+            referer || title
+              ? {
+                  ...(referer ? { referer } : {}),
+                  ...(title ? { title } : {}),
+                }
+              : undefined,
+        });
       });
       setIsSettingsOpen(false);
       setSettingsMessage("API keys saved locally.");
@@ -226,6 +292,8 @@ export default function MenuBar() {
         onClose={() => setIsSettingsOpen(false)}
         providerKeys={providerKeys}
         setProviderKey={handleProviderKeyChange}
+        gatewaySettings={gatewaySettings}
+        setGatewaySetting={handleGatewaySettingChange}
         handleSettingsSave={handleSettingsSave}
       />
 
