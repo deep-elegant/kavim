@@ -72,6 +72,7 @@
     "@hookform/resolvers": "^5.2.2",
     "@icons-pack/react-simple-icons": "^13.7.0",
     "@langchain/anthropic": "^1.0.0",
+    "@langchain/xai": "^1.0.0",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-menubar": "^1.1.16",
