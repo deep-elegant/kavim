@@ -17,8 +17,7 @@ export const AI_PROVIDER_METADATA = [
     value: 'google',
     label: 'Google',
     inputPlaceholder: 'Enter your Google AI Studio API key',
-    apiKeyPlaceholder: 'YOUR_GOOGLE_API_KEY',
-    baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    apiKeyPlaceholder: 'YOUR_GOOGLE_API_KEY'
   },
   {
     value: 'anthropic',

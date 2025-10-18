@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron';
 import { ChatOpenAI } from '@langchain/openai';
-import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
+import { GoogleGenAI } from '@google/genai';
 import type { AIMessage, AIMessageChunk } from '@langchain/core/messages';
 import {
   LLM_STREAM_CHANNEL,
@@ -45,20 +45,19 @@ const formatPrompt = (messages: LlmStreamRequestPayload['messages']): string =>
     .map(({ role, content }) => `${role === 'user' ? 'User' : 'Assistant'}: ${content}`)
     .join('\n\n');
 
-const createChatClient = (payload: LlmStreamRequestPayload) => {
+const mapMessagesToGeminiContents = (
+  messages: LlmStreamRequestPayload['messages'],
+) =>
+  messages.map((message) => ({
+    role: message.role === 'user' ? 'user' : 'model',
+    parts: [{ text: message.content }],
+  }));
+
+const createOpenAiChatClient = (payload: LlmStreamRequestPayload) => {
   const { provider, apiKey, modelName, baseURL } = payload;
 
   if (!apiKey) {
     throw new Error(`Missing API key for provider ${provider}`);
-  }
-
-  if (provider === 'google') {
-    return new ChatGoogleGenerativeAI({
-      apiKey,
-      model: modelName,
-      streaming: true,
-      apiVersion: 'v1'
-    });
   }
 
   const openAIConfiguration = baseURL ? { configuration: { baseURL } } : {};
@@ -75,20 +74,51 @@ export const addLlmEventListeners = () => {
   ipcMain.on(LLM_STREAM_CHANNEL, (event, payload: LlmStreamRequestPayload) => {
     void (async () => {
       try {
-        const llm = createChatClient(payload);
-        const prompt = formatPrompt(payload.messages);
-        const stream = await llm.stream(prompt);
+        const { provider, apiKey, baseURL, modelName, messages } = payload;
 
-        for await (const chunk of stream) {
-          const content = extractMessageContent(chunk);
-          if (!content) {
-            continue;
+        if (!apiKey) {
+          throw new Error(`Missing API key for provider ${provider}`);
+        }
+
+        if (provider === 'google') {
+          if (baseURL) {
+            throw new Error('Custom base URLs are not supported for Google Gemini');
           }
 
-          event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
-            requestId: payload.requestId,
-            content,
-          });
+          const genAI = new GoogleGenAI({apiKey});
+          const contents = mapMessagesToGeminiContents(messages);
+          const response = await genAI.models.generateContentStream({ model: modelName, contents });
+
+          for await (const chunk of response) {
+            const chunkText = chunk.text;
+
+            if (!chunkText) {
+              continue;
+            }
+
+            event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
+              requestId: payload.requestId,
+              content: chunkText,
+            });
+          }
+
+          await response;
+        } else {
+          const llm = createOpenAiChatClient(payload);
+          const prompt = formatPrompt(messages);
+          const stream = await llm.stream(prompt);
+
+          for await (const chunk of stream) {
+            const content = extractMessageContent(chunk);
+            if (!content) {
+              continue;
+            }
+
+            event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
+              requestId: payload.requestId,
+              content,
+            });
+          }
         }
 
         event.sender.send(LLM_STREAM_COMPLETE_CHANNEL, {
