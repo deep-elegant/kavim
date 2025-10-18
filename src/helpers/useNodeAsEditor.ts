@@ -150,31 +150,34 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
     }
   }, [isTyping, editor]);
 
-  const setTypingState = (value: boolean) => {
-    setNodes((nodes) =>
-      nodes.map((node) => {
-        if (node.id === id) {
-          return {
-            ...node,
-            data: {
-              ...(node.data as NodeDataWithLabel),
-              isTyping: value,
-            },
-          };
-        }
-        if (value && node.data?.isTyping) {
-          return {
-            ...node,
-            data: {
-              ...(node.data as NodeDataWithLabel),
-              isTyping: false,
-            },
-          };
-        }
-        return node;
-      }),
-    );
-  };
+  const setTypingState = useCallback(
+    (value: boolean) => {
+      setNodes((nodes) =>
+        nodes.map((node) => {
+          if (node.id === id) {
+            return {
+              ...node,
+              data: {
+                ...(node.data as NodeDataWithLabel),
+                isTyping: value,
+              },
+            };
+          }
+          if (value && node.data?.isTyping) {
+            return {
+              ...node,
+              data: {
+                ...(node.data as NodeDataWithLabel),
+                isTyping: false,
+              },
+            };
+          }
+          return node;
+        }),
+      );
+    },
+    [id, setNodes],
+  );
 
   const handleDoubleClick = (event: MouseEvent<HTMLDivElement>) => {
     event.stopPropagation();
@@ -196,5 +199,5 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
     setTypingState(false);
   };
 
-  return { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData };
+  return { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData, setTypingState };
 };

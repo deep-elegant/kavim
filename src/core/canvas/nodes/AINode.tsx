@@ -1,4 +1,4 @@
-import React, { FocusEventHandler, memo, useCallback, useEffect, useMemo, useRef, useState, type FocusEvent } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState, type FocusEvent } from 'react';
 import { type NodeProps, type Node, type Edge } from '@xyflow/react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -137,10 +137,11 @@ const STATUS_STYLES: Record<AiStatus, string> = {
 const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   const { setNodes, setEdges, getNodes, getEdges } = useCanvasData();
   const contentRef = useRef<HTMLDivElement>(null);
-  const { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData } = useNodeAsEditor({
-    id,
-    data,
-  });
+  const { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData, setTypingState } =
+    useNodeAsEditor({
+      id,
+      data,
+    });
   const model = data.model ?? 'deepseek';
   const status = data.status ?? 'not-started';
   const result = data.result ?? '';
@@ -166,7 +167,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   const requestIdRef = useRef(0);
   const lastPromptRef = useRef(label);
   const wasTypingRef = useRef(isTyping);
-
   const buildChatHistory = useCallback(
     (promptHtml: string): ChatMessage[] => {
       const flowNodes = getNodes();
@@ -446,13 +446,17 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
   const customOnBlur = useCallback(
     (event: FocusEvent<HTMLDivElement>) => {
-      const { relatedTarget } = event;
+      const potentialNextFocus =
+        event.relatedTarget instanceof Element
+          ? event.relatedTarget
+          : (typeof document !== 'undefined' ? document.activeElement : null);
+
       if (
-        (relatedTarget instanceof Element &&
-          relatedTarget.closest('[data-radix-popper-content-wrapper]')) ||
+        (potentialNextFocus instanceof Element &&
+          potentialNextFocus.closest('[data-radix-popper-content-wrapper]')) ||
         (contentRef.current &&
-          relatedTarget instanceof Node &&
-          contentRef.current.contains(relatedTarget))
+          potentialNextFocus instanceof Node &&
+          contentRef.current.contains(potentialNextFocus))
       ) {
         return;
       }
@@ -502,7 +506,19 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                   <FormItem className="space-y-1">
                     <FormLabel className="text-xs font-medium text-slate-600">Model</FormLabel>
                     <FormControl>
-                      <SingleLlmSelect value={field.value} onChange={field.onChange} />
+                      <SingleLlmSelect
+                        value={field.value}
+                        onChange={(value) => {
+                          field.onChange(value);
+                          setTypingState(true);
+                          const currentEditor = editor;
+                          if (currentEditor) {
+                            setTimeout(() => {
+                              currentEditor.commands.focus('end');
+                            }, 0);
+                          }
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

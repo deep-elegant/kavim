@@ -32,14 +32,19 @@ function MinimalTiptap({
     <div className={cn('relative', className)} style={style}>
       <div
         className={cn(
-          'relative',
-          theme === 'default' && 'rounded-lg border bg-background transition focus-within:border-primary',
-          theme === 'disabled' && 'rounded-lg border bg-muted opacity-50 cursor-not-allowed',
+          'relative h-full',
+          theme === 'default' &&
+            'rounded-lg border bg-background transition focus-within:border-primary',
+          theme === 'disabled' && 'cursor-not-allowed rounded-lg border bg-muted opacity-50',
           theme === 'transparent' && 'bg-transparent transition focus-within:border-primary ',
 
         )}
       >
-        <EditorContent editor={editor} placeholder={placeholder} />
+        <EditorContent
+          editor={editor}
+          placeholder={placeholder}
+          className="h-full min-h-full w-full"
+        />
       </div>
     </div>
   );
