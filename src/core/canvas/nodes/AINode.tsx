@@ -323,7 +323,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
         target: newNodeId,
         targetHandle: 'left-target',
         type: 'editable',
-        data: createDefaultEditableEdgeData(),
+        data: { ...createDefaultEditableEdgeData(), targetMarker: 'arrow' },
       },
     ]);
   }, [getNodes, id, model, setEdges, setNodes]);
