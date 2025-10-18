@@ -156,6 +156,7 @@ const StickyNoteNode = memo(
         minHeight={MIN_HEIGHT}
         editor={editor}
         toolbarItems={toolbarItems}
+        contextMenuItems={undefined}
       >
         <div
           className={cn(

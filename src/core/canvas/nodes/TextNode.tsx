@@ -109,6 +109,7 @@ const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => 
       minHeight={MIN_HEIGHT}
       className="text-slate-900"
       editor={editor}
+      contextMenuItems={undefined}
     >
       <div
         className="relative flex h-full w-full cursor-text items-center"

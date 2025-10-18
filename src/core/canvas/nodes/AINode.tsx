@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { Split } from 'lucide-react';
 import { marked } from 'marked';
 import { toast } from 'sonner';
+import { ContextMenuItem } from '@/components/ui/context-menu';
 
 import NodeInteractionOverlay from './NodeInteractionOverlay';
 import { type DrawableNode } from './DrawableNode';
@@ -322,7 +323,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
         target: newNodeId,
         targetHandle: 'left-target',
         type: 'editable',
-        data: createDefaultEditableEdgeData(),
+        data: { ...createDefaultEditableEdgeData(), targetMarker: 'arrow' },
       },
     ]);
   }, [getNodes, id, model, setEdges, setNodes]);
@@ -456,6 +457,27 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     return response;
   }, [result]);
 
+  const handleCopyAiResponse = useCallback(async () => {
+    const plainText = result
+    if (!plainText) {
+      toast.info('No AI response to copy yet.');
+      return;
+    }
+
+    if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+      toast.error('Clipboard is not available.');
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(plainText);
+      toast.success('AI response copied to clipboard.');
+    } catch (error) {
+      console.error('Failed to copy AI response', error);
+      toast.error('Failed to copy AI response.');
+    }
+  }, [resultHtml]);
+
   const customOnBlur = useCallback(
     (event: FocusEvent<HTMLDivElement>) => {
       const potentialNextFocus =
@@ -486,6 +508,11 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       minHeight={MIN_HEIGHT}
       className="text-slate-900"
       editor={editor}
+      contextMenuItems={
+        <ContextMenuItem onSelect={() => void handleCopyAiResponse()}>
+          Copy AI Response
+        </ContextMenuItem>
+      }
     >
       <button
         type="button"

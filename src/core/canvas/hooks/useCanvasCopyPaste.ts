@@ -1,10 +1,42 @@
-import { useCallback, useEffect, useRef, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useEffect, type Dispatch, type SetStateAction } from 'react';
 import type { ClipboardEvent as ReactClipboardEvent } from 'react';
 import type { Node } from '@xyflow/react';
 
 import type { CanvasNode, ToolId } from '../types';
 
 const COPIED_NODES_MARKER = '__COL_AI_NODES_COPY__';
+
+const copiedNodesRef: { current: Node<CanvasNode>[] } = { current: [] };
+
+const cloneNode = <T,>(node: T): T => {
+  if (typeof structuredClone === 'function') {
+    return structuredClone(node);
+  }
+
+  return JSON.parse(JSON.stringify(node)) as T;
+};
+
+const cloneNodes = <T,>(nodes: T[]): T[] => nodes.map((node) => cloneNode(node));
+
+export const copyNodesToClipboard = async (
+  selectedNodes: Node<CanvasNode>[],
+): Promise<void> => {
+  if (!selectedNodes.length) {
+    return;
+  }
+
+  copiedNodesRef.current = cloneNodes(selectedNodes);
+
+  if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(COPIED_NODES_MARKER);
+  } catch (error) {
+    console.error('Failed to write to clipboard:', error);
+  }
+};
 
 export interface UseCanvasCopyPasteParams {
   nodes: Node[];
@@ -27,8 +59,6 @@ export const useCanvasCopyPaste = ({
   getFileName,
   isImageFile,
 }: UseCanvasCopyPasteParams) => {
-  const copiedNodesRef = useRef<Node<CanvasNode>[]>([]);
-
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
@@ -41,12 +71,9 @@ export const useCanvasCopyPaste = ({
       }
 
       if ((event.ctrlKey || event.metaKey) && event.code === 'KeyC') {
-        const selectedNodes = nodes.filter((node) => node.selected);
+        const selectedNodes = nodes.filter((node) => node.selected) as Node<CanvasNode>[];
         if (selectedNodes.length > 0) {
-          copiedNodesRef.current = JSON.parse(JSON.stringify(selectedNodes));
-          navigator.clipboard.writeText(COPIED_NODES_MARKER).catch((err) => {
-            console.error('Failed to write to clipboard:', err);
-          });
+          void copyNodesToClipboard(selectedNodes);
         }
       }
     };
@@ -76,15 +103,15 @@ export const useCanvasCopyPaste = ({
           };
 
           const newNode: Node<CanvasNode> = {
-            ...nodeToCopy,
+            ...cloneNode(nodeToCopy),
             id: crypto.randomUUID(),
             position: newPosition,
             selected: true,
-            data: JSON.parse(JSON.stringify(nodeToCopy.data)),
+            data: cloneNode(nodeToCopy.data),
           };
           newNodes.push(newNode);
 
-          const updatedNode = JSON.parse(JSON.stringify(nodeToCopy));
+          const updatedNode = cloneNode(nodeToCopy);
           updatedNode.position = newPosition;
           updatedCopiedNodes.push(updatedNode);
         });
@@ -144,7 +171,7 @@ export const useCanvasCopyPaste = ({
     ],
   );
 
-  return { handlePaste };
+  return { handlePaste, copyNodesToClipboard };
 };
 
 export default useCanvasCopyPaste;
