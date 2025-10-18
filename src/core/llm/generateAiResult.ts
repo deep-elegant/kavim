@@ -103,7 +103,6 @@ export const generateAiResult = async ({
   const llm = new ChatOpenAI({
     apiKey,
     model: settings.modelName,
-    temperature: 0.2,
     streaming: true,
     ...configuration,
   });

@@ -4,6 +4,7 @@ export const AI_PROVIDER_METADATA = [
     label: 'OpenAI',
     inputPlaceholder: 'Enter your OpenAI API key',
     apiKeyPlaceholder: 'YOUR_OPENAI_API_KEY',
+    baseURL: 'https://api.openai.com/v1',
   },
   {
     value: 'deepseek',
@@ -56,19 +57,28 @@ export const AI_MODELS = [
     value: 'gpt-5-mini',
     label: 'OpenAI: GPT-5 Mini',
     provider: 'openai',
-    modelId: 'gpt-5-mini',
+    modelId: 'gpt-5-mini-2025-08-07',
+    requiresOrganizationVerification: true,
   },
   {
     value: 'gpt-5',
     label: 'OpenAI: GPT-5',
     provider: 'openai',
-    modelId: 'gpt-5',
+    modelId: 'gpt-5-2025-08-07',
+    requiresOrganizationVerification: true,
   },
   {
     value: 'gpt-5-pro',
     label: 'OpenAI: GPT-5 Pro',
     provider: 'openai',
-    modelId: 'gpt-5-pro',
+    modelId: 'gpt-5-pro-2025-10-06',
+    requiresOrganizationVerification: true,
+  },
+  {
+    value: 'gpt-5-chat-latest',
+    label: 'OpenAI: GPT-5 Chat',
+    provider: 'openai',
+    modelId: 'gpt-5-chat-latest',
   },
   {
     value: 'gemini-2-5-flash',
@@ -103,3 +113,4 @@ export const AI_MODELS = [
 ] as const;
 
 export type AiModel = (typeof AI_MODELS)[number]['value'];
+export type AiModelMetadata = (typeof AI_MODELS)[number];

@@ -1,10 +1,11 @@
-import React, { FocusEventHandler, memo, useCallback, useEffect, useMemo, useRef, useState, type FocusEvent } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState, type FocusEvent } from 'react';
 import { type NodeProps, type Node, type Edge } from '@xyflow/react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Split } from 'lucide-react';
 import { marked } from 'marked';
+import { toast } from 'sonner';
 
 import NodeInteractionOverlay from './NodeInteractionOverlay';
 import { type DrawableNode } from './DrawableNode';
@@ -137,11 +138,16 @@ const STATUS_STYLES: Record<AiStatus, string> = {
 const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   const { setNodes, setEdges, getNodes, getEdges } = useCanvasData();
   const contentRef = useRef<HTMLDivElement>(null);
-  const { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData } = useNodeAsEditor({
-    id,
-    data,
-  });
+  const { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData, setTypingState } =
+    useNodeAsEditor({
+      id,
+      data,
+    });
   const model = data.model ?? 'deepseek';
+  const modelLabel = useMemo(
+    () => AI_MODELS.find((option) => option.value === model)?.label ?? model,
+    [model],
+  );
   const status = data.status ?? 'not-started';
   const result = data.result ?? '';
   const label = data.label ?? '';
@@ -155,18 +161,20 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     },
   });
 
-  const watchedModel = form.watch('model');
+  const watchedModel = useWatch({ control: form.control, name: 'model' });
   useEffect(() => {
-    if (data.model !== watchedModel) {
-      updateNodeData({ model: watchedModel as AiModel });
+    if (!watchedModel) {
+      return;
     }
-  }, [watchedModel, updateNodeData, data.model]);
+    if (data.model !== watchedModel) {
+      updateNodeData({ model: watchedModel });
+    }
+  }, [watchedModel, data.model, updateNodeData]);
 
   const [isPromptOpen, setPromptOpen] = useState(false);
   const requestIdRef = useRef(0);
   const lastPromptRef = useRef(label);
   const wasTypingRef = useRef(isTyping);
-
   const buildChatHistory = useCallback(
     (promptHtml: string): ChatMessage[] => {
       const flowNodes = getNodes();
@@ -386,6 +394,10 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
         }
       } catch (error) {
         console.error('Failed to generate AI result', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        toast.error(`Failed to generate response with ${modelLabel}`, {
+          description: errorMessage,
+        });
 
         if (requestIdRef.current === currentRequestId) {
           updateNodeData({
@@ -397,7 +409,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
         }
       }
     },
-    [buildChatHistory, id, model, setNodes, updateNodeData],
+    [buildChatHistory, id, model, modelLabel, setNodes, updateNodeData],
   );
 
   useEffect(() => {
@@ -446,13 +458,17 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
   const customOnBlur = useCallback(
     (event: FocusEvent<HTMLDivElement>) => {
-      const { relatedTarget } = event;
+      const potentialNextFocus =
+        event.relatedTarget instanceof Element
+          ? event.relatedTarget
+          : (typeof document !== 'undefined' ? document.activeElement : null);
+
       if (
-        (relatedTarget instanceof Element &&
-          relatedTarget.closest('[data-radix-popper-content-wrapper]')) ||
+        (potentialNextFocus instanceof Element &&
+          potentialNextFocus.closest('[data-radix-popper-content-wrapper]')) ||
         (contentRef.current &&
-          relatedTarget instanceof Node &&
-          contentRef.current.contains(relatedTarget))
+          potentialNextFocus instanceof Node &&
+          contentRef.current.contains(potentialNextFocus))
       ) {
         return;
       }
@@ -502,7 +518,19 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                   <FormItem className="space-y-1">
                     <FormLabel className="text-xs font-medium text-slate-600">Model</FormLabel>
                     <FormControl>
-                      <SingleLlmSelect value={field.value} onChange={field.onChange} />
+                      <SingleLlmSelect
+                        value={field.value}
+                        onChange={(value) => {
+                          field.onChange(value);
+                          setTypingState(true);
+                          const currentEditor = editor;
+                          if (currentEditor) {
+                            setTimeout(() => {
+                              currentEditor.commands.focus('end');
+                            }, 0);
+                          }
+                        }}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
