@@ -1,4 +1,5 @@
 import { AI_MODELS, AI_PROVIDER_METADATA, type AiModel, type AiProvider } from '@/core/llm/aiModels';
+import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { ChatOpenAI } from '@langchain/openai';
 import { type AIMessage, type AIMessageChunk } from '@langchain/core/messages';
 
@@ -15,6 +16,7 @@ type ProviderSettings = {
 
 type ModelSettings = ProviderSettings & {
   modelName: string;
+  provider: AiProvider;
 };
 
 const PROVIDER_SETTINGS: Record<AiProvider, ProviderSettings> = AI_PROVIDER_METADATA.reduce(
@@ -44,6 +46,7 @@ const MODEL_SETTINGS: Record<AiModel, ModelSettings> = AI_MODELS.reduce(
       ...providerSettings,
       modelName: model.modelId,
       baseURL: model.baseURL ?? providerSettings.baseURL,
+      provider: model.provider,
     };
 
     return accumulator;
@@ -98,14 +101,26 @@ export const generateAiResult = async ({
 
   const apiKey = settings.envKey();
 
-  const configuration = settings.baseURL ? { configuration: { baseURL: settings.baseURL } } : {};
+  const streaming = true;
+  const openAIConfiguration = settings.baseURL
+    ? { configuration: { baseURL: settings.baseURL } }
+    : {};
+  const googleConfiguration = settings.baseURL ? { baseUrl: settings.baseURL } : {};
 
-  const llm = new ChatOpenAI({
-    apiKey,
-    model: settings.modelName,
-    streaming: true,
-    ...configuration,
-  });
+  const llm =
+    settings.provider === 'google'
+      ? new ChatGoogleGenerativeAI({
+          apiKey,
+          model: settings.modelName,
+          streaming,
+          ...googleConfiguration,
+        })
+      : new ChatOpenAI({
+          apiKey,
+          model: settings.modelName,
+          streaming,
+          ...openAIConfiguration,
+        });
 
   const prompt = messages
     .map(({ role, content }) => `${role === 'user' ? 'User' : 'Assistant'}: ${content}`)
