@@ -39,7 +39,7 @@ test("renders the first page", async () => {
   const page: Page = await electronApp.firstWindow();
   const title = await page.waitForSelector("h1");
   const text = await title.textContent();
-  expect(text).toBe("electron-shadcn");
+  expect(text).toBe("DeepElegant - kavim");
 });
 
 test("renders page name", async () => {
