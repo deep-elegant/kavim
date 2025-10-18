@@ -58,18 +58,21 @@ export const AI_MODELS = [
     label: 'OpenAI: GPT-5 Mini',
     provider: 'openai',
     modelId: 'gpt-5-mini-2025-08-07',
+    requiresOrganizationVerification: true,
   },
   {
     value: 'gpt-5',
     label: 'OpenAI: GPT-5',
     provider: 'openai',
     modelId: 'gpt-5-2025-08-07',
+    requiresOrganizationVerification: true,
   },
   {
     value: 'gpt-5-pro',
     label: 'OpenAI: GPT-5 Pro',
     provider: 'openai',
     modelId: 'gpt-5-pro-2025-10-06',
+    requiresOrganizationVerification: true,
   },
   {
     value: 'gpt-5-chat-latest',
@@ -110,3 +113,4 @@ export const AI_MODELS = [
 ] as const;
 
 export type AiModel = (typeof AI_MODELS)[number]['value'];
+export type AiModelMetadata = (typeof AI_MODELS)[number];
