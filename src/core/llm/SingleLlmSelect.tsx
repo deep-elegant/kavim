@@ -12,7 +12,7 @@ export const SingleLlmSelect = ({
     return (
         <Select
             onValueChange={onChange}
-            defaultValue={value}
+            value={value}
         >
             <FormControl>
                 <SelectTrigger className="w-full">
