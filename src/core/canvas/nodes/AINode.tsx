@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState, type FocusEvent } from 'react';
 import { type NodeProps, type Node, type Edge } from '@xyflow/react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Split } from 'lucide-react';
@@ -156,12 +156,15 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     },
   });
 
-  const watchedModel = form.watch('model');
+  const watchedModel = useWatch({ control: form.control, name: 'model' });
   useEffect(() => {
-    if (data.model !== watchedModel) {
-      updateNodeData({ model: watchedModel as AiModel });
+    if (!watchedModel) {
+      return;
     }
-  }, [watchedModel, updateNodeData, data.model]);
+    if (data.model !== watchedModel) {
+      updateNodeData({ model: watchedModel });
+    }
+  }, [watchedModel, data.model, updateNodeData]);
 
   const [isPromptOpen, setPromptOpen] = useState(false);
   const requestIdRef = useRef(0);
