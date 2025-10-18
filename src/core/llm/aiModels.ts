@@ -4,6 +4,7 @@ export const AI_PROVIDER_METADATA = [
     label: 'OpenAI',
     inputPlaceholder: 'Enter your OpenAI API key',
     apiKeyPlaceholder: 'YOUR_OPENAI_API_KEY',
+    baseURL: 'https://api.openai.com/v1',
   },
   {
     value: 'deepseek',
