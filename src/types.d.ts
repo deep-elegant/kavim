@@ -2,6 +2,12 @@
 // plugin that tells the Electron app where to look for the Vite-bundled app code (depending on
 // whether you're running in development or production).
 import type { AiProvider } from './core/llm/aiModels';
+import type {
+  LlmChunkPayload,
+  LlmCompletePayload,
+  LlmErrorPayload,
+  LlmStreamRequestPayload,
+} from './helpers/ipc/llm/llm-types';
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -49,6 +55,13 @@ interface FileSystemContext {
   openDirectory: () => Promise<string | null>;
 }
 
+interface LlmContext {
+  stream: (payload: LlmStreamRequestPayload) => void;
+  onChunk: (callback: (payload: LlmChunkPayload) => void) => () => void;
+  onError: (callback: (payload: LlmErrorPayload) => void) => () => void;
+  onComplete: (callback: (payload: LlmCompletePayload) => void) => () => void;
+}
+
 declare interface Window {
   electronWindow: ElectronWindow;
   settingsStore: {
@@ -57,4 +70,5 @@ declare interface Window {
   };
   projectPak: PakContext;
   fileSystem: FileSystemContext;
+  llm: LlmContext;
 }

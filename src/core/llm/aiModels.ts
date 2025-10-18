@@ -84,13 +84,13 @@ export const AI_MODELS = [
     value: 'gemini-2-5-flash',
     label: 'Google: Gemini 2.5 Flash',
     provider: 'google',
-    modelId: 'google/gemini-2.5-flash',
+    modelId: 'gemini-2.0-flash',
   },
   {
     value: 'gemini-2-5-pro',
     label: 'Google: Gemini 2.5 Pro',
     provider: 'google',
-    modelId: 'google/gemini-2.5-pro',
+    modelId: 'gemini-2.5-pro',
   },
   {
     value: 'claude-haiku-4-5',
