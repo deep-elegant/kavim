@@ -6,12 +6,15 @@ import { MakerRpm } from "@electron-forge/maker-rpm";
 import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
+import path from "path";
+
+const iconPath = path.resolve(__dirname, "assets", "icon");
 
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
     extraResource: ["./assets"],
-    icon: "./assets/icon.ico",
+    icon: iconPath,
   },
   rebuildConfig: {},
   makers: [
