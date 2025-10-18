@@ -25,6 +25,7 @@ const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeType>) => {
       isActive={selected}
       minWidth={IMAGE_NODE_MIN_WIDTH}
       minHeight={IMAGE_NODE_MIN_HEIGHT}
+      contextMenuItems={undefined}
     >
       <div className="relative h-full w-full overflow-hidden rounded-lg border border-border bg-background">
         {src ? (
