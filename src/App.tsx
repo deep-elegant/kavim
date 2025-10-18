@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo } from "react";
 import { createRoot } from "react-dom/client";
+import { Toaster } from "sonner";
 import { useTranslation } from "react-i18next";
 import { updateAppLanguage } from "./helpers/language_helpers";
 import BaseLayout from "./layouts/BaseLayout";
@@ -20,6 +21,7 @@ export default function App() {
   return (
     <WebRTCProvider doc={doc}>
       <CanvasDataProvider doc={doc}>
+        <Toaster />
         <BaseLayout>
           <div className="h-full w-full">
             <Canvas />

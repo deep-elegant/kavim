@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Split } from 'lucide-react';
 import { marked } from 'marked';
+import { toast } from 'sonner';
 
 import NodeInteractionOverlay from './NodeInteractionOverlay';
 import { type DrawableNode } from './DrawableNode';
@@ -143,6 +144,10 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       data,
     });
   const model = data.model ?? 'deepseek';
+  const modelLabel = useMemo(
+    () => AI_MODELS.find((option) => option.value === model)?.label ?? model,
+    [model],
+  );
   const status = data.status ?? 'not-started';
   const result = data.result ?? '';
   const label = data.label ?? '';
@@ -389,6 +394,10 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
         }
       } catch (error) {
         console.error('Failed to generate AI result', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        toast.error(`Failed to generate response with ${modelLabel}`, {
+          description: errorMessage,
+        });
 
         if (requestIdRef.current === currentRequestId) {
           updateNodeData({
@@ -400,7 +409,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
         }
       }
     },
-    [buildChatHistory, id, model, setNodes, updateNodeData],
+    [buildChatHistory, id, model, modelLabel, setNodes, updateNodeData],
   );
 
   useEffect(() => {
