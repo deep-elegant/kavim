@@ -1,5 +1,15 @@
 import type { Node } from '@xyflow/react';
 
+type NodeDataRecord = Record<string, unknown>;
+
+const asNodeDataRecord = (value: Node['data']): NodeDataRecord | undefined => {
+  if (!value || typeof value !== 'object') {
+    return undefined;
+  }
+
+  return value as NodeDataRecord;
+};
+
 /**
  * Transient keys represent UI-only metadata that should never be synchronized
  * with the shared Yjs document. Stripping them keeps the collaborative state
@@ -69,78 +79,116 @@ export const sanitizeNodeForSync = (node: Node): Node => {
  * Rehydrates transient node properties that are intentionally omitted from the
  * collaborative document so local UI state is preserved across updates.
  */
+export type MutableNodeRecord = {
+  node: Node;
+  data: NodeDataRecord;
+};
+
+export const createMutableNodeRecord = (node: Node): MutableNodeRecord => {
+  const record = {
+    ...(asNodeDataRecord(node.data) ?? {}),
+  } satisfies NodeDataRecord;
+
+  return {
+    node: {
+      ...node,
+      data: record as Node['data'],
+    },
+    data: record,
+  };
+};
+
+export const restoreTransientKeys = (
+  mutableData: NodeDataRecord,
+  previousData?: Node['data'],
+): boolean => {
+  const previousRecord = asNodeDataRecord(previousData);
+  if (!previousRecord) {
+    return false;
+  }
+
+  let restored = false;
+
+  for (const key of TRANSIENT_NODE_DATA_KEYS) {
+    if (!(key in previousRecord)) {
+      continue;
+    }
+
+    const previousValue = previousRecord[key];
+    if (mutableData[key] !== previousValue) {
+      mutableData[key] = previousValue;
+      restored = true;
+    }
+  }
+
+  return restored;
+};
+
+export const restoreAutoFontSize = (
+  mutableData: NodeDataRecord,
+  previousData?: Node['data'],
+): boolean => {
+  const previousRecord = asNodeDataRecord(previousData);
+  if (!previousRecord) {
+    return false;
+  }
+
+  const previousMode = previousRecord['fontSizeMode'];
+  if (previousMode !== 'auto') {
+    return false;
+  }
+
+  const previousValue = previousRecord['fontSizeValue'];
+  if (typeof previousValue !== 'number') {
+    return false;
+  }
+
+  const nextMode = mutableData['fontSizeMode'];
+  if (typeof nextMode === 'string' && nextMode !== 'auto') {
+    return false;
+  }
+
+  if (typeof mutableData['fontSizeValue'] === 'number') {
+    return false;
+  }
+
+  mutableData['fontSizeMode'] = 'auto';
+  mutableData['fontSizeValue'] = previousValue;
+  return true;
+};
+
+export const reconcileSelectedFlag = (mutableNode: Node, previousNode: Node): boolean => {
+  if (previousNode.selected !== undefined) {
+    if (mutableNode.selected !== previousNode.selected) {
+      mutableNode.selected = previousNode.selected;
+      return true;
+    }
+
+    return false;
+  }
+
+  if ('selected' in mutableNode) {
+    delete (mutableNode as { selected?: Node['selected'] }).selected;
+    return true;
+  }
+
+  return false;
+};
+
 export const restoreTransientNodeState = (docNode: Node, previousNode?: Node) => {
   if (!previousNode) {
     return docNode;
   }
 
-  const previousData = previousNode.data;
-  const docData = docNode.data;
+  const mutable = createMutableNodeRecord(docNode);
 
-  let nextData = docData;
-  let restoredData = false;
-  let mutableData: Record<string, unknown> | undefined;
+  const restoredTransient = restoreTransientKeys(mutable.data, previousNode.data);
+  const restoredFontSize = restoreAutoFontSize(mutable.data, previousNode.data);
+  const reconciledSelected = reconcileSelectedFlag(mutable.node, previousNode);
 
-  const getMutableData = () => {
-    if (!mutableData) {
-      mutableData =
-        docData && typeof docData === 'object'
-          ? { ...(docData as Record<string, unknown>) }
-          : {};
-      nextData = mutableData as Node['data'];
-    }
-
-    return mutableData;
-  };
-
-  const docDataRecord =
-    docData && typeof docData === 'object' ? (docData as Record<string, unknown>) : undefined;
-
-  if (previousData && typeof previousData === 'object') {
-    const previousDataRecord = previousData as Record<string, unknown>;
-
-    const transientEntries = Object.entries(previousDataRecord).filter(([key]) =>
-      TRANSIENT_NODE_DATA_KEYS.has(key),
-    );
-
-    if (transientEntries.length > 0) {
-      const baseData = getMutableData();
-      for (const [key, value] of transientEntries) {
-        baseData[key] = value;
-      }
-      restoredData = true;
-    }
-
-    const targetDataForFontSize = mutableData ?? docDataRecord;
-
-    if (
-      previousDataRecord.fontSizeMode === 'auto' &&
-      docDataRecord?.fontSizeMode === 'auto' &&
-      'fontSizeValue' in previousDataRecord &&
-      !(targetDataForFontSize && 'fontSizeValue' in targetDataForFontSize)
-    ) {
-      const baseData = getMutableData();
-      baseData.fontSizeValue = previousDataRecord.fontSizeValue;
-      restoredData = true;
-    }
-  }
-
-  const shouldRestoreSelected = previousNode.selected !== undefined;
-
-  if (!restoredData && !shouldRestoreSelected) {
+  if (!restoredTransient && !restoredFontSize && !reconciledSelected) {
     return docNode;
   }
 
-  const restoredNode: Node = {
-    ...docNode,
-    data: nextData,
-  };
-
-  if (shouldRestoreSelected) {
-    restoredNode.selected = previousNode.selected;
-  } else if ('selected' in restoredNode) {
-    delete restoredNode.selected;
-  }
-
-  return restoredNode;
+  return mutable.node;
 };
