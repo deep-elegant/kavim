@@ -21,6 +21,7 @@ import type {
 const DRAFTS_FOLDER_NAME = "Drafts";
 const DRAFT_FILE_EXTENSION = ".pak";
 
+// Keys for storing draft metadata in PAK manifest
 const MANIFEST_KEYS = {
   draftId: "draftId",
   createdAt: "draftCreatedAt",
@@ -49,6 +50,7 @@ const getDraftFilePath = async (draftId: string) => {
 const getStringOrNull = (value: unknown): string | null =>
   typeof value === "string" ? value : null;
 
+// Converts PAK manifest metadata to draft record with fallbacks
 const manifestToRecord = (manifest: PakManifest, archivePath: string): DraftRecord => {
   const fallbackId = path.parse(archivePath).name;
   const id = getStringOrNull(manifest[MANIFEST_KEYS.draftId]) ?? fallbackId;
@@ -93,6 +95,7 @@ const readDraft = async (draftId: string) => {
   }
 };
 
+// Builds extra manifest fields for draft metadata
 const mapToManifestExtras = (options: {
   draftId: string;
   createdAt: string;
@@ -120,6 +123,12 @@ const mapToManifestExtras = (options: {
   return extras;
 };
 
+/**
+ * Saves canvas to draft file (PAK format).
+ * - Creates new draft if no draftId provided
+ * - Updates existing draft, preserving creation time
+ * - Stores metadata in PAK manifest for quick listing
+ */
 export const saveDraft = async (payload: SaveDraftRequest): Promise<DraftDetail> => {
   const now = new Date().toISOString();
   const draftId = payload.draftId ?? randomUUID();
@@ -155,6 +164,9 @@ export const saveDraft = async (payload: SaveDraftRequest): Promise<DraftDetail>
   };
 };
 
+/**
+ * Loads draft and sets it as active PAK (for asset resolution).
+ */
 export const loadDraft = async (draftId: string): Promise<DraftDetail | null> => {
   const draft = await readDraft(draftId);
   if (!draft) {
@@ -182,6 +194,10 @@ export const deleteDraft = async (draftId: string) => {
   }
 };
 
+/**
+ * Marks draft as promoted (saved to file).
+ * Promoted drafts are hidden from recovery dialog and eligible for cleanup.
+ */
 export const markDraftPromoted = async ({
   draftId,
   promotedAt = new Date().toISOString(),
@@ -201,6 +217,10 @@ export const markDraftPromoted = async ({
   });
 };
 
+/**
+ * Lists all draft files from disk.
+ * Reads manifest metadata without loading full canvas for performance.
+ */
 export const listDrafts = async (): Promise<DraftRecord[]> => {
   const directory = await ensureDraftsDirectory();
 
@@ -235,6 +255,12 @@ export const listDrafts = async (): Promise<DraftRecord[]> => {
   return drafts;
 };
 
+/**
+ * Removes old or promoted drafts to free disk space.
+ * - Deletes drafts older than maxAgeMs
+ * - Deletes promoted (saved) drafts
+ * - Limits total draft count to maxFiles (oldest first)
+ */
 export const cleanupDrafts = async ({
   maxAgeMs = 1000 * 60 * 60 * 24 * 30, // 30 days
   maxFiles = 50,

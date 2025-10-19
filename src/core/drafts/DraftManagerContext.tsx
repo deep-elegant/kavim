@@ -13,10 +13,19 @@ import type {
   SaveDraftRequest,
 } from "./types";
 
+// Tracks what's being auto-saved (draft vs file)
 type SaveTarget =
   | { type: "draft"; draftId: string }
   | { type: "file"; filePath: string };
 
+/**
+ * Context for managing draft lifecycle and active save target.
+ * - `drafts`: List of all saved drafts
+ * - `activeDraftId`/`activeFilePath`: Currently open document
+ * - `saveTarget`: Where auto-save should write to
+ * - `isReady`: Whether draft system has initialized
+ * - `lastAutoSaveAt`: Timestamp for "Last saved" UI display
+ */
 type DraftManagerContextValue = {
   drafts: DraftRecord[];
   activeDraftId: string | null;
@@ -56,10 +65,12 @@ export const DraftManagerProvider = ({ children }: { children: React.ReactNode }
     }
   }, []);
 
+  // Load drafts on mount
   useEffect(() => {
     void refreshDrafts();
   }, [refreshDrafts]);
 
+  // Switches to draft mode (for unsaved work)
   const activateDraftSession = useCallback((draftId: string) => {
     setActiveDraftIdState(draftId);
     setActiveFilePathState(null);
@@ -67,6 +78,7 @@ export const DraftManagerProvider = ({ children }: { children: React.ReactNode }
     setLastAutoSaveAt(null);
   }, [setLastAutoSaveAt]);
 
+  // Switches to file mode (for saved documents)
   const activateFileSession = useCallback((filePath: string) => {
     setActiveFilePathState(filePath);
     setActiveDraftIdState(null);
@@ -114,6 +126,7 @@ export const DraftManagerProvider = ({ children }: { children: React.ReactNode }
         const draft = await window.drafts.save(payload);
         await refreshDrafts();
         if (draft) {
+          // Auto-activate newly saved draft
           activateDraftSession(draft.id);
           if (draft.updatedAt) {
             setLastAutoSaveAt(draft.updatedAt);
@@ -136,6 +149,7 @@ export const DraftManagerProvider = ({ children }: { children: React.ReactNode }
         console.error(`Failed to delete draft ${draftId}`, error);
       } finally {
         await refreshDrafts();
+        // Clear active state if deleting current draft
         setActiveDraftIdState((current) => (current === draftId ? null : current));
         let removedDraftTarget = false;
         setSaveTarget((current) => {
