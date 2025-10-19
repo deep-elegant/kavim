@@ -74,11 +74,6 @@ export const CanvasDataProvider = ({
     [sanitizeNodeDataForSync],
   );
 
-  const serializeNodeForSync = useCallback(
-    (node: Node) => JSON.stringify(sanitizeNodeForSync(node)),
-    [sanitizeNodeForSync],
-  );
-
   const canvasDoc = useMemo(() => doc ?? new Y.Doc(), [doc]);
   const nodesMap = useMemo(() => canvasDoc.getMap<Node>('nodes'), [canvasDoc]);
   const nodeOrder = useMemo(() => canvasDoc.getArray<string>('node-order'), [canvasDoc]);
@@ -92,6 +87,7 @@ export const CanvasDataProvider = ({
   );
 
   const nodeIndexRef = useRef<Map<string, number>>(new Map());
+  const nodeSerializationRef = useRef<Map<string, string>>(new Map());
   const edgeIndexRef = useRef<Map<string, number>>(new Map());
   const nodesRef = useRef<Node[]>([]);
   const edgesRef = useRef<Edge<EditableEdgeData>[]>([]);
@@ -118,6 +114,8 @@ export const CanvasDataProvider = ({
     const order = nodeOrder.toArray();
     const indexMap = new Map<string, number>();
     const nextNodes: Node[] = [];
+    const previousSerialization = nodeSerializationRef.current;
+    const nextSerialization = new Map<string, string>();
 
     order.forEach((id) => {
       const node = nodesMap.get(id);
@@ -128,9 +126,18 @@ export const CanvasDataProvider = ({
       const index = nextNodes.length;
       nextNodes.push(node);
       indexMap.set(id, index);
+
+      const existingSerialization = previousSerialization.get(id);
+      if (existingSerialization !== undefined) {
+        nextSerialization.set(id, existingSerialization);
+        return;
+      }
+
+      nextSerialization.set(id, JSON.stringify(node));
     });
 
     nodeIndexRef.current = indexMap;
+    nodeSerializationRef.current = nextSerialization;
     nodesRef.current = nextNodes;
     return nextNodes;
   }, [nodeOrder, nodesMap]);
@@ -233,6 +240,7 @@ export const CanvasDataProvider = ({
           }
           const value = nodesMap.get(key);
           if (!value) {
+            nodeSerializationRef.current.delete(key);
             return;
           }
           if (!next) {
@@ -242,6 +250,8 @@ export const CanvasDataProvider = ({
             next[index] = value;
             changed = true;
           }
+
+          nodeSerializationRef.current.set(key, JSON.stringify(value));
         });
 
         if (!next || !changed) {
@@ -320,6 +330,7 @@ export const CanvasDataProvider = ({
   const setNodes = useCallback<Dispatch<SetStateAction<Node[]>>>(
     (updater) => {
       const current = nodesRef.current;
+      const currentIndex = nodeIndexRef.current;
       const next =
         typeof updater === 'function'
           ? (updater as (prevState: Node[]) => Node[])(current)
@@ -331,19 +342,68 @@ export const CanvasDataProvider = ({
 
       updateLocalNodesState(next);
 
-      const sanitizedCurrentById = new Map(
-        current.map((node) => [node.id, serializeNodeForSync(node)]),
-      );
-      const sanitizedNext = next.map((node) => sanitizeNodeForSync(node));
-      const sanitizedNextSerialized = sanitizedNext.map((node) => JSON.stringify(node));
+      const nextIds = next.map((node) => node.id);
+      const currentIds = current.map((node) => node.id);
+      const orderChanged = !arraysShallowEqual(currentIds, nextIds);
+      const nextIdSet = new Set(nextIds);
+      const removedIds: string[] = [];
+
+      currentIds.forEach((id) => {
+        if (!nextIdSet.has(id)) {
+          removedIds.push(id);
+        }
+      });
+
+      const sanitizedUpdates = new Map<string, Node>();
+      const serializedUpdates = new Map<string, string>();
+
+      next.forEach((node) => {
+        const sanitized = sanitizeNodeForSync(node);
+        const previousIndex = currentIndex.get(node.id);
+
+        if (previousIndex === undefined) {
+          sanitizedUpdates.set(node.id, sanitized);
+          serializedUpdates.set(node.id, JSON.stringify(sanitized));
+          return;
+        }
+
+        const previousSerialization = nodeSerializationRef.current.get(node.id);
+        const previousNode = current[previousIndex];
+
+        if (previousNode === node) {
+          if (previousSerialization === undefined) {
+            serializedUpdates.set(node.id, JSON.stringify(sanitized));
+          }
+          return;
+        }
+
+        const storedNode = nodesMap.get(node.id);
+        if (storedNode === sanitized) {
+          if (previousSerialization === undefined) {
+            serializedUpdates.set(node.id, JSON.stringify(sanitized));
+          }
+          return;
+        }
+
+        const serialized = JSON.stringify(sanitized);
+        if (previousSerialization === serialized) {
+          return;
+        }
+
+        sanitizedUpdates.set(node.id, sanitized);
+        serializedUpdates.set(node.id, serialized);
+      });
+
+      if (!orderChanged && removedIds.length === 0 && sanitizedUpdates.size === 0) {
+        if (serializedUpdates.size > 0) {
+          serializedUpdates.forEach((serialized, id) => {
+            nodeSerializationRef.current.set(id, serialized);
+          });
+        }
+        return;
+      }
 
       canvasDoc.transact(() => {
-        const nextIds = sanitizedNext.map((node) => node.id);
-        const currentOrder = current.map((node) => node.id);
-        const orderChanged =
-          nextIds.length !== currentOrder.length ||
-          nextIds.some((id, index) => currentOrder[index] !== id);
-
         if (orderChanged) {
           nodeOrder.delete(0, nodeOrder.length);
           if (nextIds.length > 0) {
@@ -351,24 +411,35 @@ export const CanvasDataProvider = ({
           }
         }
 
-        const nextIdSet = new Set(nextIds);
-
-        Array.from(nodesMap.keys()).forEach((id) => {
-          if (!nextIdSet.has(id)) {
-            nodesMap.delete(id);
-          }
+        removedIds.forEach((id) => {
+          nodesMap.delete(id);
         });
 
-        sanitizedNext.forEach((node, index) => {
-          const serializedNode = sanitizedNextSerialized[index];
-          if (sanitizedCurrentById.get(node.id) !== serializedNode) {
-            nodesMap.set(node.id, node);
-            sanitizedCurrentById.set(node.id, serializedNode);
-          }
+        sanitizedUpdates.forEach((node, id) => {
+          nodesMap.set(id, node);
         });
       }, 'canvas');
+
+      if (removedIds.length > 0) {
+        removedIds.forEach((id) => {
+          nodeSerializationRef.current.delete(id);
+        });
+      }
+
+      if (serializedUpdates.size > 0) {
+        serializedUpdates.forEach((serialized, id) => {
+          nodeSerializationRef.current.set(id, serialized);
+        });
+      }
     },
-    [canvasDoc, nodeOrder, nodesMap, sanitizeNodeForSync, serializeNodeForSync, updateLocalNodesState],
+    [
+      arraysShallowEqual,
+      canvasDoc,
+      nodeOrder,
+      nodesMap,
+      sanitizeNodeForSync,
+      updateLocalNodesState,
+    ],
   );
 
   const setEdges = useCallback<Dispatch<SetStateAction<Edge<EditableEdgeData>[]>>>(
@@ -432,12 +503,14 @@ export const CanvasDataProvider = ({
         edgesMap.clear();
 
         const sanitizedNodes = nextNodes.map((node) => sanitizeNodeForSync(node));
+        nodeSerializationRef.current.clear();
 
         if (sanitizedNodes.length > 0) {
           const nodeIds = sanitizedNodes.map((node) => node.id);
           nodeOrder.insert(0, nodeIds);
           sanitizedNodes.forEach((node) => {
             nodesMap.set(node.id, node);
+            nodeSerializationRef.current.set(node.id, JSON.stringify(node));
           });
         }
 
