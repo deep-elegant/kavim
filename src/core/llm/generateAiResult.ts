@@ -17,6 +17,7 @@ import type {
 export type { ChatMessage } from '@/core/llm/chatTypes';
 
 type ProviderSettings = {
+  // Retrieves API key from settings store at runtime (not hardcoded)
   envKey: () => string;
   placeholder: string;
   baseURL?: string;
@@ -28,6 +29,7 @@ type ModelSettings = ProviderSettings & {
   gatewayModelOverrides?: Partial<Record<AiGateway, string>>;
 };
 
+/** Build lookup map from provider value to its configuration */
 const PROVIDER_SETTINGS: Record<AiProvider, ProviderSettings> = AI_PROVIDER_METADATA.reduce(
   (accumulator, provider) => {
     const { value, apiKeyPlaceholder, baseURL } = provider;
@@ -43,6 +45,7 @@ const PROVIDER_SETTINGS: Record<AiProvider, ProviderSettings> = AI_PROVIDER_META
   {} as Record<AiProvider, ProviderSettings>,
 );
 
+/** Build lookup map from model value to its full configuration (merges provider + model info) */
 const MODEL_SETTINGS: Record<AiModel, ModelSettings> = AI_MODELS.reduce(
   (accumulator, model) => {
     const providerSettings = PROVIDER_SETTINGS[model.provider];
@@ -64,6 +67,11 @@ const MODEL_SETTINGS: Record<AiModel, ModelSettings> = AI_MODELS.reduce(
   {} as Record<AiModel, ModelSettings>,
 );
 
+/**
+ * Constructs payload for streaming LLM requests.
+ * - Includes both the gateway/provider used and the underlying provider for routing.
+ * - Headers support gateway-specific metadata (e.g., OpenRouter's referer/title).
+ */
 const buildStreamPayload = ({
   provider,
   resolvedProvider,
@@ -93,6 +101,11 @@ const buildStreamPayload = ({
   headers,
 });
 
+/**
+ * Type guard ensuring the Electron LLM bridge is exposed on window.
+ * - Throws if preload script hasn't registered the `window.llm` API.
+ * - Narrows window type for TypeScript to access bridge methods safely.
+ */
 const assertLlmBridgeAvailable = (): asserts window is Window & {
   llm: {
     stream: (payload: LlmStreamRequestPayload) => void;
@@ -112,6 +125,12 @@ const assertLlmBridgeAvailable = (): asserts window is Window & {
   }
 };
 
+/**
+ * Streams AI responses via Electron's IPC bridge.
+ * - Checks for gateway preference (single API key for all models via OpenRouter, etc.).
+ * - Falls back to direct provider if no gateway configured.
+ * - Streams chunks via callbacks to avoid blocking on large responses.
+ */
 export const generateAiResult = async ({
   model,
   messages,
@@ -133,15 +152,16 @@ export const generateAiResult = async ({
   assertLlmBridgeAvailable();
 
   await new Promise<void>((resolve, reject) => {
+    // Track event listeners to unsubscribe when stream completes/errors
     const cleanupCallbacks: Array<() => void> = [];
 
     const cleanup = () => {
       while (cleanupCallbacks.length > 0) {
-        const unsubscribe = cleanupCallbacks.pop();
-        unsubscribe?.();
-      }
+        const unsubscribe = cleanupCallbacks.pop();      unsubscribe?.();
+    }
     };
 
+    // Match requestId to prevent cross-request contamination (multiple parallel streams)
     const handleChunk = (payload: LlmChunkPayload) => {
       if (payload.requestId !== requestId) {
         return;
@@ -173,6 +193,7 @@ export const generateAiResult = async ({
     cleanupCallbacks.push(window.llm.onComplete(handleComplete));
 
     try {
+      // Check if user enabled a gateway (OpenRouter, etc.) for all models
       let gatewayPreference:
         | {
             gateway: (typeof AI_GATEWAY_METADATA)[number];
@@ -190,6 +211,7 @@ export const generateAiResult = async ({
           continue;
         }
 
+        // Collect optional gateway headers (OpenRouter's app ranking metadata)
         const headerMap: Record<string, string> = {};
 
         if (stored.headers?.referer) {
@@ -208,6 +230,7 @@ export const generateAiResult = async ({
         break;
       }
 
+      // Use gateway if configured, otherwise direct provider
       const effectiveProvider = gatewayPreference?.gateway.value ?? settings.provider;
       const effectiveModelName = gatewayPreference?.gateway.value
         ? settings.gatewayModelOverrides?.[gatewayPreference.gateway.value] ?? settings.modelName

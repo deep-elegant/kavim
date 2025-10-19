@@ -14,8 +14,8 @@ import { AI_MODELS } from "@/core/llm/aiModels";
 
 /**
  * Dropdown selector for AI models.
- * - Separates models requiring organization verification
- * - Integrates with react-hook-form via FormControl
+ * - Separates models requiring organization verification (beta access, etc.).
+ * - Integrates with react-hook-form via FormControl for validation.
  */
 export const SingleLlmSelect = ({
     value,
@@ -24,7 +24,7 @@ export const SingleLlmSelect = ({
     value: string;
     onChange: (value: string) => void;
 }) => {
-    // Split models into verified and unverified for UI grouping
+    // Split models by access level (general availability vs. org-verified beta)
     const unrestrictedModels = AI_MODELS.filter(
         (model) => !(model as any).requiresOrganizationVerification,
     );
@@ -48,7 +48,7 @@ export const SingleLlmSelect = ({
                         {option.label}
                     </SelectItem>
                 ))}
-                {/* Show verification requirement as separate group */}
+                {/* Visually separate restricted models to set clear expectations */}
                 {restrictedModels.length > 0 && (
                     <>
                         <SelectSeparator />

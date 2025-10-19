@@ -1,3 +1,9 @@
+
+/**
+ * Direct AI provider configurations (OpenAI, DeepSeek, Google, etc.).
+ * - Each entry defines the provider's API endpoint and UI labels.
+ * - Used to configure provider-specific API keys and generate dropdowns.
+ */
 export const AI_PROVIDER_METADATA = [
   {
     value: 'openai',
@@ -39,6 +45,11 @@ export type AiProvider = (typeof AI_PROVIDER_METADATA)[number]['value'];
 
 export type AiProviderMetadata = (typeof AI_PROVIDER_METADATA)[number];
 
+/**
+ * AI gateway configurations (e.g., OpenRouter).
+ * - Gateways allow a single API key to access multiple models from different providers.
+ * - Reduces need for individual provider API keys by routing through a gateway service.
+ */
 export const AI_GATEWAY_METADATA = [
   {
     value: 'openrouter',
@@ -64,10 +75,17 @@ type BaseAiModel = {
   label: string;
   provider: AiProvider;
   modelId: string;
+  // Indicates if model requires verified organization account (e.g., for beta access)
   requiresOrganizationVerification?: boolean;
+  // Alternative model IDs when accessed via gateway (e.g., OpenRouter uses different format)
   gatewayModelOverrides?: Partial<Record<AiGateway, string>>;
 };
 
+/**
+ * Available AI models with their provider mappings.
+ * - Each model specifies its native provider and model ID.
+ * - Gateway overrides allow routing through services like OpenRouter with different identifiers.
+ */
 export const AI_MODELS = [
   {
     value: 'deepseek',
