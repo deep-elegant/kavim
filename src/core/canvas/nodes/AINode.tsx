@@ -42,8 +42,8 @@ export type AiNodeData = {
 
 export type AiNodeType = Node<AiNodeData, 'ai-node'>;
 
-const MIN_WIDTH = 240;
-const MIN_HEIGHT = 180;
+const MIN_WIDTH = 360;
+const MIN_HEIGHT = 270;
 const NODE_HORIZONTAL_GAP = 80;
 
 const htmlToPlainText = (value: string): string =>
