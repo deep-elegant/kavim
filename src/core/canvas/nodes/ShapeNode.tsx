@@ -20,6 +20,7 @@ import { useAutoFontSizeObserver } from './useAutoFontSizeObserver';
 
 export type ShapeType = 'circle' | 'rectangle';
 
+/** Data structure for shape nodes with customizable colors and text */
 export type ShapeNodeData = {
   label: string;
   shapeType: ShapeType;
@@ -35,12 +36,17 @@ export const CIRCLE_MIN_SIZE = 80;
 export const RECTANGLE_MIN_WIDTH = 120;
 export const RECTANGLE_MIN_HEIGHT = 60;
 
+/** Default light blue theme for shape nodes */
 const defaultColor: ColorStyle = {
   background: '#EFF6FF', // blue-50
   border: '#93C5FD', // blue-300
   text: '#1E293B', // slate-900
 };
 
+/**
+ * Implements DrawableNode interface for creating shape nodes via drag interaction.
+ * Creates square shapes by using the larger of width/height during drag (circles require 1:1 ratio).
+ */
 export const shapeDrawable: DrawableNode<ShapeNode> = {
   onPaneMouseDown: (id, position) => ({
     id,
@@ -61,6 +67,7 @@ export const shapeDrawable: DrawableNode<ShapeNode> = {
   }),
 
   onPaneMouseMove: (node, start, current) => {
+    // Use max of both dimensions to maintain square aspect ratio (required for circle shape)
     const size = Math.max(
       Math.abs(current.x - start.x),
       Math.abs(current.y - start.y),
@@ -98,12 +105,19 @@ export const shapeDrawable: DrawableNode<ShapeNode> = {
       },
       data: {
         ...node.data,
-        isTyping: true,
+        isTyping: true, // Auto-activate typing mode for immediate text input
       },
     };
   },
 };
 
+/**
+ * Renders a customizable shape node (circle or rectangle) with text overlay.
+ * - User can customize background, border, and text colors via toolbar color picker
+ * - Auto-scales font size to fit shape dimensions when in 'auto' mode
+ * - Circle shapes center-align text, rectangles use left-align for readability
+ * - Toggles between edit mode (TipTap editor) and display mode (rendered HTML)
+ */
 const ShapeNodeComponent = memo(({ id, data, selected }: NodeProps<ShapeNode>) => {
   const { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData } =
     useNodeAsEditor({ id, data });
@@ -112,12 +126,16 @@ const ShapeNodeComponent = memo(({ id, data, selected }: NodeProps<ShapeNode>) =
   const fontSizeMode = data.fontSizeMode ?? 'auto';
   const fontSizeValue = data.fontSizeValue ?? DEFAULT_FONT_SIZE;
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Hidden measurement element for calculating optimal font size
   const measurementRef = useRef<HTMLDivElement>(null);
+  
   const displayHtml = useMemo(
     () => label || '<p>Click to add text</p>',
     [label],
   );
 
+  // Dynamically adjust font size when in auto mode based on shape dimensions
   useAutoFontSizeObserver({
     editor,
     mode: fontSizeMode,
@@ -133,6 +151,7 @@ const ShapeNodeComponent = memo(({ id, data, selected }: NodeProps<ShapeNode>) =
     [updateNodeData],
   );
 
+  // Add color picker to the standard toolbar for per-node color customization
   const toolbarItems = useMemo<ToolbarItem[]>(
     () => [
       ...defaultToolbarItems,
@@ -148,6 +167,7 @@ const ShapeNodeComponent = memo(({ id, data, selected }: NodeProps<ShapeNode>) =
     [color, handleColorChange],
   );
 
+  // Use shape-specific minimum dimensions and text alignment
   const minWidth = shapeType === 'circle' ? CIRCLE_MIN_SIZE : RECTANGLE_MIN_WIDTH;
   const minHeight = shapeType === 'circle' ? CIRCLE_MIN_SIZE : RECTANGLE_MIN_HEIGHT;
   const textAlignClass = shapeType === 'circle' ? 'text-center' : 'text-left';
@@ -179,6 +199,7 @@ const ShapeNodeComponent = memo(({ id, data, selected }: NodeProps<ShapeNode>) =
         <div className={cn('flex h-full w-full')} style={{ color: color.text }}>
           <div ref={containerRef} className="relative h-full w-full">
             {isTyping ? (
+              // Stop propagation to prevent node dragging while editing
               <div
                 className="h-full w-full"
                 onMouseDown={(e) => e.stopPropagation()}
@@ -191,6 +212,7 @@ const ShapeNodeComponent = memo(({ id, data, selected }: NodeProps<ShapeNode>) =
                 />
               </div>
             ) : (
+              // Display mode with custom prose colors matching the shape's color scheme
               <div
                 className={cn(
                   'prose prose-sm flex h-full w-full max-w-none items-center justify-center overflow-hidden whitespace-pre-wrap break-words p-4',
@@ -216,6 +238,7 @@ const ShapeNodeComponent = memo(({ id, data, selected }: NodeProps<ShapeNode>) =
               />
             )}
 
+            {/* Hidden measurement element with identical styling for font size calculation */}
             <div
               ref={measurementRef}
               aria-hidden

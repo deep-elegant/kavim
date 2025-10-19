@@ -30,12 +30,13 @@ import { useCanvasData } from '../CanvasDataContext';
 
 export type AiStatus = 'not-started' | 'in-progress' | 'done';
 
+/** Data structure for AI-powered nodes that generate responses based on prompts */
 export type AiNodeData = {
-  label: string;
+  label: string; // User's prompt
   isTyping?: boolean;
   model?: AiModel;
   status?: AiStatus;
-  result?: string;
+  result?: string; // AI-generated response
   fontSizeMode?: FontSizeMode;
   fontSizeValue?: number;
 };
@@ -44,8 +45,9 @@ export type AiNodeType = Node<AiNodeData, 'ai-node'>;
 
 const MIN_WIDTH = 360;
 const MIN_HEIGHT = 270;
-const NODE_HORIZONTAL_GAP = 80;
+const NODE_HORIZONTAL_GAP = 80; // Spacing when creating split nodes
 
+/** Strips HTML tags to get plain text for AI prompts (preserves semantic content only) */
 const htmlToPlainText = (value: string): string =>
   value
     .replace(/<[^>]*>/g, ' ')
@@ -62,6 +64,10 @@ const aiNodeFormSchema = z.object({
 
 type AiNodeFormValues = z.infer<typeof aiNodeFormSchema>;
 
+/**
+ * Implements DrawableNode interface for creating AI nodes via drag interaction.
+ * Larger minimum size than text nodes to accommodate prompt + response display.
+ */
 export const aiNodeDrawable: DrawableNode<AiNodeType> = {
   onPaneMouseDown: (id, position) => ({
     id,
@@ -118,24 +124,34 @@ export const aiNodeDrawable: DrawableNode<AiNodeType> = {
       },
       data: {
         ...node.data,
-        isTyping: true,
+        isTyping: true, // Auto-activate typing mode for immediate prompt input
       },
     };
   },
 };
 
+/** Human-readable labels for AI processing states */
 const STATUS_LABELS: Record<AiStatus, string> = {
   'not-started': 'Not started',
   'in-progress': 'In progress',
   done: 'Done',
 };
 
+/** Color-coded badge styles for visual status indication */
 const STATUS_STYLES: Record<AiStatus, string> = {
   'not-started': 'bg-slate-100 text-slate-700',
   'in-progress': 'bg-amber-100 text-amber-800',
   done: 'bg-emerald-100 text-emerald-800',
 };
 
+/**
+ * Renders an AI-powered node that generates responses from prompts.
+ * - Top section: User's prompt (editable rich text)
+ * - Bottom section: AI's response (markdown-rendered, read-only)
+ * - Builds chat history from connected upstream AI nodes for context
+ * - Auto-runs prompt when user stops typing
+ * - Supports creating "split" nodes for exploring multiple conversation branches
+ */
 const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   const { setNodes, setEdges, getNodes, getEdges } = useCanvasData();
   const contentRef = useRef<HTMLDivElement>(null);
@@ -162,6 +178,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     },
   });
 
+  // Sync model changes from form back to node data (allows model switching mid-conversation)
   const watchedModel = useWatch({ control: form.control, name: 'model' });
   useEffect(() => {
     if (!watchedModel) {
@@ -173,17 +190,28 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   }, [watchedModel, data.model, updateNodeData]);
 
   const [isPromptOpen, setPromptOpen] = useState(false);
+  
+  // Increment on each new request to cancel stale responses (prevents race conditions)
   const requestIdRef = useRef(0);
   const lastPromptRef = useRef(label);
   const wasTypingRef = useRef(isTyping);
+  
+  /**
+   * Builds conversation history by traversing connected AI nodes upstream.
+   * - Follows edges backwards to find parent AI nodes
+   * - Recursively collects prompts and responses in chronological order
+   * - Prevents cycles with visited set
+   * - Enables contextual conversations where each node builds on previous ones
+   */
   const buildChatHistory = useCallback(
     (promptHtml: string): ChatMessage[] => {
       const flowNodes = getNodes();
       const flowEdges = getEdges();
 
       const nodeMap = new Map(flowNodes.map((node) => [node.id, node] as const));
+      
+      // Build reverse lookup: target node ID -> incoming edges
       const incomingMap = new Map<string, Edge[]>();
-
       flowEdges.forEach((edge) => {
         if (!edge.target) {
           return;
@@ -198,17 +226,19 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
       const visited = new Set<string>();
 
+      // Recursively collect chat messages from a node and its ancestors
       const collectFromNode = (nodeId: string): ChatMessage[] => {
         if (visited.has(nodeId)) {
-          return [];
+          return []; // Prevent infinite loops in cyclic graphs
         }
 
         visited.add(nodeId);
         const node = nodeMap.get(nodeId);
         if (!node || node.type !== 'ai-node') {
-          return [];
+          return []; // Only collect from AI nodes
         }
 
+        // First, collect messages from parent nodes (depth-first traversal)
         const messagesBefore = (incomingMap.get(nodeId) ?? []).flatMap((incomingEdge) => {
           const sourceId = incomingEdge.source;
           if (typeof sourceId !== 'string') {
@@ -222,6 +252,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
         const promptText = htmlToPlainText(nodeData?.label ?? '');
         const resultText = (nodeData?.result ?? '').trim();
 
+        // Add this node's messages (user prompt, then assistant response)
         const messages: ChatMessage[] = [];
         if (promptText) {
           messages.push({ role: 'user', content: promptText });
@@ -233,6 +264,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
         return [...messagesBefore, ...messages];
       };
 
+      // Collect history from all parent AI nodes connected to this one
       const history = (incomingMap.get(id) ?? []).flatMap((edge) => {
         const sourceId = edge.source;
         if (typeof sourceId !== 'string') {
@@ -241,8 +273,9 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
         return collectFromNode(sourceId);
       });
+      
+      // Add current prompt as the final user message
       const promptText = htmlToPlainText(promptHtml);
-
       if (promptText) {
         history.push({ role: 'user', content: promptText });
       }
@@ -252,6 +285,13 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     [getEdges, getNodes, id],
   );
 
+  /**
+   * Creates a new AI node to the right, connected to this one.
+   * - Enables exploring different conversation branches from the same context
+   * - New node inherits the model selection but starts with empty prompt
+   * - Positioned to the right with consistent spacing
+   * - Auto-activates typing mode for immediate input
+   */
   const handleCreateSplit = useCallback(() => {
     const flowNodes = getNodes();
     const currentNode = flowNodes.find((node) => node.id === id);
@@ -271,12 +311,13 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     const newNodeData: AiNodeData = {
       label: '',
       isTyping: true,
-      model: currentNodeData?.model ?? model,
+      model: currentNodeData?.model ?? model, // Inherit model choice
       status: 'not-started',
       result: '',
     };
 
     setNodes((existing) => {
+      // Deselect all nodes and exit typing mode on current node
       const clearedSelection = existing.map((node) => {
         if (node.id === id && node.type === 'ai-node') {
           return {
@@ -314,6 +355,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       ];
     });
 
+    // Create edge connecting this node to the new split node
     setEdges((prevEdges) => [
       ...prevEdges,
       {
@@ -328,6 +370,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     ]);
   }, [getNodes, id, model, setEdges, setNodes]);
 
+  // Memoized prompt display (shown in top section of node when not editing)
   const renderPromptContent = useMemo(
     () => (
       <div
@@ -350,6 +393,12 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     [label, fontSizeValue],
   );
 
+  /**
+   * Executes the AI prompt with full chat history context.
+   * - Streams response chunks for real-time feedback
+   * - Uses request ID to cancel stale responses if prompt changes mid-generation
+   * - Updates node status throughout the lifecycle (in-progress -> done)
+   */
   const runPrompt = useCallback(
     async (prompt: string) => {
       const promptText = htmlToPlainText(prompt);
@@ -359,6 +408,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
         return;
       }
 
+      // Increment request ID to invalidate any in-flight requests
       const currentRequestId = requestIdRef.current + 1;
       requestIdRef.current = currentRequestId;
       updateNodeData({ status: 'in-progress', result: '' });
@@ -370,6 +420,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
           model,
           messages,
           onChunk: (chunk) => {
+            // Only update if this is still the current request (user hasn't changed prompt)
             if (requestIdRef.current === currentRequestId) {
               setNodes((nodes) =>
                 nodes.map((n) => {
@@ -413,6 +464,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     [buildChatHistory, id, model, modelLabel, setNodes, updateNodeData],
   );
 
+  // Auto-run prompt when user finishes typing (detects typing -> not typing transition)
   useEffect(() => {
     if (wasTypingRef.current && !isTyping) {
       if (label !== lastPromptRef.current && label !== '') {
@@ -423,6 +475,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     wasTypingRef.current = isTyping;
   }, [isTyping, label, runPrompt]);
 
+  // Auto-expand node height when response content grows beyond current height
   useEffect(() => {
     if (!contentRef.current) {
       return;
@@ -452,6 +505,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     });
   }, [id, setNodes, result]);
 
+  // Convert markdown response to HTML for display
   const resultHtml = useMemo(() => {
     const response = marked.parse(result || '');
     return response;
@@ -478,6 +532,11 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     }
   }, [resultHtml]);
 
+  /**
+   * Custom blur handler to prevent exiting edit mode when interacting with:
+   * - Radix UI popovers (e.g., formatting toolbar)
+   * - Elements within the content area (e.g., clicking response section)
+   */
   const customOnBlur = useCallback(
     (event: FocusEvent<HTMLDivElement>) => {
       const potentialNextFocus =
@@ -485,6 +544,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
           ? event.relatedTarget
           : (typeof document !== 'undefined' ? document.activeElement : null);
 
+      // Don't blur if focus moved to toolbar popover or within content area
       if (
         (potentialNextFocus instanceof Element &&
           potentialNextFocus.closest('[data-radix-popper-content-wrapper]')) ||
