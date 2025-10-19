@@ -29,12 +29,21 @@ export const useCanvasNodes = ({
   nodeOrder: Y.Array<string>;
   nodesMap: Y.Map<Node>;
 }): CanvasNodeHandles => {
+  // Tracks each node's index within the local array for fast lookup when
+  // handling targeted updates from the shared document.
   const nodeIndexRef = useRef<Map<string, number>>(new Map());
+  // Caches serialized node payloads so we can detect structural changes and
+  // avoid rewriting identical data back to the document.
   const nodeSerializationRef = useRef<Map<string, string>>(new Map());
+  // Stores the latest snapshot of nodes mirrored from the document to serve as
+  // the canonical local state reference for optimistic updates.
   const nodesRef = useRef<Node[]>([]);
 
   const compareArrays = useCallback(arraysShallowEqual, []);
 
+  // Recreates the local node snapshot from the shared document while restoring
+  // transient UI-only fields from the previous state and reusing cached
+  // serializations whenever possible to minimize JSON work.
   const snapshotNodesFromDoc = useCallback(() => {
     const order = nodeOrder.toArray();
     const indexMap = new Map<string, number>();
@@ -117,12 +126,16 @@ export const useCanvasNodes = ({
           }
           const value = nodesMap.get(key);
           if (!value) {
+            // Remove any stale serialization for nodes that were deleted in the
+            // document so the cache reflects current reality.
             nodeSerializationRef.current.delete(key);
             return;
           }
           if (!next) {
             next = [...current];
           }
+          // Merge persisted data with transient fields (selection, dragging, etc.)
+          // so external edits do not wipe in-flight UI state.
           const restoredNode = restoreTransientNodeState(value, current[index]);
           if (next[index] !== restoredNode) {
             next[index] = restoredNode;
@@ -165,7 +178,9 @@ export const useCanvasNodes = ({
 
       // First update local state optimistically, then reconcile the Yjs map in
       // a transaction. The serialization map helps us detect whether a node's
-      // structural payload actually changed to avoid unnecessary writes.
+      // structural payload actually changed to avoid unnecessary writes, while
+      // sanitizedUpdates/serializedUpdates ensure we only push sanitized data to
+      // the document and retain transient selection flags on identical nodes.
       updateLocalNodesState(next);
 
       const nextIds = next.map((node) => node.id);
@@ -241,6 +256,8 @@ export const useCanvasNodes = ({
 
   const replaceNodesInDoc = useCallback(
     (nextNodes: Node[]) => {
+      // Completely rebuild the Yjs order/map with sanitized nodes and reset the
+      // serialization cache to reflect the fresh document state.
       nodeOrder.delete(0, nodeOrder.length);
       nodesMap.clear();
 
