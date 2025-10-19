@@ -10,6 +10,10 @@ import {
 } from "@/components/ui/dialog";
 import type { DraftRecord } from "@/core/drafts/types";
 
+/**
+ * Formats a timestamp string for display in the UI.
+ * - Returns localized datetime if parsable, otherwise returns the raw string.
+ */
 const formatTimestamp = (timestamp: string | null) => {
   if (!timestamp) {
     return "Unknown time";
@@ -23,6 +27,12 @@ const formatTimestamp = (timestamp: string | null) => {
   return new Date(parsed).toLocaleString();
 };
 
+/**
+ * Dialog shown at startup to recover unsaved drafts.
+ * - Lists all available drafts with metadata (name, last updated, file path).
+ * - User can resume a draft (loads it into canvas) or discard it permanently.
+ * - `processingId` disables buttons while loading to prevent duplicate actions.
+ */
 type DraftRecoveryDialogProps = {
   isOpen: boolean;
   drafts: DraftRecord[];

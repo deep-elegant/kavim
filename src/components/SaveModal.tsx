@@ -8,6 +8,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
+/**
+ * Modal for saving the current project as a `.pak` file.
+ * - Allows user to specify filename and destination folder.
+ * - Defaults to saving in Documents folder if no path is provided.
+ */
 interface SaveModalProps {
   isOpen: boolean;
   onClose: () => void;
