@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import DragWindowRegion from "@/components/DragWindowRegion";
 import MenuBar from "@/components/MenuBar";
 import { DraftRecoveryManager } from "@/core/drafts/DraftRecoveryManager";
+import { AutoSaveManager } from "@/core/drafts/AutoSaveManager";
 
 export default function BaseLayout({
   children,
@@ -15,6 +16,7 @@ export default function BaseLayout({
       <DragWindowRegion title={i18n.t("appName")} />
       <MenuBar />
       <DraftRecoveryManager />
+      <AutoSaveManager />
       <main className="flex-1 overflow-hidden ">{children}</main>
     </div>
   );

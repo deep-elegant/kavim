@@ -48,6 +48,14 @@ export const DraftRecoveryManager = () => {
     const edges = Array.isArray(draft.canvas.edges) ? draft.canvas.edges : [];
     setCanvasState(nodes, edges);
     setActiveDraftId(draftId);
+    window.dispatchEvent(
+      new CustomEvent("canvas:manual-save", {
+        detail: {
+          nodes: JSON.parse(JSON.stringify(nodes)),
+          edges: JSON.parse(JSON.stringify(edges)),
+        },
+      }),
+    );
     setIsDialogOpen(false);
   };
 

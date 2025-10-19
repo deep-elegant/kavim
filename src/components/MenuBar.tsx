@@ -56,7 +56,14 @@ export default function MenuBar() {
   const { i18n } = useTranslation();
   const { nodes, edges, setCanvasState } = useCanvasData();
   const { connectionState, dataChannelState } = useWebRTC();
-  const { activeDraftId, setActiveDraftId, deleteDraft, saveDraft } = useDraftManager();
+  const {
+    activeDraftId,
+    setActiveFilePath,
+    deleteDraft,
+    saveDraft,
+    lastAutoSaveAt,
+    saveTarget,
+  } = useDraftManager();
 
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   const [saveFileName, setSaveFileName] = useState("untitled.pak");
@@ -81,11 +88,56 @@ export default function MenuBar() {
     }
   }, [isSettingsOpen]);
 
-  const draftStatus = activeDraftId ? "Working from draft" : "";
+  const draftStatus = useMemo(() => {
+    if (!saveTarget) {
+      return "";
+    }
+
+    const formattedTime = (() => {
+      if (!lastAutoSaveAt) {
+        return null;
+      }
+      const parsed = Date.parse(lastAutoSaveAt);
+      return Number.isNaN(parsed)
+        ? lastAutoSaveAt
+        : new Date(parsed).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    })();
+
+    if (saveTarget.type === "draft") {
+      if (!formattedTime) {
+        return "Working from draft";
+      }
+      return `Working from draft · Auto-saved ${formattedTime}`;
+    }
+
+    return formattedTime ? `Auto-saved ${formattedTime}` : "";
+  }, [lastAutoSaveAt, saveTarget]);
 
   const combinedStatus = useMemo(() => {
     return [draftStatus, saveMessage, settingsMessage].filter(Boolean).join(" · ");
   }, [draftStatus, saveMessage, settingsMessage]);
+
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isSaveShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s";
+      if (!isSaveShortcut) {
+        return;
+      }
+
+      const target = event.target as HTMLElement | null;
+      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+        return;
+      }
+
+      event.preventDefault();
+      setIsSaveModalOpen(true);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   const connectionStatus = useMemo(() => {
     if (dataChannelState === "not-initiated") {
@@ -154,11 +206,20 @@ export default function MenuBar() {
         ? (result.canvas.edges as typeof edges)
         : [];
       setCanvasState(loadedNodes, loadedEdges);
-      setActiveDraftId(null);
+      setActiveFilePath(filePath);
+      window.dispatchEvent(
+        new CustomEvent("canvas:manual-save", {
+          detail: {
+            nodes: JSON.parse(JSON.stringify(loadedNodes)),
+            edges: JSON.parse(JSON.stringify(loadedEdges)),
+            filePath,
+          },
+        }),
+      );
     } catch (error) {
       console.error("Failed to load project", error);
     }
-  }, [setActiveDraftId, setCanvasState]);
+  }, [setActiveFilePath, setCanvasState]);
 
   const handleFolderBrowse = useCallback(async () => {
     try {
@@ -198,8 +259,17 @@ export default function MenuBar() {
       setSaveMessage(`Saved project to ${result.filePath}`);
       if (activeDraftId) {
         await deleteDraft(activeDraftId);
-        setActiveDraftId(null);
       }
+      setActiveFilePath(result.filePath);
+      window.dispatchEvent(
+        new CustomEvent("canvas:manual-save", {
+          detail: {
+            nodes: Array.isArray(sanitizedNodes) ? sanitizedNodes : [],
+            edges: Array.isArray(sanitizedEdges) ? sanitizedEdges : [],
+            filePath: result.filePath,
+          },
+        }),
+      );
     } catch (error) {
       console.error("Failed to save project", error);
       setSaveMessage("Failed to save project.");
@@ -222,7 +292,6 @@ export default function MenuBar() {
     });
 
     if (draft) {
-      setActiveDraftId(draft.id);
       const updatedAt = Date.parse(draft.updatedAt);
       const formatted =
         Number.isNaN(updatedAt) ? draft.updatedAt : new Date(updatedAt).toLocaleTimeString();
@@ -230,7 +299,7 @@ export default function MenuBar() {
     } else {
       setSaveMessage("Failed to save draft.");
     }
-  }, [activeDraftId, nodes, edges, saveDraft, saveFileName, setActiveDraftId]);
+  }, [activeDraftId, nodes, edges, saveDraft, saveFileName]);
 
   const handleSettingsSave = () => {
     try {
