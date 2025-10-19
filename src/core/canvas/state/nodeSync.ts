@@ -5,7 +5,7 @@ import type { Node } from '@xyflow/react';
  * with the shared Yjs document. Stripping them keeps the collaborative state
  * focused on the persisted node shape.
  */
-export const TRANSIENT_NODE_DATA_KEYS = new Set(['isTyping', 'isEditing', 'isActive', 'fontSizeValue']);
+export const TRANSIENT_NODE_DATA_KEYS = new Set(['isTyping', 'isEditing', 'isActive']);
 
 /**
  * Removes transient UI keys from a node's data object before sending it to Yjs.
