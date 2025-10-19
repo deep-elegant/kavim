@@ -7,6 +7,21 @@ import type { Node } from '@xyflow/react';
  */
 export const TRANSIENT_NODE_DATA_KEYS = new Set(['isTyping', 'isEditing', 'isActive']);
 
+export const isTransientNodeDataKey = (key: string, data?: Node['data']) => {
+  if (TRANSIENT_NODE_DATA_KEYS.has(key)) {
+    return true;
+  }
+
+  if (key === 'fontSizeValue' && data && typeof data === 'object') {
+    const { fontSizeMode } = data as { fontSizeMode?: unknown };
+    if (fontSizeMode === 'auto') {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 /**
  * Removes transient UI keys from a node's data object before sending it to Yjs.
  */
@@ -18,7 +33,7 @@ export const sanitizeNodeDataForSync = (data: Node['data']) => {
   let hasTransientKey = false;
 
   const sanitizedEntries = Object.entries(data).filter(([key]) => {
-    if (TRANSIENT_NODE_DATA_KEYS.has(key)) {
+    if (isTransientNodeDataKey(key, data)) {
       hasTransientKey = true;
       return false;
     }
@@ -64,22 +79,48 @@ export const restoreTransientNodeState = (docNode: Node, previousNode?: Node) =>
 
   let nextData = docData;
   let restoredData = false;
+  let mutableData: Record<string, unknown> | undefined;
+
+  const getMutableData = () => {
+    if (!mutableData) {
+      mutableData =
+        docData && typeof docData === 'object'
+          ? { ...(docData as Record<string, unknown>) }
+          : {};
+      nextData = mutableData as Node['data'];
+    }
+
+    return mutableData;
+  };
+
+  const docDataRecord =
+    docData && typeof docData === 'object' ? (docData as Record<string, unknown>) : undefined;
 
   if (previousData && typeof previousData === 'object') {
-    const transientEntries = Object.entries(previousData).filter(([key]) =>
+    const previousDataRecord = previousData as Record<string, unknown>;
+
+    const transientEntries = Object.entries(previousDataRecord).filter(([key]) =>
       TRANSIENT_NODE_DATA_KEYS.has(key),
     );
 
     if (transientEntries.length > 0) {
-      const baseData =
-        docData && typeof docData === 'object'
-          ? (docData as Record<string, unknown>)
-          : {};
+      const baseData = getMutableData();
+      for (const [key, value] of transientEntries) {
+        baseData[key] = value;
+      }
+      restoredData = true;
+    }
 
-      nextData = {
-        ...baseData,
-        ...Object.fromEntries(transientEntries),
-      } as Node['data'];
+    const targetDataForFontSize = mutableData ?? docDataRecord;
+
+    if (
+      previousDataRecord.fontSizeMode === 'auto' &&
+      docDataRecord?.fontSizeMode === 'auto' &&
+      'fontSizeValue' in previousDataRecord &&
+      !(targetDataForFontSize && 'fontSizeValue' in targetDataForFontSize)
+    ) {
+      const baseData = getMutableData();
+      baseData.fontSizeValue = previousDataRecord.fontSizeValue;
       restoredData = true;
     }
   }
