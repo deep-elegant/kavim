@@ -74,6 +74,59 @@ export const CanvasDataProvider = ({
     [sanitizeNodeDataForSync],
   );
 
+  const restoreTransientNodeState = useCallback(
+    (docNode: Node, previousNode?: Node) => {
+      if (!previousNode) {
+        return docNode;
+      }
+
+      const previousData = previousNode.data;
+      const docData = docNode.data;
+
+      let nextData = docData;
+      let restoredData = false;
+
+      if (previousData && typeof previousData === 'object') {
+        const transientEntries = Object.entries(previousData).filter(([key]) =>
+          TRANSIENT_NODE_DATA_KEYS.has(key),
+        );
+
+        if (transientEntries.length > 0) {
+          const baseData =
+            docData && typeof docData === 'object'
+              ? (docData as Record<string, unknown>)
+              : {};
+
+          nextData = {
+            ...baseData,
+            ...Object.fromEntries(transientEntries),
+          } as Node['data'];
+          restoredData = true;
+        }
+      }
+
+      const shouldRestoreSelected = previousNode.selected !== undefined;
+
+      if (!restoredData && !shouldRestoreSelected) {
+        return docNode;
+      }
+
+      const restoredNode: Node = {
+        ...docNode,
+        data: nextData,
+      };
+
+      if (shouldRestoreSelected) {
+        restoredNode.selected = previousNode.selected;
+      } else if ('selected' in restoredNode) {
+        delete restoredNode.selected;
+      }
+
+      return restoredNode;
+    },
+    [],
+  );
+
   const canvasDoc = useMemo(() => doc ?? new Y.Doc(), [doc]);
   const nodesMap = useMemo(() => canvasDoc.getMap<Node>('nodes'), [canvasDoc]);
   const nodeOrder = useMemo(() => canvasDoc.getArray<string>('node-order'), [canvasDoc]);
@@ -116,6 +169,7 @@ export const CanvasDataProvider = ({
     const nextNodes: Node[] = [];
     const previousSerialization = nodeSerializationRef.current;
     const nextSerialization = new Map<string, string>();
+    const previousNodesById = new Map(nodesRef.current.map((node) => [node.id, node]));
 
     order.forEach((id) => {
       const node = nodesMap.get(id);
@@ -124,7 +178,8 @@ export const CanvasDataProvider = ({
       }
 
       const index = nextNodes.length;
-      nextNodes.push(node);
+      const restoredNode = restoreTransientNodeState(node, previousNodesById.get(id));
+      nextNodes.push(restoredNode);
       indexMap.set(id, index);
 
       const existingSerialization = previousSerialization.get(id);
@@ -140,7 +195,7 @@ export const CanvasDataProvider = ({
     nodeSerializationRef.current = nextSerialization;
     nodesRef.current = nextNodes;
     return nextNodes;
-  }, [nodeOrder, nodesMap]);
+  }, [nodeOrder, nodesMap, restoreTransientNodeState]);
 
   const snapshotEdgesFromDoc = useCallback(() => {
     const order = edgeOrder.toArray();
@@ -246,8 +301,9 @@ export const CanvasDataProvider = ({
           if (!next) {
             next = [...current];
           }
-          if (next[index] !== value) {
-            next[index] = value;
+          const restoredNode = restoreTransientNodeState(value, current[index]);
+          if (next[index] !== restoredNode) {
+            next[index] = restoredNode;
             changed = true;
           }
 
@@ -325,7 +381,16 @@ export const CanvasDataProvider = ({
       edgeOrder.unobserve(handleEdgeOrderChange);
       edgesMap.unobserve(handleEdgesMapChange);
     };
-  }, [arraysShallowEqual, edgeOrder, edgesMap, nodeOrder, nodesMap, snapshotEdgesFromDoc, snapshotNodesFromDoc]);
+  }, [
+    arraysShallowEqual,
+    edgeOrder,
+    edgesMap,
+    nodeOrder,
+    nodesMap,
+    restoreTransientNodeState,
+    snapshotEdgesFromDoc,
+    snapshotNodesFromDoc,
+  ]);
 
   const setNodes = useCallback<Dispatch<SetStateAction<Node[]>>>(
     (updater) => {
