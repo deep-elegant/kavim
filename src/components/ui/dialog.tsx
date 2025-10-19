@@ -4,6 +4,12 @@ import { X } from "lucide-react"
 
 import { cn } from "@/utils/tailwind"
 
+/**
+ * Composable dialog components built on Radix UI primitives.
+ * - Uses Radix for accessibility (focus trap, escape key, etc.)
+ * - Styled with Tailwind for consistent design system
+ */
+
 const Dialog = DialogPrimitive.Root
 
 const DialogTrigger = DialogPrimitive.Trigger
@@ -12,6 +18,10 @@ const DialogPortal = DialogPrimitive.Portal
 
 const DialogClose = DialogPrimitive.Close
 
+/**
+ * Semi-transparent backdrop with fade animations.
+ * - Blocks interaction with content behind dialog
+ */
 const DialogOverlay = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay>
@@ -27,6 +37,12 @@ const DialogOverlay = React.forwardRef<
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
+/**
+ * Main dialog content container.
+ * - Centered with responsive width (max-w-lg)
+ * - Includes close button in top-right (always accessible)
+ * - Animations: fade + zoom + slide for smooth entrance/exit
+ */
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
@@ -42,6 +58,7 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       {children}
+      {/* Close button always visible for explicit dismissal */}
       <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
@@ -51,6 +68,10 @@ const DialogContent = React.forwardRef<
 ))
 DialogContent.displayName = DialogPrimitive.Content.displayName
 
+/**
+ * Header section for title and description.
+ * - Responsive: centered on mobile, left-aligned on desktop
+ */
 const DialogHeader = ({
   className,
   ...props
@@ -65,6 +86,11 @@ const DialogHeader = ({
 )
 DialogHeader.displayName = "DialogHeader"
 
+/**
+ * Footer section for actions (buttons).
+ * - Responsive: stacked on mobile, horizontal on desktop
+ * - Actions right-aligned (standard pattern for confirm/cancel)
+ */
 const DialogFooter = ({
   className,
   ...props
@@ -79,6 +105,10 @@ const DialogFooter = ({
 )
 DialogFooter.displayName = "DialogFooter"
 
+/**
+ * Dialog title element.
+ * - Semantically announces title to screen readers
+ */
 const DialogTitle = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
@@ -94,6 +124,11 @@ const DialogTitle = React.forwardRef<
 ))
 DialogTitle.displayName = DialogPrimitive.Title.displayName
 
+/**
+ * Dialog description element.
+ * - Provides additional context below title
+ * - Announced by screen readers for accessibility
+ */
 const DialogDescription = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description>

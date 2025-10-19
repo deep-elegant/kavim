@@ -1,6 +1,14 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import * as Y from 'yjs';
 
+/**
+ * Manual WebRTC hook for peer-to-peer collaboration.
+ * - No signaling server: users manually exchange SDP and ICE candidates
+ * - Syncs Yjs document updates over WebRTC data channel
+ * - Handles presence data (cursors, selections, typing indicators)
+ * - Chunks large messages to avoid WebRTC size limits
+ */
+
 type ConnectionState = 'new' | 'connecting' | 'connected' | 'disconnected' | 'failed' | 'closed';
 type DataChannelState =
   | 'not-initiated'
@@ -15,19 +23,21 @@ export interface WebRTCChatMessage {
   timestamp: number;
 }
 
+// Yjs sync protocol messages
 type SyncMessage = {
   type: 'yjs-sync';
-  vector: string;
+  vector: string; // State vector for requesting missing updates
 };
 
 type YjsUpdateMessage = {
   type: 'yjs-update';
-  update: string;
+  update: string; // Base64-encoded Yjs update
 };
 
+// Large updates split into chunks to avoid WebRTC message size limits
 type YjsUpdateChunkMessage = {
   type: 'yjs-update-chunk';
-  id: string;
+  id: string; // Unique ID to group chunks
   index: number;
   total: number;
   chunk: string;
@@ -50,15 +60,22 @@ export type CursorPresence = {
   hasPosition?: boolean;
 };
 
+// Encode in chunks to avoid stack overflow on large arrays
 const BASE64_CHUNK_SIZE = 0x8000;
+
+// WebRTC data channel has 16KB limit, stay under with overhead
 const MAX_MESSAGE_CHUNK_SIZE = 15_000;
 
 type PendingChunk = {
   total: number;
   received: number;
-  parts: string[];
+  parts: string[]; // Accumulated chunks
 };
 
+/**
+ * Encode Uint8Array to base64 in chunks.
+ * - Prevents stack overflow from String.fromCharCode(...largeArray)
+ */
 const encodeToBase64 = (bytes: Uint8Array): string => {
   if (bytes.length === 0) {
     return '';
@@ -72,6 +89,9 @@ const encodeToBase64 = (bytes: Uint8Array): string => {
   return btoa(binary);
 };
 
+/**
+ * Decode base64 string back to Uint8Array.
+ */
 const decodeFromBase64 = (encoded: string): Uint8Array => {
   if (!encoded) {
     return new Uint8Array(0);
@@ -86,6 +106,7 @@ const decodeFromBase64 = (encoded: string): Uint8Array => {
 };
 
 export function useWebRTCManual(doc: Y.Doc) {
+  // UI state for manual connection setup
   const [localOffer, setLocalOffer] = useState<string>('');
   const [localAnswer, setLocalAnswer] = useState<string>('');
   const [localCandidates, setLocalCandidates] = useState<string[]>([]);
@@ -96,16 +117,32 @@ export function useWebRTCManual(doc: Y.Doc) {
     Record<string, CursorPresence>
   >({});
 
+  // WebRTC refs (persist across renders)
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
+  
+  // Buffer ICE candidates until remote description is set
   const candidatesBuffer = useRef<RTCIceCandidate[]>([]);
+  
+  // Queue outgoing updates when channel not ready
   const pendingYUpdatesRef = useRef<Uint8Array[]>([]);
+  
+  // Reassemble chunked messages from remote peer
   const incomingChunksRef = useRef<Map<string, PendingChunk>>(new Map());
+  
+  // Batch local doc changes to reduce network chatter
   const pendingLocalUpdatesRef = useRef<Uint8Array[]>([]);
   const localFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  
+  // Stable client ID for presence tracking
   const localClientKey = useMemo(() => String(doc.clientID), [doc]);
   const presenceMap = useMemo(() => doc.getMap<CursorPresence>('presence'), [doc]);
 
+  /**
+   * Send our current state vector to remote peer.
+   * - Remote responds with missing updates we don't have
+   * - Part of Yjs sync protocol
+   */
   const sendStateVector = useCallback(() => {
     const channel = dataChannelRef.current;
     if (!channel || channel.readyState !== 'open') {
@@ -122,10 +159,17 @@ export function useWebRTCManual(doc: Y.Doc) {
     }
   }, [doc]);
 
+  /**
+   * Send a Yjs update to remote peer.
+   * - Queues if channel not ready
+   * - Chunks large updates to stay under WebRTC size limit
+   * - Re-queues on send failure for retry
+   */
   const sendYUpdate = useCallback((update: Uint8Array) => {
     const channel = dataChannelRef.current;
     const updateCopy = update.slice();
 
+    // Queue for later if channel not open
     if (!channel || channel.readyState !== 'open') {
       pendingYUpdatesRef.current.push(updateCopy);
       return;
@@ -144,11 +188,13 @@ export function useWebRTCManual(doc: Y.Doc) {
       }
     };
 
+    // Small enough to send in one message
     if (encoded.length <= MAX_MESSAGE_CHUNK_SIZE) {
       void sendMessage({ type: 'yjs-update', update: encoded });
       return;
     }
 
+    // Large update: split into chunks
     const chunkId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -166,12 +212,17 @@ export function useWebRTCManual(doc: Y.Doc) {
         total: totalChunks,
         chunk,
       });
+      // Stop sending if one chunk fails (avoid partial state)
       if (!success) {
         break;
       }
     }
   }, []);
 
+  /**
+   * Send all queued Yjs updates when channel becomes ready.
+   * - Called when data channel opens or reconnects
+   */
   const flushPendingYUpdates = useCallback(() => {
     const channel = dataChannelRef.current;
     if (!channel || channel.readyState !== 'open') {
@@ -189,6 +240,11 @@ export function useWebRTCManual(doc: Y.Doc) {
     });
   }, [sendYUpdate]);
 
+  /**
+   * Merge and send batched local document changes.
+   * - Reduces network messages by combining rapid edits
+   * - Merging multiple updates prevents redundant data
+   */
   const flushLocalUpdates = useCallback(() => {
     if (pendingLocalUpdatesRef.current.length === 0) {
       return;
@@ -201,6 +257,10 @@ export function useWebRTCManual(doc: Y.Doc) {
     sendYUpdate(mergedUpdate);
   }, [sendYUpdate]);
 
+  /**
+   * Debounce local updates to batch rapid changes.
+   * - 80ms window: balances responsiveness vs network efficiency
+   */
   const scheduleLocalFlush = useCallback(() => {
     if (localFlushTimerRef.current !== null) {
       return;
@@ -212,6 +272,10 @@ export function useWebRTCManual(doc: Y.Doc) {
     }, 80);
   }, [flushLocalUpdates]);
 
+  /**
+   * Apply received Yjs update to local document.
+   * - Triggers React re-renders via Yjs observers
+   */
   const applyYUpdate = useCallback((update: Uint8Array) => {
     try {
       Y.applyUpdate(doc, update, 'webrtc');
@@ -220,6 +284,12 @@ export function useWebRTCManual(doc: Y.Doc) {
     }
   }, [doc]);
 
+  /**
+   * Handle incoming WebRTC data channel messages.
+   * - Parses JSON and routes to appropriate handler
+   * - Reassembles chunked Yjs updates
+   * - Implements Yjs sync protocol (state vector exchange)
+   */
   const handleStringMessage = useCallback((raw: string) => {
     let message: ChannelMessage;
     try {
@@ -229,26 +299,30 @@ export function useWebRTCManual(doc: Y.Doc) {
       return;
     }
 
+    // Chat message for testing connection
     if (message.type === 'chat') {
       setMessages((prev) => [...prev, message]);
       return;
     }
 
+    // State vector: remote peer requesting missing updates
     if (message.type === 'yjs-sync') {
       const remoteVector = decodeFromBase64(message.vector);
       const diff = Y.encodeStateAsUpdate(doc, remoteVector);
       if (diff.byteLength > 0) {
-        sendYUpdate(diff);
+        sendYUpdate(diff); // Send what they're missing
       }
-      flushPendingYUpdates();
+      flushPendingYUpdates(); // Also send queued updates
       return;
     }
 
+    // Single Yjs update message
     if (message.type === 'yjs-update') {
       applyYUpdate(decodeFromBase64(message.update));
       return;
     }
 
+    // Chunked Yjs update: reassemble before applying
     if (message.type === 'yjs-update-chunk') {
       const { id, index, total, chunk } = message;
 
@@ -270,6 +344,7 @@ export function useWebRTCManual(doc: Y.Doc) {
         return;
       }
 
+      // Track this chunk (avoid duplicates)
       if (entry.parts[index] === undefined) {
         entry.parts[index] = chunk;
         entry.received += 1;
@@ -277,6 +352,7 @@ export function useWebRTCManual(doc: Y.Doc) {
 
       incomingChunksRef.current.set(id, entry);
 
+      // All chunks received: reassemble and apply
       if (entry.received === entry.total) {
         incomingChunksRef.current.delete(id);
         const combined = entry.parts.join('');
@@ -285,7 +361,11 @@ export function useWebRTCManual(doc: Y.Doc) {
     }
   }, [applyYUpdate, doc, flushPendingYUpdates, sendYUpdate]);
 
-  // Initialize peer connection
+  /**
+   * Create new RTCPeerConnection with event handlers.
+   * - Closes existing connection if retrying
+   * - Resets signaling state for fresh start
+   */
   const initializePeerConnection = useCallback(() => {
     if (pcRef.current) {
       pcRef.current.close();
@@ -298,9 +378,10 @@ export function useWebRTCManual(doc: Y.Doc) {
     candidatesBuffer.current = [];
 
     const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] // Google's public STUN
     });
 
+    // Collect ICE candidates for manual exchange
     pc.onicecandidate = (e) => {
       if (e.candidate) {
         const candidateStr = JSON.stringify(e.candidate.toJSON());
@@ -321,21 +402,26 @@ export function useWebRTCManual(doc: Y.Doc) {
     return pc;
   }, []);
 
-  // Setup data channel with message handlers
+  /**
+   * Configure data channel for Yjs sync and presence updates.
+   * - Binary mode for efficient Yjs updates
+   * - Flushes queued updates when channel opens
+   * - Clears state on close to prevent stale data
+   */
   const setupDataChannel = useCallback((channel: RTCDataChannel) => {
     channel.binaryType = 'arraybuffer';
     setDataChannelState(channel.readyState as DataChannelState);
 
     channel.onopen = () => {
       setDataChannelState('open');
-      sendStateVector();
-      flushLocalUpdates();
-      flushPendingYUpdates();
+      sendStateVector(); // Request missing updates from peer
+      flushLocalUpdates(); // Send our pending changes
+      flushPendingYUpdates(); // Send queued remote updates
     };
 
     channel.onclose = () => {
       setDataChannelState('closed');
-      setRemotePresenceByClient({});
+      setRemotePresenceByClient({}); // Clear collaborator cursors
       incomingChunksRef.current.clear();
       pendingYUpdatesRef.current = [];
     };
@@ -343,11 +429,13 @@ export function useWebRTCManual(doc: Y.Doc) {
     channel.onmessage = (event) => {
       const { data } = event;
 
+      // JSON messages (chat, sync, updates)
       if (typeof data === 'string') {
         handleStringMessage(data);
         return;
       }
 
+      // Binary Yjs updates (for efficiency)
       if (data instanceof ArrayBuffer) {
         applyYUpdate(new Uint8Array(data));
         return;
@@ -383,10 +471,15 @@ export function useWebRTCManual(doc: Y.Doc) {
     setRemotePresenceByClient,
   ]);
 
+  /**
+   * Listen for local Yjs document changes and queue for sync.
+   * - Ignores updates from WebRTC (prevent echo)
+   * - Batches changes to reduce network traffic
+   */
   useEffect(() => {
     const handleDocUpdate = (update: Uint8Array, origin: unknown) => {
       if (origin === 'webrtc') {
-        return;
+        return; // Don't echo back updates we received
       }
 
       pendingLocalUpdatesRef.current.push(update.slice());
@@ -400,11 +493,16 @@ export function useWebRTCManual(doc: Y.Doc) {
     };
   }, [doc, scheduleLocalFlush]);
 
-  // Create offer (User A)
+  /**
+   * Create WebRTC offer (initiator/host side).
+   * - Creates data channel (initiator must create it)
+   * - Waits for ICE candidate gathering
+   * - Returns SDP offer as JSON string for manual exchange
+   */
   const createOffer = useCallback(async () => {
     const pc = initializePeerConnection();
 
-    // Create data channel
+    // Initiator creates data channel
     const channel = pc.createDataChannel('chat');
     dataChannelRef.current = channel;
     setupDataChannel(channel);
@@ -421,11 +519,15 @@ export function useWebRTCManual(doc: Y.Doc) {
     return offerStr;
   }, [initializePeerConnection, setupDataChannel]);
 
-  // Set remote offer (User B)
+  /**
+   * Set remote offer (responder side).
+   * - Waits for data channel to be created by initiator
+   * - Applies buffered ICE candidates once remote description is set
+   */
   const setRemoteOffer = useCallback(async (offerJson: string) => {
     const pc = initializePeerConnection();
 
-    // Set up data channel handler
+    // Responder waits for data channel from initiator
     pc.ondatachannel = (e) => {
       const channel = e.channel;
       dataChannelRef.current = channel;
@@ -435,14 +537,18 @@ export function useWebRTCManual(doc: Y.Doc) {
     const offer = JSON.parse(offerJson);
     await pc.setRemoteDescription(new RTCSessionDescription(offer));
 
-    // Apply buffered candidates
+    // Apply buffered candidates now that remote description is set
     for (const candidate of candidatesBuffer.current) {
       await pc.addIceCandidate(candidate);
     }
     candidatesBuffer.current = [];
   }, [initializePeerConnection, setupDataChannel]);
 
-  // Create answer (User B)
+  /**
+   * Create WebRTC answer (responder side).
+   * - Must be called after setRemoteOffer
+   * - Returns SDP answer as JSON string for manual exchange
+   */
   const createAnswer = useCallback(async () => {
     const pc = pcRef.current;
     if (!pc) {
@@ -460,7 +566,11 @@ export function useWebRTCManual(doc: Y.Doc) {
     return answerStr;
   }, []);
 
-  // Set remote answer (User A)
+  /**
+   * Set remote answer (initiator side).
+   * - Completes the offer/answer exchange
+   * - Applies buffered ICE candidates
+   */
   const setRemoteAnswer = useCallback(async (answerJson: string) => {
     const pc = pcRef.current;
     if (!pc) {
@@ -470,14 +580,18 @@ export function useWebRTCManual(doc: Y.Doc) {
     const answer = JSON.parse(answerJson);
     await pc.setRemoteDescription(new RTCSessionDescription(answer));
 
-    // Apply buffered candidates
+    // Apply buffered candidates now that remote description is set
     for (const candidate of candidatesBuffer.current) {
       await pc.addIceCandidate(candidate);
     }
     candidatesBuffer.current = [];
   }, []);
 
-  // Add ICE candidate
+  /**
+   * Add ICE candidate from remote peer.
+   * - Buffers if remote description not yet set (timing issue)
+   * - Helps establish optimal network path
+   */
   const addCandidate = useCallback(async (candidateJson: string) => {
     const pc = pcRef.current;
     if (!pc) {
@@ -500,7 +614,10 @@ export function useWebRTCManual(doc: Y.Doc) {
     }
   }, []);
 
-  // Send message
+  /**
+   * Send chat message (for testing connection).
+   * - Returns false if channel not ready
+   */
   const sendMessage = useCallback((message: WebRTCChatMessage) => {
     const channel = dataChannelRef.current;
     if (!channel || channel.readyState !== 'open') {
@@ -518,6 +635,12 @@ export function useWebRTCManual(doc: Y.Doc) {
     }
   }, []);
 
+  /**
+   * Update local user's presence data (cursor, selection, typing).
+   * - Stored in Yjs map for automatic sync to peers
+   * - Merges with existing presence to preserve unspecified fields
+   * - Transacted to avoid multiple sync events
+   */
   const updatePresence = useCallback(
     (update: Partial<Omit<CursorPresence, 'updatedAt'>>) => {
       doc.transact(() => {
@@ -540,20 +663,25 @@ export function useWebRTCManual(doc: Y.Doc) {
         };
 
         presenceMap.set(localClientKey, next);
-      }, 'presence');
+      }, 'presence'); // Origin tag to identify presence updates
 
       return true;
     },
     [doc, localClientKey, presenceMap],
   );
 
+  /**
+   * Subscribe to remote collaborator presence changes.
+   * - Updates React state when presence map changes
+   * - Filters out local user's own presence
+   */
   useEffect(() => {
     const updateRemotePresence = () => {
       const nextPresence: Record<string, CursorPresence> = {};
 
       presenceMap.forEach((value, key) => {
         if (key === localClientKey || !value) {
-          return;
+          return; // Skip own presence
         }
 
         nextPresence[key] = value;
@@ -575,13 +703,21 @@ export function useWebRTCManual(doc: Y.Doc) {
     };
   }, [localClientKey, presenceMap]);
 
+  /**
+   * Cleanup presence on unmount.
+   * - Removes user from presence map so peers know they left
+   */
   useEffect(() => () => {
     doc.transact(() => {
       presenceMap.delete(localClientKey);
     }, 'presence');
   }, [doc, localClientKey, presenceMap]);
 
-  // Cleanup
+  /**
+   * Cleanup on unmount.
+   * - Flushes pending updates before closing
+   * - Closes WebRTC connections gracefully
+   */
   useEffect(() => {
     return () => {
       if (localFlushTimerRef.current !== null) {
