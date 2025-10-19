@@ -2,8 +2,11 @@ import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { useCanvasData } from "@/core/canvas/CanvasDataContext";
 import { useDraftManager } from "./DraftManagerContext";
 
+// Debounce delay after last change before saving
 const AUTO_SAVE_DEBOUNCE_MS = 2000;
+// Periodic save interval even if canvas hasn't changed
 const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000;
+// Retry delay after failed save attempt
 const AUTO_SAVE_RETRY_MS = 5000;
 
 type SaveReason = "debounce" | "interval" | "queued";
@@ -14,6 +17,7 @@ type ManualSaveDetail = {
   filePath?: string;
 };
 
+// Deep clones canvas data to prevent mutation during async save
 const sanitizeCanvas = (nodes: unknown, edges: unknown) => {
   const safeNodes = Array.isArray(nodes) ? JSON.parse(JSON.stringify(nodes)) : [];
   const safeEdges = Array.isArray(edges) ? JSON.parse(JSON.stringify(edges)) : [];
@@ -32,6 +36,13 @@ const splitFilePath = (filePath: string) => {
   return { directory: directory || undefined, fileName };
 };
 
+/**
+ * Automatically saves canvas changes to drafts or files.
+ * - Debounces rapid changes to avoid excessive saves
+ * - Falls back to periodic saves as safety net
+ * - Retries failed saves to handle temporary network/disk issues
+ * - Skips redundant saves by comparing JSON signatures
+ */
 export const AutoSaveManager: React.FC = () => {
   const { nodes, edges } = useCanvasData();
   const {
@@ -42,14 +53,18 @@ export const AutoSaveManager: React.FC = () => {
     setLastAutoSaveAt,
   } = useDraftManager();
 
+  // Always-current snapshot avoids stale closure issues
   const latestSnapshotRef = useRef<{ nodes: unknown; edges: unknown }>({
     nodes,
     edges,
   });
+  // Tracks last saved state to skip redundant saves
   const lastSavedSignatureRef = useRef<string | null>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const intervalTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Prevents concurrent saves that could cause race conditions
   const savingRef = useRef(false);
+  // Queues save when one is already in progress
   const rerunRequestedRef = useRef(false);
   const needsSaveRef = useRef(false);
   const retryTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -61,6 +76,12 @@ export const AutoSaveManager: React.FC = () => {
     return drafts.find((draft) => draft.id === saveTarget.draftId) ?? null;
   }, [drafts, saveTarget]);
 
+  /**
+   * Performs the actual save operation to draft or file.
+   * - Compares JSON signature to skip redundant saves
+   * - Handles both draft and file save targets
+   * - Queues retry on failure instead of losing changes
+   */
   const performSave = useCallback(
     async (reason: SaveReason) => {
       void reason;
@@ -74,6 +95,7 @@ export const AutoSaveManager: React.FC = () => {
       );
       const signature = JSON.stringify(snapshot);
 
+      // Skip saving empty canvas with no target
       if (!saveTarget && snapshot.nodes.length === 0 && snapshot.edges.length === 0) {
         lastSavedSignatureRef.current = signature;
         needsSaveRef.current = false;
@@ -84,6 +106,7 @@ export const AutoSaveManager: React.FC = () => {
         return;
       }
 
+      // Skip if nothing changed since last save
       if (signature === lastSavedSignatureRef.current) {
         needsSaveRef.current = false;
         if (retryTimerRef.current) {
@@ -93,6 +116,7 @@ export const AutoSaveManager: React.FC = () => {
         return;
       }
 
+      // Queue save if one is already running
       if (savingRef.current) {
         rerunRequestedRef.current = true;
         return;
@@ -186,6 +210,7 @@ export const AutoSaveManager: React.FC = () => {
     [isReady, performSave],
   );
 
+  // Trigger debounced save on any canvas change
   useEffect(() => {
     latestSnapshotRef.current = { nodes, edges };
     if (!isReady) {
@@ -195,6 +220,7 @@ export const AutoSaveManager: React.FC = () => {
     scheduleDebouncedSave();
   }, [nodes, edges, isReady, scheduleDebouncedSave]);
 
+  // Periodic save as safety net (in case debounce keeps resetting)
   useEffect(() => {
     if (!isReady) {
       return;
@@ -215,6 +241,7 @@ export const AutoSaveManager: React.FC = () => {
     };
   }, [isReady, performSave]);
 
+  // Reschedule save if needed when manager becomes ready
   useEffect(() => {
     if (!isReady || !needsSaveRef.current) {
       return;
@@ -222,6 +249,7 @@ export const AutoSaveManager: React.FC = () => {
     scheduleDebouncedSave();
   }, [isReady, scheduleDebouncedSave]);
 
+  // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (debounceTimerRef.current) {
@@ -239,6 +267,7 @@ export const AutoSaveManager: React.FC = () => {
     };
   }, []);
 
+  // Sync with manual saves (from File > Save menu)
   useEffect(() => {
     const handleManualSave = (event: Event) => {
       const customEvent = event as CustomEvent<ManualSaveDetail>;
@@ -246,11 +275,13 @@ export const AutoSaveManager: React.FC = () => {
         return;
       }
 
+      // Update signature to prevent auto-save from re-saving same content
       const snapshot = sanitizeCanvas(customEvent.detail.nodes, customEvent.detail.edges);
       latestSnapshotRef.current = snapshot;
       lastSavedSignatureRef.current = JSON.stringify(snapshot);
       needsSaveRef.current = false;
 
+      // Clear pending saves since manual save just completed
       if (debounceTimerRef.current) {
         clearTimeout(debounceTimerRef.current);
         debounceTimerRef.current = null;

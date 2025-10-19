@@ -6,6 +6,7 @@ import { useCanvasDoc } from './useCanvasDoc';
 import { useCanvasNodes } from './useCanvasNodes';
 import { useCanvasEdges } from './useCanvasEdges';
 
+/** Main API surface for canvas state management with Yjs synchronization */
 export type CanvasDataContextValue = {
   nodes: Node[];
   edges: Edge<EditableEdgeData>[];
@@ -17,6 +18,12 @@ export type CanvasDataContextValue = {
   doc: Y.Doc;
 };
 
+/**
+ * Orchestrates Yjs-backed canvas state with nodes and edges.
+ * - Provides React state hooks (nodes/edges) synced to a Yjs document.
+ * - setCanvasState replaces entire graph atomically in one transaction.
+ * - Accepts optional Yjs doc for external ownership (e.g., collaboration provider).
+ */
 export const useCanvasDataState = (doc?: Y.Doc): CanvasDataContextValue => {
   const { canvasDoc, nodeOrder, nodesMap, edgeOrder, edgesMap } = useCanvasDoc(doc);
   const { nodes, setNodes, getNodes, updateLocalNodesState, replaceNodesInDoc } =
@@ -32,13 +39,13 @@ export const useCanvasDataState = (doc?: Y.Doc): CanvasDataContextValue => {
       edgesMap,
     });
 
+  // Replace entire graph in one transaction for atomic updates
   const setCanvasState = useCallback(
     (nextNodes: Node[], nextEdges: Edge<EditableEdgeData>[]) => {
       updateLocalNodesState(nextNodes);
       updateLocalEdgesState(nextEdges);
 
-      // Replace the entire graph in a single transaction so collaborators see a
-      // consistent snapshot of nodes and edges.
+      // Single transaction ensures collaborators see consistent snapshot
       canvasDoc.transact(() => {
         replaceNodesInDoc(nextNodes);
         replaceEdgesInDoc(nextEdges);

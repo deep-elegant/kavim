@@ -19,6 +19,7 @@ type ProviderKeyMap = Record<AiProvider, string>;
 
 type ProviderVisibilityMap = Record<AiProvider, boolean>;
 
+/** Creates initial visibility state for all provider keys (hidden by default). */
 const createInitialVisibilityMap = (): ProviderVisibilityMap =>
   AI_PROVIDER_METADATA.reduce((accumulator, provider) => {
     accumulator[provider.value] = false;
@@ -27,12 +28,18 @@ const createInitialVisibilityMap = (): ProviderVisibilityMap =>
 
 type GatewayVisibilityMap = Record<AiGateway, boolean>;
 
+/** Creates initial visibility state for all gateway keys (hidden by default). */
 const createInitialGatewayVisibilityMap = (): GatewayVisibilityMap =>
   AI_GATEWAY_METADATA.reduce((accumulator, gateway) => {
     accumulator[gateway.value] = false;
     return accumulator;
   }, {} as GatewayVisibilityMap);
 
+/**
+ * Form state for a single AI gateway configuration.
+ * - `useForAllModels` enables routing all requests through this gateway.
+ * - `referer` and `title` are optional HTTP headers for gateway authentication.
+ */
 type GatewaySettingsValue = {
   apiKey: string;
   useForAllModels: boolean;
@@ -42,6 +49,12 @@ type GatewaySettingsValue = {
 
 type GatewaySettingsMap = Record<AiGateway, GatewaySettingsValue>;
 
+/**
+ * Modal for managing AI provider and gateway API keys.
+ * - Providers tab: direct API keys for OpenAI, DeepSeek, Anthropic, etc.
+ * - Gateways tab: keys for multi-provider gateways like OpenRouter.
+ * - Keys are stored locally via electron-store (not secure for production).
+ */
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -64,6 +77,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   setGatewaySetting,
   handleSettingsSave,
 }) => {
+  // Track visibility state for password fields (local UI state only)
   const [visibleProviders, setVisibleProviders] = React.useState<ProviderVisibilityMap>(
     () => createInitialVisibilityMap(),
   );
@@ -74,6 +88,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     'providers',
   );
 
+  // Reset UI state when modal closes to avoid leaking visible passwords
   React.useEffect(() => {
     if (!isOpen) {
       setVisibleProviders(createInitialVisibilityMap());
@@ -82,6 +97,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   }, [isOpen]);
 
+  /** Toggle visibility of a provider's API key field. */
   const toggleProviderVisibility = (provider: AiProvider) => {
     setVisibleProviders((previous) => ({
       ...previous,
@@ -89,6 +105,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }));
   };
 
+  /** Toggle visibility of a gateway's API key field. */
   const toggleGatewayVisibility = (gateway: AiGateway) => {
     setVisibleGateways((previous) => ({
       ...previous,
@@ -96,6 +113,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }));
   };
 
+  /** Renders the provider API keys tab with individual text inputs. */
   const renderProviderTab = () => (
     <div className="space-y-2">
       {AI_PROVIDER_METADATA.map(({ value: provider, label, inputPlaceholder }) => {
@@ -132,6 +150,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     </div>
   );
 
+  /**
+   * Renders the gateway settings tab with grouped controls.
+   * - Each gateway gets: API key, "use for all models" checkbox, and optional headers.
+   */
   const renderGatewayTab = () => (
     <div className="space-y-3">
       {AI_GATEWAY_METADATA.map(

@@ -7,6 +7,12 @@ interface PeerConnectionPanelProps {
   role: 'initiator' | 'responder';
 }
 
+/**
+ * Manual WebRTC connection panel with step-by-step UI.
+ * - Initiator: creates offer → receives answer → exchanges ICE candidates
+ * - Responder: receives offer → creates answer → exchanges ICE candidates
+ * - No signaling server: users copy/paste connection data manually
+ */
 export function PeerConnectionPanel({ role }: PeerConnectionPanelProps) {
   const {
     createOffer,
@@ -23,13 +29,17 @@ export function PeerConnectionPanel({ role }: PeerConnectionPanelProps) {
     messages,
   } = useWebRTC();
 
+  // Local input state for pasting remote connection data
   const [remoteOfferInput, setRemoteOfferInput] = useState('');
   const [remoteAnswerInput, setRemoteAnswerInput] = useState('');
   const [remoteCandidateInput, setRemoteCandidateInput] = useState('');
   const [chatInput, setChatInput] = useState('');
+  
+  // UI feedback for copy actions
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
+  // Copy helpers with temporary UI feedback
   const copyToClipboard = async (text: string, field: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -54,8 +64,11 @@ export function PeerConnectionPanel({ role }: PeerConnectionPanelProps) {
     await createOffer();
   };
 
+  /**
+   * Responder flow: must receive offer before creating answer.
+   * - Validates input to prevent confusing error states
+   */
   const handleCreateAnswer = async () => {
-    // For responder: first set the remote offer, then create answer
     if (!remoteOfferInput.trim()) {
       alert('Please paste the offer from Initiator first');
       return;
@@ -105,6 +118,12 @@ export function PeerConnectionPanel({ role }: PeerConnectionPanelProps) {
     }
   };
 
+  /**
+   * Visual feedback for connection health.
+   * - Green: connected and ready
+   * - Amber: attempting connection
+   * - Red/orange: connection issues
+   */
   const getConnectionStateColor = () => {
     switch (connectionState) {
       case 'connected':

@@ -22,6 +22,10 @@ import { useDraftManager } from "@/core/drafts/DraftManagerContext";
 
 type ProviderKeyState = Record<AiProvider, string>;
 
+/**
+ * Form state for a gateway configuration (matches SettingsModal contract).
+ * - Temporary state before persisting to electron-store.
+ */
 type GatewayFormState = {
   apiKey: string;
   useForAllModels: boolean;
@@ -31,6 +35,7 @@ type GatewayFormState = {
 
 type GatewaySettingsState = Record<AiGateway, GatewayFormState>;
 
+/** Loads all provider API keys from persistent storage. */
 const createProviderKeyState = (): ProviderKeyState =>
   AI_PROVIDER_METADATA.reduce((accumulator, provider) => {
     accumulator[provider.value] =
@@ -38,6 +43,7 @@ const createProviderKeyState = (): ProviderKeyState =>
     return accumulator;
   }, {} as ProviderKeyState);
 
+/** Loads all gateway configurations from persistent storage. */
 const createGatewaySettingsState = (): GatewaySettingsState =>
   AI_GATEWAY_METADATA.reduce((accumulator, gateway) => {
     const stored = window.settingsStore.getGateway(gateway.value);
@@ -52,6 +58,12 @@ const createGatewaySettingsState = (): GatewaySettingsState =>
     return accumulator;
   }, {} as GatewaySettingsState);
 
+/**
+ * Top menu bar with file operations, settings, and collaboration controls.
+ * - Manages save/load for `.pak` project files and draft auto-save.
+ * - Provides access to LLM API key settings.
+ * - Displays connection status for WebRTC collaboration.
+ */
 export default function MenuBar() {
   const { i18n } = useTranslation();
   const { nodes, edges, setCanvasState } = useCanvasData();
@@ -80,6 +92,7 @@ export default function MenuBar() {
     () => createGatewaySettingsState(),
   );
 
+  // Reload settings from storage when modal opens to reflect any external changes
   React.useEffect(() => {
     if (isSettingsOpen) {
       setProviderKeys(createProviderKeyState());
@@ -88,6 +101,11 @@ export default function MenuBar() {
     }
   }, [isSettingsOpen]);
 
+  /**
+   * Computes status text for draft/autosave indicator.
+   * - Shows "Working from draft" for unsaved drafts.
+   * - Shows last auto-save time for both drafts and saved files.
+   */
   const draftStatus = useMemo(() => {
     if (!saveTarget) {
       return "";
@@ -113,10 +131,12 @@ export default function MenuBar() {
     return formattedTime ? `Auto-saved ${formattedTime}` : "";
   }, [lastAutoSaveAt, saveTarget]);
 
+  /** Combines draft status, save messages, and settings messages into one line. */
   const combinedStatus = useMemo(() => {
     return [draftStatus, saveMessage, settingsMessage].filter(Boolean).join(" · ");
   }, [draftStatus, saveMessage, settingsMessage]);
 
+  // Listen for Cmd+S / Ctrl+S to open save modal
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const isSaveShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s";
@@ -124,6 +144,7 @@ export default function MenuBar() {
         return;
       }
 
+      // Ignore shortcut if user is typing in an input/textarea/contenteditable
       const target = event.target as HTMLElement | null;
       if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
         return;
@@ -139,6 +160,11 @@ export default function MenuBar() {
     };
   }, []);
 
+  /**
+   * Computes connection status display for WebRTC collaboration.
+   * - Returns label and color class based on connection/channel state.
+   * - Returns null if collaboration has not been initiated.
+   */
   const connectionStatus = useMemo(() => {
     if (dataChannelState === "not-initiated") {
       return null;
@@ -169,6 +195,7 @@ export default function MenuBar() {
     return { label: "Idle", className: "text-muted-foreground" };
   }, [connectionState, dataChannelState]);
 
+  /** Updates a single provider's API key in local state (not persisted until save). */
   const handleProviderKeyChange = useCallback((provider: AiProvider, value: string) => {
     setProviderKeys((previous) => ({
       ...previous,
@@ -176,6 +203,7 @@ export default function MenuBar() {
     }));
   }, []);
 
+  /** Updates a gateway's configuration in local state (not persisted until save). */
   const handleGatewaySettingChange = useCallback(
     (gateway: AiGateway, updates: Partial<GatewayFormState>) => {
       setGatewaySettings((previous) => ({
@@ -189,6 +217,11 @@ export default function MenuBar() {
     [],
   );
 
+  /**
+   * Opens file picker to load a `.pak` project file.
+   * - Deserializes canvas data and replaces current state.
+   * - Triggers manual save event to update draft tracking.
+   */
   const handleLoadClick = useCallback(async () => {
     const filePath = await window.fileSystem.openFile({
       filters: [{ name: "Pak Files", extensions: ["pak"] }],
@@ -221,6 +254,10 @@ export default function MenuBar() {
     }
   }, [setActiveFilePath, setCanvasState]);
 
+  /**
+   * Opens native directory picker for save destination.
+   * - Uses File System Access API (Chromium-based Electron).
+   */
   const handleFolderBrowse = useCallback(async () => {
     try {
       const directoryHandle = await window.fileSystem.openDirectory();
@@ -232,6 +269,7 @@ export default function MenuBar() {
       }
     } catch (error) {
       const domError = error as { name?: string };
+      // User cancelled the picker - don't show error
       if (domError?.name === "AbortError") {
         return;
       }
@@ -239,6 +277,12 @@ export default function MenuBar() {
     }
   }, [setFolderPickerMessage]);
 
+  /**
+   * Saves current canvas state to a `.pak` file.
+   * - Serializes nodes/edges to msgpack format.
+   * - Deletes associated draft after successful save.
+   * - Updates file path tracking for future auto-saves.
+   */
   const handleSaveConfirmation = async () => {
     const safeFileName = saveFileName.trim() || "untitled.pak";
     const safeFolder = saveFolder.trim();
@@ -276,6 +320,11 @@ export default function MenuBar() {
     }
   };
 
+  /**
+   * Saves current canvas state to local draft storage.
+   * - Used for auto-save and manual draft saving.
+   * - Updates existing draft if one is active, otherwise creates new.
+   */
   const handleSaveDraft = useCallback(async () => {
     const sanitizedNodes = JSON.parse(JSON.stringify(nodes));
     const sanitizedEdges = JSON.parse(JSON.stringify(edges));
@@ -301,6 +350,11 @@ export default function MenuBar() {
     }
   }, [activeDraftId, nodes, edges, saveDraft, saveFileName]);
 
+  /**
+   * Persists all API keys to electron-store.
+   * - Saves provider keys (OpenAI, DeepSeek, etc.).
+   * - Saves gateway keys with optional HTTP headers.
+   */
   const handleSettingsSave = () => {
     try {
       AI_PROVIDER_METADATA.forEach(({ value: provider }) => {

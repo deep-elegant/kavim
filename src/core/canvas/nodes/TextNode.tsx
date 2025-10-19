@@ -9,6 +9,7 @@ import { useNodeAsEditor } from '@/helpers/useNodeAsEditor';
 import { DEFAULT_FONT_SIZE, type FontSizeMode } from '@/components/ui/minimal-tiptap/FontSizePlugin';
 import { useAutoFontSizeObserver } from './useAutoFontSizeObserver';
 
+/** Data structure for text nodes with rich text editing capabilities */
 export type TextNodeData = {
   label: string;
   isTyping?: boolean;
@@ -21,6 +22,10 @@ export type TextNode = Node<TextNodeData, 'text-node'>;
 const MIN_WIDTH = 80;
 const MIN_HEIGHT = 32;
 
+/**
+ * Implements DrawableNode interface for creating text nodes via drag interaction.
+ * Nodes auto-enter typing mode after creation for immediate text input.
+ */
 export const textDrawable: DrawableNode<TextNode> = {
   onPaneMouseDown: (id, position) => ({
     id,
@@ -74,24 +79,35 @@ export const textDrawable: DrawableNode<TextNode> = {
       },
       data: {
         ...node.data,
-        isTyping: true,
+        isTyping: true, // Auto-activate typing mode for immediate editing
       },
     };
   },
 };
 
+/**
+ * Renders a rich text node on the canvas.
+ * - Supports markdown-style formatting (headings, lists, bold, etc.).
+ * - Auto-scales font size to fit content when in 'auto' mode.
+ * - Toggles between edit mode (TipTap editor) and display mode (rendered HTML).
+ * - Double-click to enter edit mode.
+ */
 const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => {
   const { editor, isTyping, handleDoubleClick, handleBlur } = useNodeAsEditor({ id, data });
   const label = data.label ?? '';
   const fontSizeMode = data.fontSizeMode ?? 'auto';
   const fontSizeValue = data.fontSizeValue ?? DEFAULT_FONT_SIZE;
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Hidden measurement element for calculating optimal font size
   const measurementRef = useRef<HTMLDivElement>(null);
+  
   const displayHtml = useMemo(
     () => label || '<p>Click to add text</p>',
     [label],
   );
 
+  // Dynamically adjust font size when in auto mode based on container dimensions
   useAutoFontSizeObserver({
     editor,
     mode: fontSizeMode,
@@ -119,6 +135,7 @@ const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => 
       >
         <div ref={containerRef} className="relative h-full w-full">
           {isTyping ? (
+            // Stop propagation to prevent node dragging while editing
             <div className="h-full w-full" onMouseDown={(e) => e.stopPropagation()}>
               <MinimalTiptap
                 editor={editor}
@@ -128,6 +145,7 @@ const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => 
               />
             </div>
           ) : (
+            // Rendered view with prose styles for readable typography
             <div
               className={cn(
                 'prose prose-sm w-full max-w-none',
@@ -146,6 +164,7 @@ const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => 
             />
           )}
 
+          {/* Hidden measurement element with identical styling for font size calculation */}
           <div
             ref={measurementRef}
             aria-hidden

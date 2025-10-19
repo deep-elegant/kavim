@@ -3,10 +3,12 @@ import { type Node, type NodeProps } from '@xyflow/react';
 
 import NodeInteractionOverlay from './NodeInteractionOverlay';
 
+/** Data structure for image nodes on the canvas */
 export type ImageNodeData = {
   src: string;
   alt?: string;
   fileName?: string;
+  /** Original image dimensions (used for aspect ratio calculations) */
   naturalWidth?: number;
   naturalHeight?: number;
 };
@@ -16,6 +18,12 @@ export type ImageNodeType = Node<ImageNodeData, 'image-node'>;
 export const IMAGE_NODE_MIN_WIDTH = 120;
 export const IMAGE_NODE_MIN_HEIGHT = 120;
 
+/**
+ * Displays an image on the canvas with optional filename overlay.
+ * - Uses object-contain to preserve aspect ratio.
+ * - Shows filename badge at bottom when available.
+ * - Lazy loads images for performance with many nodes.
+ */
 const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeType>) => {
   const { src, alt, fileName } = data;
 
@@ -42,6 +50,7 @@ const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeType>) => {
           </div>
         )}
 
+        {/* Show filename badge when available (helps identify images in complex canvases) */}
         {fileName ? (
           <div className="pointer-events-none absolute bottom-2 left-2 right-2 rounded bg-black/50 px-2 py-1 text-xs text-white">
             {fileName}

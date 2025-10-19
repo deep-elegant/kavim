@@ -13,9 +13,16 @@ interface PeerConnectionModalProps {
   role: 'initiator' | 'responder';
 }
 
+/**
+ * Modal dialog for manual WebRTC peer connection setup.
+ * - Different UI flow for initiator vs responder roles
+ * - Used for peer-to-peer connection without a signaling server
+ * - Users manually exchange SDP offers/answers and ICE candidates
+ */
 export function PeerConnectionModal({ isOpen, onClose, role }: PeerConnectionModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
+      {/* Large modal for displaying multiple text areas with connection data */}
       <DialogContent className="max-w-4xl h-[80vh] p-0 overflow-hidden grid grid-rows-[auto,1fr] content-start">
         <DialogHeader className="px-6 pt-6 pb-0">
           <DialogTitle>

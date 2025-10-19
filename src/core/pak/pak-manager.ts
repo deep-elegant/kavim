@@ -2,9 +2,16 @@ import { protocol } from "electron";
 import path from "node:path";
 import type { PakReadResult } from "./types";
 
+/**
+ * Manages custom pak:// protocol for loading assets from .pak archives.
+ * - Registers Electron protocol handler to serve files from in-memory pak.
+ * - Allows rendering `pak://assets/image.png` URLs directly in the canvas.
+ */
+
 let isRegistered = false;
 let activePak: (PakReadResult & { filePath: string }) | null = null;
 
+// Map file extensions to MIME types for proper browser rendering
 const mimeTypes: Record<string, string> = {
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -20,12 +27,18 @@ const guessMimeType = (assetPath: string) => {
   return mimeTypes[extension] ?? "application/octet-stream";
 };
 
+/** Strip protocol and decode URL to get internal pak file path */
 const normalizeRequestPath = (url: string) => {
   const withoutProtocol = url.replace(/^pak:\/\//i, "");
   const decoded = decodeURIComponent(withoutProtocol);
   return decoded.replace(/^\/+/, "");
 };
 
+/**
+ * Registers pak:// protocol handler with Electron.
+ * - Should be called once during app initialization.
+ * - Allows loading assets via pak:// URLs in renderer process.
+ */
 export const registerPakProtocol = () => {
   if (isRegistered) {
     return;
@@ -44,6 +57,7 @@ export const registerPakProtocol = () => {
       return;
     }
 
+    // Serve file with correct MIME type for browser rendering
     respond({
       data: buffer,
       mimeType: guessMimeType(requestPath),
@@ -53,6 +67,11 @@ export const registerPakProtocol = () => {
   isRegistered = true;
 };
 
+/**
+ * Sets the currently active .pak archive for protocol handler.
+ * - Only one pak can be active at a time (matches opened file).
+ * - Set to null to clear (no file open).
+ */
 export const setActivePak = (pak: (PakReadResult & { filePath: string }) | null) => {
   activePak = pak;
 };

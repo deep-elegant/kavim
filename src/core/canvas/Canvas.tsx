@@ -61,6 +61,8 @@ import useCanvasImageNodes, {
 } from './hooks/useCanvasImageNodes';
 import type { CanvasNode, ToolId } from './types';
 
+
+// Available drawing tools in the toolbar
 const tools: { id: ToolId; label: string; icon: ComponentType<{ className?: string }> }[] = [
   { id: 'sticky-note', label: 'Sticky Note', icon: StickyNote },
   { id: 'shape', label: 'Shape', icon: Circle },
@@ -69,6 +71,7 @@ const tools: { id: ToolId; label: string; icon: ComponentType<{ className?: stri
   { id: 'image', label: 'Image', icon: ImageIcon },
 ];
 
+// ReactFlow node type mapping
 const nodeTypes = {
   'sticky-note': StickyNoteNode,
   'shape-node': ShapeNodeComponent,
@@ -77,6 +80,7 @@ const nodeTypes = {
   'image-node': ImageNode,
 };
 
+// Drawable tools implement mouse-based drawing (drag to create)
 const drawableNodeTools: Partial<Record<ToolId, DrawableNode>> = {
   'sticky-note': stickyNoteDrawable,
   shape: shapeDrawable,
@@ -84,17 +88,26 @@ const drawableNodeTools: Partial<Record<ToolId, DrawableNode>> = {
   'prompt-node': aiNodeDrawable,
 };
 
+// Tools that support click-and-drag creation
 const drawingTools: ToolId[] = ['sticky-note', 'shape', 'text', 'prompt-node'];
 
+/**
+ * Main canvas component for the infinite collaborative whiteboard.
+ * - Handles tool selection and mouse-based drawing
+ * - Manages node/edge state with Yjs for real-time collaboration
+ * - Broadcasts user interactions (selection, typing) to remote collaborators
+ */
 const CanvasInner = () => {
   const { nodes, edges, setNodes, setEdges } = useCanvasData();
   const [selectedTool, setSelectedTool] = useState<ToolId | null>(null);
+  // Tracks active drawing operation (node being created by dragging)
   const drawingState = useRef<{
     nodeId: string;
     start: XYPosition;
   } | null>(null);
   const reactFlowWrapperRef = useRef<HTMLDivElement | null>(null);
   const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow();
+  // Prevents redundant broadcasts when selection hasn't changed
   const lastSelectionBroadcastRef = useRef<string | null>(null);
   const currentSelectedNodeRef = useRef<string | null>(null);
   const lastTypingNodeRef = useRef<string | null>(null);
@@ -120,6 +133,7 @@ const CanvasInner = () => {
     [setEdges],
   );
 
+  // Clear typing state when clicking empty canvas (commits edits)
   const onPaneClick = useCallback(() => {
     setNodes((currentNodes) => {
       const hasTypingNode = currentNodes.some((node) => node.data.isTyping);
@@ -143,6 +157,7 @@ const CanvasInner = () => {
     });
   }, [setNodes]);
 
+  // Creates new edges when user drags connection between nodes
   const onConnect = useCallback(
     (params: Connection) =>
       setEdges((eds) =>
@@ -160,6 +175,7 @@ const CanvasInner = () => {
     [setEdges],
   );
 
+  // Handles edge reconnection when user drags edge endpoint to different node
   const handleEdgeUpdate = useCallback(
     (oldEdge: Edge<EditableEdgeData>, newConnection: Connection) => {
       setEdges((currentEdges) => {
@@ -198,6 +214,7 @@ const CanvasInner = () => {
 
   const edgeTypes = useMemo(() => ({ editable: EditableEdge }), []);
 
+  // Calculates center of visible canvas (for placing nodes without mouse position)
   const getCanvasCenterPosition = useCallback((): XYPosition => {
     const bounds = reactFlowWrapperRef.current?.getBoundingClientRect();
     if (!bounds) {
@@ -221,6 +238,7 @@ const CanvasInner = () => {
       getCanvasCenterPosition,
     });
 
+  // Image tool opens file picker, other tools toggle active state
   const handleToolSelect = useCallback(
     (id: ToolId) => {
       if (id === 'image') {
@@ -234,6 +252,7 @@ const CanvasInner = () => {
     [handleAddImageFromDialog],
   );
 
+  // Starts drawing operation when mouse pressed with drawing tool active
   const handlePaneMouseDown = useCallback(
     (event: ReactMouseEvent) => {
       const toolImpl = selectedTool ? drawableNodeTools[selectedTool] : undefined;
@@ -256,9 +275,11 @@ const CanvasInner = () => {
     [screenToFlowPosition, selectedTool, setNodes],
   );
 
+  // Updates node dimensions as user drags during creation
   const handlePaneMouseMove = useCallback(
     (event: ReactMouseEvent) => {
       const current = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      // Broadcast cursor position to remote collaborators
       collaborationPaneMouseMove(current);
 
       if (!drawingState.current || !selectedTool) {
@@ -283,6 +304,7 @@ const CanvasInner = () => {
     [screenToFlowPosition, selectedTool, setNodes, collaborationPaneMouseMove],
   );
 
+  // Tracks cursor for remote collaborators (even when not drawing)
   const handleWrapperMouseMove = useCallback(
     (event: ReactMouseEvent) => {
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
@@ -291,10 +313,12 @@ const CanvasInner = () => {
     [collaborationPaneMouseMove, screenToFlowPosition],
   );
 
+  // Hide cursor from remote collaborators when leaving canvas
   const handleWrapperMouseLeave = useCallback(() => {
     collaborationPaneMouseMove(null);
   }, [collaborationPaneMouseMove]);
 
+  // Finalizes node creation and deselects tool
   const handlePaneMouseUp = useCallback(() => {
     if (!drawingState.current || !selectedTool) {
       return;
@@ -321,6 +345,7 @@ const CanvasInner = () => {
 
   const isDrawingToolSelected = selectedTool != null && drawingTools.includes(selectedTool);
 
+  // Broadcasts which node user has selected to remote collaborators
   const handleSelectionChange = useCallback(
     ({ nodes: selectedNodes }: OnSelectionChangeParams) => {
       const nextSelectedId = selectedNodes[0]?.id ?? null;
@@ -334,6 +359,7 @@ const CanvasInner = () => {
     [broadcastSelection],
   );
 
+  // Broadcasts typing state so remote users see who's editing what
   useEffect(() => {
     const typingNode = nodes.find((node) => node.data && (node.data as { isTyping?: boolean }).isTyping);
     const typingNodeId = typingNode?.id ?? null;
@@ -345,6 +371,7 @@ const CanvasInner = () => {
     lastTypingNodeRef.current = typingNodeId;
     broadcastTyping(typingNodeId);
 
+    // Re-broadcast selection when user stops typing
     if (!typingNodeId && currentSelectedNodeRef.current) {
       broadcastSelection(currentSelectedNodeRef.current);
       lastSelectionBroadcastRef.current = currentSelectedNodeRef.current;

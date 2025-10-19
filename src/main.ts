@@ -2,6 +2,7 @@ import { app, BrowserWindow, Menu } from "electron";
 import Store from "electron-store";
 import registerListeners from "./helpers/ipc/listeners-register";
 
+// Initialize renderer process access to electron-store
 Store.initRenderer();
 // "electron-squirrel-startup" seems broken when packaging with vite
 //import started from "electron-squirrel-startup";
@@ -16,6 +17,11 @@ const APP_TITLE = "DeepElegant - kavim";
 
 app.setName(APP_TITLE);
 
+/**
+ * Resolves asset paths differently for development vs packaged app.
+ * - Packaged: assets are in resourcesPath
+ * - Dev: assets are two levels up from dist
+ */
 function resolveAsset(fileName: string) {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, "assets", fileName);
@@ -24,10 +30,20 @@ function resolveAsset(fileName: string) {
   return path.join(__dirname, "..", "..", "assets", fileName);
 }
 
+/**
+ * Returns platform-specific icon path.
+ * - macOS uses PNG (better quality for Dock)
+ * - Windows uses ICO (supports multiple resolutions)
+ */
 function getIcon() {
   return resolveAsset(process.platform === "darwin" ? "icon.png" : "icon.ico");
 }
 
+/**
+ * Configures macOS-specific UI elements.
+ * - Sets dock icon and about panel
+ * - Creates native menu bar (required on macOS, unlike Windows/Linux)
+ */
 function configureMacApp(iconPath: string) {
   if (process.platform !== "darwin") {
     return;
@@ -38,6 +54,7 @@ function configureMacApp(iconPath: string) {
     applicationName: APP_TITLE,
   });
 
+  // Build standard macOS menu structure with app-specific labels
   const menu = Menu.buildFromTemplate([
     {
       label: APP_TITLE,
@@ -63,6 +80,11 @@ function configureMacApp(iconPath: string) {
   Menu.setApplicationMenu(menu);
 }
 
+/**
+ * Creates the main application window with platform-specific configurations.
+ * - Uses custom title bar for modern UI consistency
+ * - Context isolation enabled for security (separates renderer from Node.js)
+ */
 function createWindow() {
   const preload = path.join(__dirname, "preload.js");
   const iconPath = getIcon();
@@ -75,20 +97,24 @@ function createWindow() {
     title: APP_TITLE,
     webPreferences: {
       devTools: inDevelopment,
-      contextIsolation: true,
+      contextIsolation: true, // Security: isolate renderer from Node.js context
       nodeIntegration: true,
-      nodeIntegrationInSubFrames: false,
+      nodeIntegrationInSubFrames: false, // Prevent iframes from accessing Node APIs
 
       preload: preload,
     },
+    // Custom title bar: macOS uses inset for traffic lights, others fully hidden
     titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
     trafficLightPosition:
       process.platform === "darwin" ? { x: 5, y: 5 } : undefined,
     icon: iconPath,
   });
   mainWindow.setTitle(APP_TITLE);
+  
+  // Register IPC handlers for file system, LLM, drafts, etc.
   registerListeners(mainWindow);
 
+  // Dev: use Vite dev server for HMR, Prod: load built files
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   } else {
@@ -99,6 +125,10 @@ function createWindow() {
   mainWindow.webContents.openDevTools({ mode: 'detach'});
 }
 
+/**
+ * Installs React DevTools for development debugging.
+ * - Non-blocking: failures won't prevent app from running
+ */
 async function installExtensions() {
   try {
     const result = await installExtension(REACT_DEVELOPER_TOOLS);
@@ -110,16 +140,16 @@ async function installExtensions() {
 
 app.whenReady().then(createWindow).then(installExtensions);
 
-//osX only
+// macOS: keep app running when all windows closed (standard behavior)
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     app.quit();
   }
 });
 
+// macOS: recreate window when dock icon clicked with no windows open
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
 });
-//osX only ends

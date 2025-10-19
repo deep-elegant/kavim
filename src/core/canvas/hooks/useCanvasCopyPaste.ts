@@ -4,10 +4,13 @@ import type { Node } from '@xyflow/react';
 
 import type { CanvasNode, ToolId } from '../types';
 
+// Sentinel value to detect when clipboard contains our custom node data
 const COPIED_NODES_MARKER = '__COL_AI_NODES_COPY__';
 
+// Persistent ref to store copied nodes across renders (avoids stale closures)
 const copiedNodesRef: { current: Node<CanvasNode>[] } = { current: [] };
 
+/** Deep clones a node using structuredClone or JSON fallback */
 const cloneNode = <T,>(node: T): T => {
   if (typeof structuredClone === 'function') {
     return structuredClone(node);
@@ -18,6 +21,11 @@ const cloneNode = <T,>(node: T): T => {
 
 const cloneNodes = <T,>(nodes: T[]): T[] => nodes.map((node) => cloneNode(node));
 
+/**
+ * Copies selected nodes to clipboard and internal ref.
+ * - Stores nodes in copiedNodesRef for internal paste operations.
+ * - Writes marker text to system clipboard for detection.
+ */
 export const copyNodesToClipboard = async (
   selectedNodes: Node<CanvasNode>[],
 ): Promise<void> => {
@@ -49,6 +57,12 @@ export interface UseCanvasCopyPasteParams {
   isImageFile: (file: File) => boolean;
 }
 
+/**
+ * Hook for copy/paste functionality on the canvas.
+ * - Handles Ctrl/Cmd+C to copy selected nodes.
+ * - Handles paste events for both nodes and images from clipboard.
+ * - Pastes nodes with offset to avoid stacking on originals.
+ */
 export const useCanvasCopyPaste = ({
   nodes,
   setNodes,
@@ -59,9 +73,11 @@ export const useCanvasCopyPaste = ({
   getFileName,
   isImageFile,
 }: UseCanvasCopyPasteParams) => {
+  // Listen for Ctrl/Cmd+C to copy selected nodes
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
+      // Skip if user is typing in an input field
       if (
         target.tagName === 'INPUT' ||
         target.tagName === 'TEXTAREA' ||
@@ -84,10 +100,17 @@ export const useCanvasCopyPaste = ({
     };
   }, [nodes]);
 
+  /**
+   * Handles paste events from the clipboard.
+   * - Pastes nodes if marker text is detected.
+   * - Pastes images from clipboard files.
+   * - Offsets pasted items to avoid exact overlap.
+   */
   const handlePaste = useCallback(
     async (event: ReactClipboardEvent) => {
       const clipboardText = event.clipboardData.getData('text/plain');
 
+      // Check if we're pasting our own copied nodes
       if (clipboardText === COPIED_NODES_MARKER && copiedNodesRef.current.length > 0) {
         event.preventDefault();
         setSelectedTool(null);
@@ -102,6 +125,7 @@ export const useCanvasCopyPaste = ({
             y: nodeToCopy.position.y + offset,
           };
 
+          // Create new node with fresh ID and offset position
           const newNode: Node<CanvasNode> = {
             ...cloneNode(nodeToCopy),
             id: crypto.randomUUID(),
@@ -111,6 +135,7 @@ export const useCanvasCopyPaste = ({
           };
           newNodes.push(newNode);
 
+          // Update ref so next paste is offset from this paste
           const updatedNode = cloneNode(nodeToCopy);
           updatedNode.position = newPosition;
           updatedCopiedNodes.push(updatedNode);
@@ -127,6 +152,7 @@ export const useCanvasCopyPaste = ({
         return;
       }
 
+      // Check for pasted image files
       const files = Array.from(event.clipboardData?.files ?? []).filter(isImageFile);
 
       if (files.length > 0) {
@@ -148,6 +174,7 @@ export const useCanvasCopyPaste = ({
             const newSrc = await window.fileSystem.readFileAsDataUrl(filePath);
             const fileName = getFileName(filePath);
 
+            // Offset multiple images slightly
             const offset = index * 24;
             await addImageNode(
               newSrc,

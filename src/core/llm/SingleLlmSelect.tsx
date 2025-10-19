@@ -1,3 +1,4 @@
+import React from "react";
 import {
     Select,
     SelectContent,
@@ -11,6 +12,11 @@ import {
 import { FormControl } from "@/components/ui/form";
 import { AI_MODELS } from "@/core/llm/aiModels";
 
+/**
+ * Dropdown selector for AI models.
+ * - Separates models requiring organization verification (beta access, etc.).
+ * - Integrates with react-hook-form via FormControl for validation.
+ */
 export const SingleLlmSelect = ({
     value,
     onChange,
@@ -18,11 +24,12 @@ export const SingleLlmSelect = ({
     value: string;
     onChange: (value: string) => void;
 }) => {
+    // Split models by access level (general availability vs. org-verified beta)
     const unrestrictedModels = AI_MODELS.filter(
-        (model) => !model.requiresOrganizationVerification,
+        (model) => !(model as any).requiresOrganizationVerification,
     );
     const restrictedModels = AI_MODELS.filter(
-        (model) => model.requiresOrganizationVerification,
+        (model) => (model as any).requiresOrganizationVerification,
     );
 
     return (
@@ -41,6 +48,7 @@ export const SingleLlmSelect = ({
                         {option.label}
                     </SelectItem>
                 ))}
+                {/* Visually separate restricted models to set clear expectations */}
                 {restrictedModels.length > 0 && (
                     <>
                         <SelectSeparator />

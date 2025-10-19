@@ -11,17 +11,28 @@ import { DraftManagerProvider } from "./core/drafts/DraftManagerContext";
 import "./localization/i18n";
 import * as Y from "yjs";
 
+/**
+ * Main application component with collaborative canvas editing.
+ * - Creates a single Yjs document instance shared across all providers for real-time sync.
+ * - Provider order matters: WebRTC wraps everything to enable peer communication first.
+ */
 export default function App() {
   const { i18n } = useTranslation();
+  
+  // Memoized to ensure only one Y.Doc instance exists (required for proper collaboration)
   const doc = useMemo(() => new Y.Doc(), []);
 
+  // Sync app language with i18n settings on mount/change
   useEffect(() => {
     updateAppLanguage(i18n);
   }, [i18n]);
 
   return (
+    // WebRTC layer enables real-time collaboration via peer-to-peer connections
     <WebRTCProvider doc={doc}>
+      {/* Draft management for auto-save and recovery */}
       <DraftManagerProvider>
+        {/* Canvas state tied to the shared Y.Doc for CRDT-based sync */}
         <CanvasDataProvider doc={doc}>
           <Toaster />
           <BaseLayout>

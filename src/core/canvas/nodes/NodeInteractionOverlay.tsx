@@ -25,8 +25,12 @@ import { copyNodesToClipboard } from '../hooks/useCanvasCopyPaste';
 import type { CanvasNode } from '../types';
 
 const HANDLE_SIZE = 12;
-const HANDLE_OFFSET = 10;
+const HANDLE_OFFSET = 10; // Distance handles appear outside node bounds
 
+/**
+ * All 4 sides provide both source and target handles for maximum connection flexibility.
+ * This allows users to connect nodes in any direction without being restricted.
+ */
 const handlePositions: { id: string; position: Position }[] = [
   { id: 'top', position: Position.Top },
   { id: 'right', position: Position.Right },
@@ -34,6 +38,7 @@ const handlePositions: { id: string; position: Position }[] = [
   { id: 'left', position: Position.Left },
 ];
 
+/** Position handles just outside the node border for better visual separation */
 const getHandleStyle = (position: Position): React.CSSProperties => {
   switch (position) {
     case Position.Top:
@@ -72,6 +77,18 @@ export type NodeInteractionOverlayProps = PropsWithChildren<{
   contextMenuItems?: React.ReactNode;
 }>;
 
+/**
+ * Wraps all canvas nodes to provide consistent interaction behavior:
+ * - Selection borders (blue for local, colored dashed for remote collaborators)
+ * - Resize handles (only when selected and not editing)
+ * - Connection handles (shown when selected or during connection attempt)
+ * - TipTap toolbar (positioned above node when editing)
+ * - Collaborator presence indicators (colored badges showing who's selecting/typing)
+ * - Context menu with copy functionality
+ * 
+ * Handles are dynamically shown based on connection state to reduce visual clutter
+ * while maintaining discoverability during connection attempts.
+ */
 const NodeInteractionOverlay = ({
   children,
   nodeId,
@@ -87,11 +104,16 @@ const NodeInteractionOverlay = ({
   const { setNodes, getNodes } = useCanvasData();
   const { selecting: remoteSelecting, typing: remoteTyping } =
     useRemoteNodeCollaborators(nodeId);
+  
+  // Show resize handles and selection UI only when selected but not editing
   const shouldShowInteractions = isActive && !isEditing;
+  
   const connectionRadius = useStore(
     (state) => state.connectionRadius ?? DEFAULT_CONNECTION_RADIUS,
   );
   const node = useInternalNode(nodeId);
+  
+  // Track connection state to show handles when user is attempting to connect
   const connectionInfo = useConnection((connection) => ({
     inProgress: connection.inProgress,
     fromNodeId: connection.fromNode?.id ?? null,
@@ -99,6 +121,8 @@ const NodeInteractionOverlay = ({
     pointerPosition: connection.to ?? null,
   }));
   const { inProgress, fromNodeId, toNodeId, pointerPosition } = connectionInfo;
+  
+  // Show handles when pointer is near (even if not hovering) during connection attempts
   const isPointerNearNode = useMemo(() => {
     if (!inProgress || !node || !pointerPosition || toNodeId || !node.width || !node.height) {
       return false;
@@ -114,10 +138,13 @@ const NodeInteractionOverlay = ({
       pointerY <= nodeY + node.height + connectionRadius
     );
   }, [inProgress, node, pointerPosition, toNodeId, connectionRadius]);
+  
+  // Show handles: always when selected, or during connection if involved/nearby
   const shouldShowHandles =
     shouldShowInteractions ||
     (inProgress &&
       (fromNodeId === nodeId || toNodeId === nodeId || isPointerNearNode));
+      
   const containerStyle = useMemo<React.CSSProperties>(
     () => ({
       minWidth,
@@ -126,6 +153,7 @@ const NodeInteractionOverlay = ({
     [minHeight, minWidth],
   );
 
+  // Select only this node when context menu opens (deselect others for clarity)
   const handleContextMenuOpenChange = useCallback(
     (open: boolean) => {
       if (!open) {
@@ -172,6 +200,7 @@ const NodeInteractionOverlay = ({
           )}
           style={containerStyle}
         >
+          {/* Floating toolbar above node (attached via data attribute for portal targeting) */}
           {editor && (
             <div
               data-editor-toolbar
@@ -185,12 +214,14 @@ const NodeInteractionOverlay = ({
 
           {children}
 
+          {/* Local selection border (solid blue) */}
           {shouldShowInteractions && (
             <div className="pointer-events-none absolute inset-0 -m-2">
               <div className="absolute inset-0 rounded-xl border-2 border-sky-500/80" />
             </div>
           )}
 
+          {/* Remote collaborator selection borders (dashed, colored by user) */}
           {remoteSelecting.length > 0 && (
             <div className="pointer-events-none absolute inset-0 -m-3">
               {remoteSelecting.map((collaborator, index) => (
@@ -206,6 +237,7 @@ const NodeInteractionOverlay = ({
             </div>
           )}
 
+          {/* "Typing..." badges for remote collaborators actively editing */}
           {remoteTyping.length > 0 && (
             <div className="pointer-events-none absolute left-1/2 top-0 z-10 -translate-x-1/2">
               {remoteTyping.map((collaborator, index) => (
@@ -226,6 +258,7 @@ const NodeInteractionOverlay = ({
             </div>
           )}
 
+          {/* "Selecting" badges for remote collaborators (only shown if not typing) */}
           {remoteTyping.length === 0 && remoteSelecting.length > 0 && (
             <div className="pointer-events-none absolute left-1/2 top-0 z-10 -translate-x-1/2">
               {remoteSelecting.map((collaborator, index) => (
@@ -246,6 +279,7 @@ const NodeInteractionOverlay = ({
             </div>
           )}
 
+          {/* Corner resize handles (only visible when node selected and not editing) */}
           <NodeResizer
             isVisible={shouldShowInteractions}
             minWidth={minWidth}
@@ -254,6 +288,7 @@ const NodeInteractionOverlay = ({
             handleStyle={sharedHandleStyle}
           />
 
+          {/* Connection handles on all 4 sides (both source and target) */}
           {handlePositions.map(({ id, position }) => (
             <React.Fragment key={id}>
               <Handle

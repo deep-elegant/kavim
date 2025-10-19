@@ -10,6 +10,12 @@ import {
 } from '../components/ui/minimal-tiptap/FontSizePlugin';
 import { useCanvasData } from '@/core/canvas/CanvasDataContext';
 
+/**
+ * Base shape for node data that supports rich text editing.
+ * - `label` holds the HTML content from TipTap editor.
+ * - `isTyping` tracks whether this node is currently being edited.
+ * - Font size properties enable per-node text scaling (auto or fixed).
+ */
 export type NodeDataWithLabel = {
   label: string;
   isTyping?: boolean;
@@ -22,6 +28,13 @@ export type UseNodeAsEditorParams<T extends NodeDataWithLabel> = {
   data: T;
 };
 
+/**
+ * Hook to integrate a TipTap rich text editor into a canvas node.
+ * - Manages editing state (typing vs. draggable).
+ * - Syncs editor content bidirectionally with node data.
+ * - Handles font size persistence (auto-scaling or fixed size).
+ * - Prevents node dragging while typing by toggling `.nodrag` class.
+ */
 export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNodeAsEditorParams<T>) => {
   const { setNodes } = useCanvasData();
   const isTyping = Boolean(data.isTyping);
@@ -29,6 +42,7 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
   const fontSizeMode = data.fontSizeMode ?? 'auto';
   const fontSizeValue = data.fontSizeValue ?? DEFAULT_FONT_SIZE;
 
+  /** Merges partial updates into this node's data object. */
   const updateNodeData = useCallback(
     (partial: Partial<T>) => {
       setNodes((nodes) =>
@@ -48,6 +62,7 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
     [id, setNodes],
   );
 
+  // Stable ref to avoid re-creating TipTap extensions when updateNodeData changes
   const updateNodeDataRef = useRef(updateNodeData);
 
   useEffect(() => {
@@ -58,15 +73,18 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
     updateNodeData({ label: value } as Partial<T>);
   };
 
+  // Freeze initial font settings to prevent re-initializing the editor on every render
   const initialFontSizeMode = useRef<FontSizeMode>(fontSizeMode);
   const initialFontSizeValue = useRef<number>(fontSizeValue);
 
+  /** TipTap extensions: rich text features + custom font size plugin. */
   const extensions = useMemo(
     () => [
       StarterKit.configure({
         bulletList: { keepMarks: true, keepAttributes: false },
         orderedList: { keepMarks: true, keepAttributes: false },
       }),
+      // Custom extension to persist font size changes back to node data
       FontSize.configure({
         initialMode: initialFontSizeMode.current,
         initialValue: initialFontSizeValue.current,
@@ -81,6 +99,7 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
     [],
   );
 
+  /** Initialize TipTap editor with prose styling and update callbacks. */
   const editor = useEditor({
     extensions,
     content: label,
@@ -103,6 +122,7 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
     },
   });
 
+  // Initialize font size properties if missing (e.g., older saved nodes)
   useEffect(() => {
     if (!data.fontSizeMode || typeof data.fontSizeValue !== 'number') {
       updateNodeData({
@@ -112,6 +132,7 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
     }
   }, [data.fontSizeMode, data.fontSizeValue, fontSizeMode, fontSizeValue, updateNodeData]);
 
+  // Sync font size from node data into TipTap editor when changed externally
   useEffect(() => {
     if (!editor) {
       return;
@@ -132,12 +153,14 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
     }
   }, [editor, fontSizeMode, fontSizeValue]);
 
+  // Sync label content into editor when changed externally (e.g., undo/redo, collaboration)
   useEffect(() => {
     if (editor && label !== editor.getHTML()) {
       editor.commands.setContent(label, false);
     }
   }, [label, editor]);
 
+  // Toggle editor editability and `.nodrag` class based on typing state
   useEffect(() => {
     if (editor) {
       editor.setEditable(isTyping);
@@ -150,6 +173,10 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
     }
   }, [isTyping, editor]);
 
+  /**
+   * Sets typing state for this node and clears it for all others.
+   * - Ensures only one node is editable at a time.
+   */
   const setTypingState = useCallback(
     (value: boolean) => {
       setNodes((nodes) =>
@@ -163,6 +190,7 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
               },
             };
           }
+          // Disable typing on all other nodes when entering edit mode
           if (value && node.data?.isTyping) {
             return {
               ...node,
@@ -179,6 +207,7 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
     [id, setNodes],
   );
 
+  /** Enter edit mode on double-click. */
   const handleDoubleClick = (event: MouseEvent<HTMLDivElement>) => {
     event.stopPropagation();
     if (!isTyping) {
@@ -186,13 +215,19 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
     }
   };
 
+  /**
+   * Exit edit mode on blur, unless focus moved to the toolbar or within the editor.
+   * - Prevents accidental exit when clicking formatting buttons.
+   */
   const handleBlur = (event: FocusEvent<HTMLDivElement>) => {
     const relatedTarget = event.relatedTarget as HTMLElement | null;
 
+    // Keep editing if focus moved to the formatting toolbar
     if (relatedTarget?.closest('[data-editor-toolbar]')) {
       return;
     }
 
+    // Keep editing if focus moved to a child element (e.g., nested input)
     if (relatedTarget && event.currentTarget.contains(relatedTarget)) {
       return;
     }

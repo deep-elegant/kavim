@@ -13,7 +13,12 @@ import type { EditableEdgeData } from '../edges/EditableEdge';
 import { arraysShallowEqual } from './arrayUtils';
 
 /**
- * Keeps the Yjs-managed edge order and map mirrored into React state, updating incrementally while skipping redundant renders.
+ * Handles for managing canvas edges synchronized with Yjs CRDT.
+ * - `edges`: Current React state for rendering
+ * - `setEdges`: Updates both local state and Yjs structures atomically
+ * - `getEdges`: Retrieves latest edges without triggering re-render
+ * - `updateLocalEdgesState`: Updates only local state (for remote changes already in Yjs)
+ * - `replaceEdgesInDoc`: Replaces entire Yjs document (for loading saved files)
  */
 export type CanvasEdgeHandles = {
   edges: Edge<EditableEdgeData>[];
@@ -23,6 +28,16 @@ export type CanvasEdgeHandles = {
   replaceEdgesInDoc: (nextEdges: Edge<EditableEdgeData>[]) => void;
 };
 
+/**
+ * Synchronizes ReactFlow edges with a Yjs CRDT for real-time collaboration.
+ * - Maintains ordered edge array and fast lookup map for incremental updates
+ * - Prevents redundant re-renders by comparing arrays before updating state
+ * - Distinguishes local changes from remote changes via transaction origin
+ * 
+ * @param canvasDoc - Yjs document for transactional updates
+ * @param edgeOrder - Yjs array maintaining edge display order
+ * @param edgesMap - Yjs map storing edge data by ID
+ */
 export const useCanvasEdges = ({
   canvasDoc,
   edgeOrder,
@@ -32,14 +47,17 @@ export const useCanvasEdges = ({
   edgeOrder: Y.Array<string>;
   edgesMap: Y.Map<Edge<EditableEdgeData>>;
 }): CanvasEdgeHandles => {
-  // Stores the positions of edges in the local array so observer callbacks can patch updates in place.
+  // Index map enables O(1) updates when remote collaborators modify specific edges
   const edgeIndexRef = useRef<Map<string, number>>(new Map());
-  // Holds the latest edge array snapshot to compare and serve as the source of truth for setters.
+  // Always-current snapshot avoids stale closures in callbacks
   const edgesRef = useRef<Edge<EditableEdgeData>[]>([]);
 
   const compareArrays = useCallback(arraysShallowEqual, []);
 
-  // Rebuilds the ordered edge array from the shared Yjs structures and primes the lookup caches for future updates.
+  /**
+   * Rebuilds edge array from Yjs structures and updates lookup cache.
+   * Used on mount and when order changes significantly (not for individual edge updates).
+   */
   const snapshotEdgesFromDoc = useCallback(() => {
     const order = edgeOrder.toArray();
     const indexMap = new Map<string, number>();
@@ -63,6 +81,10 @@ export const useCanvasEdges = ({
 
   const [edges, setEdgesState] = useState<Edge<EditableEdgeData>[]>(() => snapshotEdgesFromDoc());
 
+  /**
+   * Updates local React state without touching Yjs.
+   * Used when remote changes arrive that are already persisted in Yjs structures.
+   */
   const updateLocalEdgesState = useCallback(
     (nextEdges: Edge<EditableEdgeData>[]) => {
       const indexMap = new Map<string, number>();
@@ -79,7 +101,7 @@ export const useCanvasEdges = ({
 
   useEffect(() => {
     const handleEdgeOrderChange = (event: Y.YArrayEvent<string>) => {
-      // Ignore transactions we initiated because local state is already in sync with those updates.
+      // Skip our own changes - local state is already updated before we write to Yjs
       if (event.transaction?.origin === 'canvas') {
         return;
       }
@@ -89,7 +111,7 @@ export const useCanvasEdges = ({
     };
 
     const handleEdgesMapChange = (event: Y.YMapEvent<Edge<EditableEdgeData>>) => {
-      // Ignore transactions we initiated because local state is already in sync with those updates.
+      // Skip our own changes - local state is already updated before we write to Yjs
       if (event.transaction?.origin === 'canvas') {
         return;
       }
@@ -103,7 +125,7 @@ export const useCanvasEdges = ({
         let changed = false;
 
         event.keysChanged.forEach((key) => {
-          // Use the cached index map to update only the affected edge positions without rebuilding the entire array.
+          // Patch only the changed edges using cached index - avoids full array rebuild
           const index = edgeIndexRef.current.get(key);
           if (index === undefined) {
             return;
@@ -139,6 +161,11 @@ export const useCanvasEdges = ({
     };
   }, [compareArrays, edgeOrder, edgesMap, snapshotEdgesFromDoc]);
 
+  /**
+   * Updates edges in both React state and Yjs document atomically.
+   * - Computes minimal changes to avoid unnecessary network traffic
+   * - Deletes removed edges, updates modified ones, preserves unchanged ones
+   */
   const setEdges = useCallback<Dispatch<SetStateAction<Edge<EditableEdgeData>[]>>>(
     (updater) => {
       const current = edgesRef.current;
@@ -156,7 +183,7 @@ export const useCanvasEdges = ({
       updateLocalEdgesState(next);
 
       canvasDoc.transact(() => {
-        // Align the shared order array with the requested edges, delete removed edges, and only rewrite map entries that changed.
+        // Sync Yjs structures with new edge list, minimizing writes
         const nextIds = next.map((edge) => edge.id);
         const currentOrder = current.map((edge) => edge.id);
         const orderChanged =
@@ -173,12 +200,14 @@ export const useCanvasEdges = ({
         const previousById = new Map(current.map((edge) => [edge.id, edge]));
         const nextIdSet = new Set(nextIds);
 
+        // Remove edges that no longer exist
         Array.from(edgesMap.keys()).forEach((id) => {
           if (!nextIdSet.has(id)) {
             edgesMap.delete(id);
           }
         });
 
+        // Update only edges that changed (by reference)
         next.forEach((edge) => {
           if (previousById.get(edge.id) !== edge) {
             edgesMap.set(edge.id, edge);
@@ -189,8 +218,13 @@ export const useCanvasEdges = ({
     [canvasDoc, edgeOrder, edgesMap, updateLocalEdgesState],
   );
 
+  // Returns current edges without triggering re-render (for callbacks)
   const getEdges = useCallback(() => edgesRef.current, []);
 
+  /**
+   * Replaces entire Yjs document with new edges.
+   * Used when loading a saved file - doesn't update React state (caller handles that).
+   */
   const replaceEdgesInDoc = useCallback(
     (nextEdges: Edge<EditableEdgeData>[]) => {
       edgeOrder.delete(0, edgeOrder.length);
