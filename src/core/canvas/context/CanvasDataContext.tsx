@@ -4,6 +4,11 @@ import { useCanvasDataState, type CanvasDataContextValue } from '../state/useCan
 
 const CanvasDataContext = createContext<CanvasDataContextValue | undefined>(undefined);
 
+/**
+ * Provides canvas data state (nodes, edges) to the component tree.
+ * - Wraps Yjs-backed collaborative state management.
+ * - Accepts an optional Yjs doc for shared editing sessions.
+ */
 export const CanvasDataProvider = ({
   doc,
   children,
@@ -16,6 +21,10 @@ export const CanvasDataProvider = ({
   return <CanvasDataContext.Provider value={value}>{children}</CanvasDataContext.Provider>;
 };
 
+/**
+ * Hook to access canvas data (nodes, edges, setters) within any child component.
+ * - Must be used inside a CanvasDataProvider or will throw.
+ */
 export const useCanvasData = () => {
   const context = useContext(CanvasDataContext);
   if (!context) {

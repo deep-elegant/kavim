@@ -25,10 +25,13 @@ import {
   type ColorStyle,
 } from '@/components/ui/simple-color-picker';
 
+/** Determines what to show at edge endpoints */
 export type EdgeMarkerType = 'none' | 'arrow';
 
+/** Visual style of the edge line */
 export type EdgeLineStyle = 'regular' | 'dashed' | 'bolder';
 
+/** Data stored per edge for customization and spline control */
 export type EditableEdgeData = {
   controlPoints: XYPosition[];
   sourceMarker?: EdgeMarkerType;
@@ -45,13 +48,17 @@ const DEFAULT_STROKE = '#000000';
 const DEFAULT_MARKER: EdgeMarkerType = 'none';
 const DEFAULT_STYLE_TYPE: EdgeLineStyle = 'regular';
 const CONTROL_POINT_RADIUS = 6;
+// Larger hit area makes control points easier to grab
 const CONTROL_POINT_HIT_RADIUS = 14;
 const SPLINE_TENSION = 1;
+// Toolbar appears above the highest point of the edge
 const EDGE_TOOLBAR_VERTICAL_OFFSET = 32;
 
+// SVG paths for arrow markers pointing left and right
 const ARROW_HEAD_LEFT = 'M12,0 L12,12 L0,6 z';
 const ARROW_HEAD_RIGHT = 'M0,0 L0,12 L12,6 z';
 
+/** Factory for initial edge data with sensible defaults */
 export const createDefaultEditableEdgeData = (): EditableEdgeData => ({
   controlPoints: [],
   sourceMarker: DEFAULT_MARKER,
@@ -60,12 +67,17 @@ export const createDefaultEditableEdgeData = (): EditableEdgeData => ({
   color: DEFAULT_STROKE,
 });
 
+/** Euclidean distance between two points */
 const distanceBetween = (a: Point, b: Point) => {
   const dx = a.x - b.x;
   const dy = a.y - b.y;
   return Math.sqrt(dx * dx + dy * dy);
 };
 
+/**
+ * Shortest distance from point p to line segment a-b.
+ * - Projects p onto the line, clamped to the segment.
+ */
 const distancePointToSegment = (p: Point, a: Point, b: Point) => {
   const lengthSquared = Math.pow(distanceBetween(a, b), 2);
   if (lengthSquared === 0) {
@@ -88,6 +100,11 @@ const distancePointToSegment = (p: Point, a: Point, b: Point) => {
   return distanceBetween(p, projection);
 };
 
+/**
+ * Builds an SVG path for a smooth spline through the given points.
+ * - Uses cubic Bezier curves (Catmull-Rom style) for smooth transitions.
+ * - Handles edge cases (0, 1, or 2 points) with simpler paths.
+ */
 const buildSmoothPath = (points: Point[]) => {
   if (points.length === 0) {
     return '';
@@ -123,6 +140,13 @@ const buildSmoothPath = (points: Point[]) => {
   return pathCommands.join(' ');
 };
 
+/**
+ * Renders a customizable edge with smooth curves and interactive control points.
+ * - Users can double-click the path to add control points.
+ * - Control points are draggable when selected.
+ * - Double-clicking a control point removes it.
+ * - Toolbar shows styling options when edge is selected.
+ */
 const EditableEdge = memo(
   ({
     id,
@@ -140,6 +164,7 @@ const EditableEdge = memo(
     const { setEdges, screenToFlowPosition } = useReactFlow();
     const store = useStoreApi();
 
+    // Determine arrow icon orientation based on connection direction
     const isSourceLeft = sourceX < targetX;
     let [sourceMarkerPath, targetMarkerPath] = [ARROW_HEAD_LEFT, ARROW_HEAD_RIGHT];
 
@@ -149,6 +174,7 @@ const EditableEdge = memo(
     const styleType = data?.styleType ?? DEFAULT_STYLE_TYPE;
     const edgeColor = data?.color ?? DEFAULT_STROKE;
 
+    // Combine source, control points, and target into a single point list
     const points = useMemo<Point[]>(
       () => [
         { x: sourceX, y: sourceY },
@@ -170,6 +196,7 @@ const EditableEdge = memo(
     const markerStartUrl = showSourceArrow ? `url(#${markerStartId})` : undefined;
     const markerEndUrl = showTargetArrow ? `url(#${markerEndId})` : undefined;
 
+    // Position toolbar above the highest point (or center if multiple at same height)
     const toolbarPosition = useMemo(() => {
       if (points.length === 0) {
         return { x: 0, y: 0 } satisfies XYPosition;
@@ -209,6 +236,7 @@ const EditableEdge = memo(
       [edgeColor, strokeDasharray, style],
     );
 
+    /** Utility to update just the control points array for this edge */
     const updateControlPoints = useCallback(
       (updater: (current: XYPosition[]) => XYPosition[]) => {
         setEdges((currentEdges) =>
@@ -231,6 +259,7 @@ const EditableEdge = memo(
       [id, setEdges],
     );
 
+    /** Utility to update any part of edge data (style, markers, etc.) */
     const updateEdgeData = useCallback(
       (updater: (current: EditableEdgeData) => EditableEdgeData) => {
         setEdges((currentEdges) =>
@@ -409,6 +438,11 @@ const EditableEdge = memo(
       isSourceLeft,
     ]);
 
+    /**
+     * Handles drag interaction on control points.
+     * - Uses pointer capture for reliable tracking across the viewport.
+     * - Updates control point positions in real-time as user drags.
+     */
     const handleControlPointerDown = useCallback(
       (event: ReactPointerEvent<SVGCircleElement>, index: number) => {
         event.stopPropagation();
@@ -453,6 +487,7 @@ const EditableEdge = memo(
       [screenToFlowPosition, updateControlPoints],
     );
 
+    /** Double-clicking a control point removes it */
     const handleControlDoubleClick = useCallback(
       (event: ReactMouseEvent<SVGCircleElement>, index: number) => {
         event.stopPropagation();
@@ -463,6 +498,11 @@ const EditableEdge = memo(
       [updateControlPoints],
     );
 
+    /**
+     * Double-clicking the edge path adds a new control point at that location.
+     * - Finds closest segment to insert position for natural curve control.
+     * - Automatically selects the edge after adding a point.
+     */
     const handlePathDoubleClick = useCallback(
       (event: ReactMouseEvent<SVGPathElement>) => {
         if (event.button !== 0) {
@@ -474,6 +514,7 @@ const EditableEdge = memo(
           y: event.clientY,
         });
 
+        // Find which segment the click is closest to
         const segmentIndex = (() => {
           let bestIndex = 0;
           let bestDistance = Number.POSITIVE_INFINITY;
@@ -508,6 +549,7 @@ const EditableEdge = memo(
 
     return (
       <>
+        {/* SVG marker definitions for arrow heads */}
         <defs>
           {showSourceArrow && (
             <marker
@@ -537,6 +579,7 @@ const EditableEdge = memo(
           )}
         </defs>
         <g>
+          {/* Visible edge path */}
           <path
             className="react-flow__edge-path"
             d={path}
@@ -549,6 +592,7 @@ const EditableEdge = memo(
             markerEnd={markerEndUrl ?? markerEnd}
             style={edgeStyle}
           />
+          {/* Invisible wider path for easier clicking */}
           <path
             className="react-flow__edge-interaction"
             d={path}
@@ -558,9 +602,11 @@ const EditableEdge = memo(
             onDoubleClick={handlePathDoubleClick}
             style={{ cursor: 'pointer' }}
           />
+          {/* Render draggable control points when selected */}
           {selected &&
             controlPoints.map((point, index) => (
               <g key={`${id}-control-${index}`}>
+                {/* Larger invisible hit area for easier grabbing */}
                 <circle
                   cx={point.x}
                   cy={point.y}
@@ -574,6 +620,7 @@ const EditableEdge = memo(
                   }
                   style={{ cursor: 'grab' }}
                 />
+                {/* Visible control point circle */}
                 <circle
                   cx={point.x}
                   cy={point.y}
@@ -592,6 +639,7 @@ const EditableEdge = memo(
               </g>
             ))}
         </g>
+        {/* Floating toolbar for edge styling (only visible when selected) */}
         {selected && (
           <EdgeLabelRenderer>
             <div

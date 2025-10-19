@@ -4,6 +4,7 @@ import type { Node, XYPosition } from '@xyflow/react';
 import { IMAGE_NODE_MIN_HEIGHT, IMAGE_NODE_MIN_WIDTH, type ImageNodeType } from '../nodes/ImageNode';
 import type { CanvasNode, ToolId } from '../types';
 
+/** File filter for image selection dialog */
 export const IMAGE_FILE_FILTERS = [
   {
     name: 'Images',
@@ -11,8 +12,13 @@ export const IMAGE_FILE_FILTERS = [
   },
 ];
 
+/** Maximum dimension (width or height) for displayed images - scales down larger images */
 export const MAX_IMAGE_DIMENSION = 480;
 
+/**
+ * Loads image from src and returns its natural dimensions.
+ * - Used to calculate proper aspect ratios before displaying.
+ */
 export const loadImageDimensions = (src: string) =>
   new Promise<{ width: number; height: number }>((resolve, reject) => {
     const image = new Image();
@@ -25,6 +31,7 @@ export const loadImageDimensions = (src: string) =>
     image.src = src;
   });
 
+/** Converts a File to a data URL for embedding */
 export const readFileAsDataUrl = (file: File) =>
   new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
@@ -41,11 +48,16 @@ export const readFileAsDataUrl = (file: File) =>
     reader.readAsDataURL(file);
   });
 
+/** Extracts filename from full path (works with both / and \ separators) */
 export const getFileName = (filePath: string) => {
   const segments = filePath.split(/[\/\\]/);
   return segments[segments.length - 1] ?? filePath;
 };
 
+/**
+ * Checks if a File is an image based on MIME type or extension.
+ * - Handles cases where MIME type may be missing.
+ */
 export const isImageFile = (file: File) => {
   if (file.type.startsWith('image/')) {
     return true;
@@ -64,12 +76,25 @@ export interface UseCanvasImageNodesParams {
   getCanvasCenterPosition: () => XYPosition;
 }
 
+/**
+ * Hook for adding and managing image nodes on the canvas.
+ * - Provides method to add image nodes programmatically.
+ * - Handles file dialog for image selection.
+ * - Supports drag-and-drop image insertion.
+ * - Auto-scales images to fit within MAX_IMAGE_DIMENSION while preserving aspect ratio.
+ */
 export const useCanvasImageNodes = ({
   setNodes,
   setSelectedTool,
   screenToFlowPosition,
   getCanvasCenterPosition,
 }: UseCanvasImageNodesParams) => {
+  /**
+   * Adds a new image node to the canvas.
+   * - Loads image to determine natural dimensions.
+   * - Scales to fit within MAX_IMAGE_DIMENSION while respecting min sizes.
+   * - Automatically selects the new node.
+   */
   const addImageNode = useCallback(
     async (src: string, position: XYPosition, fileName?: string) => {
       let naturalWidth = 0;
@@ -92,6 +117,7 @@ export const useCanvasImageNodes = ({
 
           const aspectRatio = naturalWidth / naturalHeight || 1;
 
+          // Ensure minimum dimensions while maintaining aspect ratio
           if (height < IMAGE_NODE_MIN_HEIGHT) {
             height = IMAGE_NODE_MIN_HEIGHT;
             width = Math.max(IMAGE_NODE_MIN_WIDTH, Math.round(height * aspectRatio));
@@ -137,6 +163,7 @@ export const useCanvasImageNodes = ({
     [setNodes],
   );
 
+  /** Opens file dialog to select and add an image */
   const handleAddImageFromDialog = useCallback(async () => {
     try {
       const filePath = await window.fileSystem.openFile({ filters: IMAGE_FILE_FILTERS });
@@ -154,6 +181,7 @@ export const useCanvasImageNodes = ({
     }
   }, [addImageNode, getCanvasCenterPosition]);
 
+  /** Required to allow dropping files on the canvas */
   const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     if (event.dataTransfer) {
@@ -161,6 +189,12 @@ export const useCanvasImageNodes = ({
     }
   }, []);
 
+  /**
+   * Handles dropping image files onto the canvas.
+   * - Filters out non-image files.
+   * - Places images at drop position.
+   * - Offsets multiple images to avoid stacking.
+   */
   const handleDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
