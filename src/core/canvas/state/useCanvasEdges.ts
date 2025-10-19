@@ -12,6 +12,9 @@ import type * as Y from 'yjs';
 import type { EditableEdgeData } from '../edges/EditableEdge';
 import { arraysShallowEqual } from './arrayUtils';
 
+/**
+ * Keeps the Yjs-managed edge order and map mirrored into React state, updating incrementally while skipping redundant renders.
+ */
 export type CanvasEdgeHandles = {
   edges: Edge<EditableEdgeData>[];
   setEdges: Dispatch<SetStateAction<Edge<EditableEdgeData>[]>>;
@@ -29,11 +32,14 @@ export const useCanvasEdges = ({
   edgeOrder: Y.Array<string>;
   edgesMap: Y.Map<Edge<EditableEdgeData>>;
 }): CanvasEdgeHandles => {
+  // Stores the positions of edges in the local array so observer callbacks can patch updates in place.
   const edgeIndexRef = useRef<Map<string, number>>(new Map());
+  // Holds the latest edge array snapshot to compare and serve as the source of truth for setters.
   const edgesRef = useRef<Edge<EditableEdgeData>[]>([]);
 
   const compareArrays = useCallback(arraysShallowEqual, []);
 
+  // Rebuilds the ordered edge array from the shared Yjs structures and primes the lookup caches for future updates.
   const snapshotEdgesFromDoc = useCallback(() => {
     const order = edgeOrder.toArray();
     const indexMap = new Map<string, number>();
@@ -73,6 +79,7 @@ export const useCanvasEdges = ({
 
   useEffect(() => {
     const handleEdgeOrderChange = (event: Y.YArrayEvent<string>) => {
+      // Ignore transactions we initiated because local state is already in sync with those updates.
       if (event.transaction?.origin === 'canvas') {
         return;
       }
@@ -82,6 +89,7 @@ export const useCanvasEdges = ({
     };
 
     const handleEdgesMapChange = (event: Y.YMapEvent<Edge<EditableEdgeData>>) => {
+      // Ignore transactions we initiated because local state is already in sync with those updates.
       if (event.transaction?.origin === 'canvas') {
         return;
       }
@@ -95,6 +103,7 @@ export const useCanvasEdges = ({
         let changed = false;
 
         event.keysChanged.forEach((key) => {
+          // Use the cached index map to update only the affected edge positions without rebuilding the entire array.
           const index = edgeIndexRef.current.get(key);
           if (index === undefined) {
             return;
@@ -147,6 +156,7 @@ export const useCanvasEdges = ({
       updateLocalEdgesState(next);
 
       canvasDoc.transact(() => {
+        // Align the shared order array with the requested edges, delete removed edges, and only rewrite map entries that changed.
         const nextIds = next.map((edge) => edge.id);
         const currentOrder = current.map((edge) => edge.id);
         const orderChanged =
