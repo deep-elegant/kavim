@@ -17,12 +17,14 @@ import {
 import { DEFAULT_FONT_SIZE, type FontSizeMode } from '@/components/ui/minimal-tiptap/FontSizePlugin';
 import { useAutoFontSizeObserver } from './useAutoFontSizeObserver';
 
+
+/** Data structure for sticky notes with color theming and font sizing */
 export type StickyNoteData = {
   label: string;
-  isTyping?: boolean;
+  isTyping?: boolean; // UI-only flag, not synced to Yjs
   color?: ColorStyle;
   fontSizeMode?: FontSizeMode;
-  fontSizeValue?: number;
+  fontSizeValue?: number; // Transient when mode is 'auto'
 };
 
 export type StickyNoteNodeType = Node<StickyNoteData, 'sticky-note'>;
@@ -30,12 +32,17 @@ export type StickyNoteNodeType = Node<StickyNoteData, 'sticky-note'>;
 const MIN_WIDTH = 100;
 const MIN_HEIGHT = 30;
 
+/** Classic sticky note yellow - provides familiar UX for quick notes */
 const defaultColor: ColorStyle = {
   background: '#ffe83f',
   border: '#E6D038',
   text: '#000000',
 };
 
+/**
+ * Implements drag-to-create behavior for sticky notes.
+ * Users draw a rectangle on canvas, then it auto-enters typing mode.
+ */
 export const stickyNoteDrawable: DrawableNode<StickyNoteNodeType> = {
   onPaneMouseDown: (id, position) => ({
     id,
@@ -96,12 +103,18 @@ export const stickyNoteDrawable: DrawableNode<StickyNoteNodeType> = {
       },
       data: {
         ...node.data,
-        isTyping: true,
+        isTyping: true, // Auto-focus for immediate text input
       },
     };
   },
 };
 
+/**
+ * Renders a color-themeable sticky note with rich text editing.
+ * - Toggles between TipTap editor (typing mode) and rendered HTML (display mode).
+ * - Auto-scales font size to fit content within the note bounds.
+ * - Includes color picker in toolbar for quick theme changes.
+ */
 const StickyNoteNode = memo(
   ({ id, data, selected }: NodeProps<StickyNoteNodeType>) => {
     const { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData } =
@@ -111,7 +124,10 @@ const StickyNoteNode = memo(
     const fontSizeMode = data.fontSizeMode ?? 'auto';
     const fontSizeValue = data.fontSizeValue ?? DEFAULT_FONT_SIZE;
     const containerRef = useRef<HTMLDivElement>(null);
+    
+    // Hidden element used to measure rendered text dimensions for auto-sizing
     const measurementRef = useRef<HTMLDivElement>(null);
+    
     const displayHtml = useMemo(
       () => label || '<p>Click to add text</p>',
       [label],
@@ -132,6 +148,7 @@ const StickyNoteNode = memo(
       [updateNodeData],
     );
 
+    // Extend default formatting tools (bold, italic, etc.) with color picker
     const toolbarItems = useMemo<ToolbarItem[]>(
       () => [
         ...defaultToolbarItems,
@@ -217,6 +234,7 @@ const StickyNoteNode = memo(
                 />
               )}
 
+              {/* Hidden clone of content with identical styles for measuring overflow */}
               <div
                 ref={measurementRef}
                 aria-hidden

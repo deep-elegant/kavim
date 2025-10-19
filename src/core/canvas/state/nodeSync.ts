@@ -17,11 +17,17 @@ const asNodeDataRecord = (value: Node['data']): NodeDataRecord | undefined => {
  */
 export const TRANSIENT_NODE_DATA_KEYS = new Set(['isTyping', 'isEditing', 'isActive']);
 
+/**
+ * Determines if a key should be excluded from Yjs sync.
+ * - Always excludes UI-only flags (isTyping, isEditing, isActive).
+ * - Excludes fontSizeValue when mode is 'auto' (it's computed, not authored).
+ */
 export const isTransientNodeDataKey = (key: string, data?: Node['data']) => {
   if (TRANSIENT_NODE_DATA_KEYS.has(key)) {
     return true;
   }
 
+  // Auto-calculated font size shouldn't be synced; each client computes their own
   if (key === 'fontSizeValue' && data && typeof data === 'object') {
     const { fontSizeMode } = data as { fontSizeMode?: unknown };
     if (fontSizeMode === 'auto') {
@@ -51,7 +57,7 @@ export const sanitizeNodeDataForSync = (data: Node['data']) => {
   });
 
   if (!hasTransientKey) {
-    return data;
+    return data; // Nothing to strip, return original to avoid unnecessary clones
   }
 
   return Object.fromEntries(sanitizedEntries) as Node['data'];
@@ -65,7 +71,7 @@ export const sanitizeNodeForSync = (node: Node): Node => {
   const sanitizedData = sanitizeNodeDataForSync(node.data);
 
   if (sanitizedData === node.data && node.selected === undefined) {
-    return node;
+    return node; // No changes needed, return original
   }
 
   const { selected: _selected, ...rest } = node;
@@ -81,7 +87,7 @@ export const sanitizeNodeForSync = (node: Node): Node => {
  */
 export type MutableNodeRecord = {
   node: Node;
-  data: NodeDataRecord;
+  data: NodeDataRecord; // Mutable reference for efficient in-place updates
 };
 
 export const createMutableNodeRecord = (node: Node): MutableNodeRecord => {
@@ -98,6 +104,10 @@ export const createMutableNodeRecord = (node: Node): MutableNodeRecord => {
   };
 };
 
+/**
+ * Restores transient UI flags from previous node state.
+ * Returns true if any keys were restored (indicating the object was mutated).
+ */
 export const restoreTransientKeys = (
   mutableData: NodeDataRecord,
   previousData?: Node['data'],
@@ -124,6 +134,10 @@ export const restoreTransientKeys = (
   return restored;
 };
 
+/**
+ * Restores auto-calculated font size from previous state when still in auto mode.
+ * Prevents losing locally computed value when receiving updates from Yjs.
+ */
 export const restoreAutoFontSize = (
   mutableData: NodeDataRecord,
   previousData?: Node['data'],
@@ -135,7 +149,7 @@ export const restoreAutoFontSize = (
 
   const previousMode = previousRecord['fontSizeMode'];
   if (previousMode !== 'auto') {
-    return false;
+    return false; // Was manual, don't restore
   }
 
   const previousValue = previousRecord['fontSizeValue'];
@@ -145,11 +159,11 @@ export const restoreAutoFontSize = (
 
   const nextMode = mutableData['fontSizeMode'];
   if (typeof nextMode === 'string' && nextMode !== 'auto') {
-    return false;
+    return false; // Switched to manual, use new value
   }
 
   if (typeof mutableData['fontSizeValue'] === 'number') {
-    return false;
+    return false; // Already has a value from Yjs
   }
 
   mutableData['fontSizeMode'] = 'auto';
@@ -157,6 +171,10 @@ export const restoreAutoFontSize = (
   return true;
 };
 
+/**
+ * Reconciles the selected flag between incoming doc node and previous local state.
+ * Keeps local selection state stable during remote updates.
+ */
 export const reconcileSelectedFlag = (mutableNode: Node, previousNode: Node): boolean => {
   if (previousNode.selected !== undefined) {
     if (mutableNode.selected !== previousNode.selected) {
@@ -175,6 +193,12 @@ export const reconcileSelectedFlag = (mutableNode: Node, previousNode: Node): bo
   return false;
 };
 
+/**
+ * Main entry point for merging Yjs document node with local transient state.
+ * - Restores UI flags (isTyping, selection).
+ * - Preserves auto-calculated font sizes.
+ * - Returns original node if no restoration was needed (preserves identity).
+ */
 export const restoreTransientNodeState = (docNode: Node, previousNode?: Node) => {
   if (!previousNode) {
     return docNode;

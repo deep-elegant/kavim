@@ -12,12 +12,13 @@ import type * as Y from 'yjs';
 import { arraysShallowEqual } from './arrayUtils';
 import { restoreTransientNodeState, sanitizeNodeForSync } from './nodeSync';
 
+/** API for managing nodes with Yjs synchronization and local state optimization */
 export type CanvasNodeHandles = {
-  nodes: Node[];
-  setNodes: Dispatch<SetStateAction<Node[]>>;
-  getNodes: () => Node[];
-  updateLocalNodesState: (nextNodes: Node[]) => void;
-  replaceNodesInDoc: (nextNodes: Node[]) => void;
+  nodes: Node[]; // React state, triggers re-renders
+  setNodes: Dispatch<SetStateAction<Node[]>>; // ReactFlow-compatible setter
+  getNodes: () => Node[]; // Ref-based getter for callbacks (avoids stale closures)
+  updateLocalNodesState: (nextNodes: Node[]) => void; // Internal: sync refs without Yjs write
+  replaceNodesInDoc: (nextNodes: Node[]) => void; // Internal: bulk replace in Yjs
 };
 
 export const useCanvasNodes = ({
@@ -41,9 +42,11 @@ export const useCanvasNodes = ({
 
   const compareArrays = useCallback(arraysShallowEqual, []);
 
-  // Recreates the local node snapshot from the shared document while restoring
-  // transient UI-only fields from the previous state and reusing cached
-  // serializations whenever possible to minimize JSON work.
+  /**
+   * Reconstructs local node array from Yjs document.
+   * - Restores transient UI state from previous snapshot.
+   * - Reuses serialization cache to minimize JSON stringify calls.
+   */
   const snapshotNodesFromDoc = useCallback(() => {
     const order = nodeOrder.toArray();
     const indexMap = new Map<string, number>();
@@ -63,6 +66,7 @@ export const useCanvasNodes = ({
       nextNodes.push(restoredNode);
       indexMap.set(id, index);
 
+      // Reuse existing serialization if available (optimization)
       const existingSerialization = previousSerialization.get(id);
       if (existingSerialization !== undefined) {
         nextSerialization.set(id, existingSerialization);
@@ -80,6 +84,10 @@ export const useCanvasNodes = ({
 
   const [nodes, setNodesState] = useState<Node[]>(() => snapshotNodesFromDoc());
 
+  /**
+   * Updates local node state and refs without writing to Yjs.
+   * Used for optimistic updates before sync, or when receiving bulk replacements.
+   */
   const updateLocalNodesState = useCallback(
     (nextNodes: Node[]) => {
       const indexMap = new Map<string, number>();
@@ -94,21 +102,22 @@ export const useCanvasNodes = ({
     [compareArrays],
   );
 
+  // Listen to Yjs events and sync to React state
   useEffect(() => {
-    // Ignore events originating from this provider's transactions to avoid
-    // redundant re-renders when we already updated local state optimistically.
+    // Order change: full rebuild needed (nodes added/removed/reordered)
     const handleNodeOrderChange = (event: Y.YArrayEvent<string>) => {
       if (event.transaction?.origin === 'canvas') {
-        return;
+        return; // Skip our own writes to avoid feedback loop
       }
 
       const snapshot = snapshotNodesFromDoc();
       setNodesState((current) => (compareArrays(current, snapshot) ? current : snapshot));
     };
 
+    // Map change: targeted updates for modified nodes
     const handleNodesMapChange = (event: Y.YMapEvent<Node>) => {
       if (event.transaction?.origin === 'canvas') {
-        return;
+        return; // Skip our own writes
       }
 
       if (event.keysChanged.size === 0) {
@@ -163,6 +172,12 @@ export const useCanvasNodes = ({
     };
   }, [compareArrays, nodeOrder, nodesMap, snapshotNodesFromDoc]);
 
+  /**
+   * ReactFlow-compatible setter for nodes.
+   * - Updates local state optimistically.
+   * - Writes sanitized changes to Yjs in a transaction.
+   * - Uses serialization cache to skip unchanged nodes.
+   */
   const setNodes = useCallback<Dispatch<SetStateAction<Node[]>>>(
     (updater) => {
       const current = nodesRef.current;
@@ -176,11 +191,7 @@ export const useCanvasNodes = ({
         return;
       }
 
-      // First update local state optimistically, then reconcile the Yjs map in
-      // a transaction. The serialization map helps us detect whether a node's
-      // structural payload actually changed to avoid unnecessary writes, while
-      // sanitizedUpdates/serializedUpdates ensure we only push sanitized data to
-      // the document and retain transient selection flags on identical nodes.
+      // Optimistically update local state first (immediate UI feedback)
       updateLocalNodesState(next);
 
       const nextIds = next.map((node) => node.id);
@@ -189,6 +200,7 @@ export const useCanvasNodes = ({
       const nextIdSet = new Set(nextIds);
       const removedIds: string[] = [];
 
+      // Collect IDs of deleted nodes
       currentIds.forEach((id) => {
         if (!nextIdSet.has(id)) {
           removedIds.push(id);
@@ -198,11 +210,13 @@ export const useCanvasNodes = ({
       const sanitizedUpdates = new Map<string, Node>();
       const serializedUpdates = new Map<string, string>();
 
+      // Identify nodes that actually changed (skip identical serializations)
       next.forEach((node) => {
         const sanitized = sanitizeNodeForSync(node);
         const previousIndex = currentIndex.get(node.id);
 
         if (previousIndex === undefined) {
+          // New node, add to updates
           sanitizedUpdates.set(node.id, sanitized);
           serializedUpdates.set(node.id, JSON.stringify(sanitized));
           return;
@@ -212,6 +226,7 @@ export const useCanvasNodes = ({
         const previousNode = current[previousIndex];
 
         if (previousNode === node) {
+          // Identity match (no change), but ensure serialization exists
           if (previousSerialization === undefined) {
             serializedUpdates.set(node.id, JSON.stringify(sanitized));
           }
@@ -220,13 +235,14 @@ export const useCanvasNodes = ({
 
         const serialized = JSON.stringify(sanitized);
         if (previousSerialization === serialized) {
-          return;
+          return; // Structural match, skip write
         }
 
         sanitizedUpdates.set(node.id, sanitized);
         serializedUpdates.set(node.id, serialized);
       });
 
+      // Batch all changes into one Yjs transaction
       canvasDoc.transact(() => {
         if (orderChanged) {
           nodeOrder.delete(0, nodeOrder.length);
@@ -252,8 +268,13 @@ export const useCanvasNodes = ({
     [canvasDoc, compareArrays, nodeOrder, nodesMap, sanitizeNodeForSync, updateLocalNodesState],
   );
 
+  // Ref-based getter to avoid stale closures in callbacks
   const getNodes = useCallback(() => nodesRef.current, []);
 
+  /**
+   * Replaces entire node set in Yjs document (used for bulk operations like load/restore).
+   * Clears and rebuilds both order array and map, resetting serialization cache.
+   */
   const replaceNodesInDoc = useCallback(
     (nextNodes: Node[]) => {
       // Completely rebuild the Yjs order/map with sanitized nodes and reset the

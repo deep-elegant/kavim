@@ -24,7 +24,7 @@ const MIN_HEIGHT = 32;
 
 /**
  * Implements DrawableNode interface for creating text nodes via drag interaction.
- * Nodes start in typing mode after creation for immediate text input.
+ * Nodes auto-enter typing mode after creation for immediate text input.
  */
 export const textDrawable: DrawableNode<TextNode> = {
   onPaneMouseDown: (id, position) => ({
@@ -87,10 +87,10 @@ export const textDrawable: DrawableNode<TextNode> = {
 
 /**
  * Renders a rich text node on the canvas.
- * - Supports markdown-style formatting (headings, lists, bold, etc.)
- * - Auto-scales font size to fit content when in 'auto' mode
- * - Toggles between edit mode (TipTap editor) and display mode (rendered HTML)
- * - Double-click to enter edit mode
+ * - Supports markdown-style formatting (headings, lists, bold, etc.).
+ * - Auto-scales font size to fit content when in 'auto' mode.
+ * - Toggles between edit mode (TipTap editor) and display mode (rendered HTML).
+ * - Double-click to enter edit mode.
  */
 const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => {
   const { editor, isTyping, handleDoubleClick, handleBlur } = useNodeAsEditor({ id, data });
