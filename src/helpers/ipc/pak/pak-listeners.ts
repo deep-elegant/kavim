@@ -3,8 +3,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { resolveOutputPath } from "@/core/pak/packer";
 import { readPak } from "@/core/pak/unpacker";
-import { type PakOperationResult, type SavePakRequest } from "@/core/pak/types";
-import { registerPakProtocol, setActivePak } from "@/core/pak/pak-manager";
+import { type PakOperationResult, type SavePakRequest, type PakAssetInput } from "@/core/pak/types";
+import { registerPakProtocol, setActivePak, getActivePak } from "@/core/pak/pak-manager";
 import { PAK_LOAD_CHANNEL, PAK_SAVE_CHANNEL } from "./pak-channels";
 import {
   buildManifest,
@@ -12,7 +12,7 @@ import {
   getCanvasFromPak,
 } from "@/core/pak/pak-utils";
 
-const savePakFile = async (payload: SavePakRequest): Promise<PakOperationResult> => {
+const savePakFile = async (payload: SavePakRequest, previousAssets: PakAssetInput[]): Promise<PakOperationResult> => {
   const baseDirectory = app.getPath("documents");
   const outputPath = resolveOutputPath(baseDirectory, payload.fileName, payload.directory);
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
@@ -38,7 +38,13 @@ export const addPakEventListeners = () => {
   registerPakProtocol();
 
   ipcMain.handle(PAK_SAVE_CHANNEL, async (_event, payload: SavePakRequest) => {
-    const result = await savePakFile(payload);
+    const activePak = getActivePak();
+    let previousAssets: PakAssetInput[] = [];
+    if (activePak) {
+      previousAssets = Object.entries(activePak.files).filter(([path]) => path.startsWith("assets/"))
+        .map(([path, data]) => ({ path, data }));
+    }
+    const result = await savePakFile(payload, previousAssets);
     return result;
   });
 

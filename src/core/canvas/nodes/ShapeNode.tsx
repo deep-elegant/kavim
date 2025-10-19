@@ -161,6 +161,7 @@ const ShapeNodeComponent = memo(({ id, data, selected }: NodeProps<ShapeNode>) =
       minHeight={minHeight}
       editor={editor}
       toolbarItems={toolbarItems}
+      contextMenuItems={undefined}
     >
       <div
         className={cn(

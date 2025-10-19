@@ -91,6 +91,21 @@ const prepareAssetFiles = (
     }
   }
 
+  /** Check the previous assets are actually in the canvas rightnow */
+  const usedCanvasAssetPaths = (canvas.nodes as Node[])
+    .filter((node) => node.type === "image-node")
+    .map((node) => (node as ImageNodeType).data.src.split("pak://")[1]);
+
+  // Efficent way to remove elements from array, because files can be large - optimization is required here.
+  let writeIndex = 0;
+  for (let readIndex = 0; readIndex < processedAssets.length; readIndex++) {
+    const file = processedAssets[readIndex];
+    if (usedCanvasAssetPaths.includes(file.path)) {
+      processedAssets[writeIndex++] = file;
+    }
+  }
+  processedAssets.length = writeIndex;
+
   const serializedCanvas = Buffer.from(JSON.stringify(ensureCanvas(canvas)));
   const manifestBuffer = Buffer.from(JSON.stringify(manifest));
 
