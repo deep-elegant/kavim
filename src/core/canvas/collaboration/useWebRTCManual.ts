@@ -291,6 +291,12 @@ export function useWebRTCManual(doc: Y.Doc) {
       pcRef.current.close();
     }
 
+    // Reset local signaling state for a clean retry
+    setLocalOffer('');
+    setLocalAnswer('');
+    setLocalCandidates([]);
+    candidatesBuffer.current = [];
+
     const pc = new RTCPeerConnection({
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
     });
