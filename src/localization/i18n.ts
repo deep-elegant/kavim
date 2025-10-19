@@ -10,6 +10,7 @@ i18n.use(initReactI18next).init({
           file: "File",
           load: "Load",
           save: "Save",
+          saveDraft: "Save Draft",
           llm: "LLM",
           settings: "Settings",
         },

@@ -8,6 +8,13 @@ import type {
   LlmErrorPayload,
   LlmStreamRequestPayload,
 } from './helpers/ipc/llm/llm-types';
+import type {
+  CleanupDraftsRequest,
+  DraftDetail,
+  DraftRecord,
+  MarkDraftPromotedRequest,
+  SaveDraftRequest,
+} from "./core/drafts/types";
 
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
@@ -61,6 +68,14 @@ interface LlmContext {
   onError: (callback: (payload: LlmErrorPayload) => void) => () => void;
   onComplete: (callback: (payload: LlmCompletePayload) => void) => () => void;
 }
+interface DraftContext {
+  save: (payload: SaveDraftRequest) => Promise<DraftDetail>;
+  load: (draftId: string) => Promise<DraftDetail | null>;
+  list: () => Promise<DraftRecord[]>;
+  delete: (draftId: string) => Promise<void>;
+  markPromoted: (payload: MarkDraftPromotedRequest) => Promise<void>;
+  cleanup: (payload?: CleanupDraftsRequest) => Promise<void>;
+}
 
 declare interface Window {
   electronWindow: ElectronWindow;
@@ -88,4 +103,5 @@ declare interface Window {
   projectPak: PakContext;
   fileSystem: FileSystemContext;
   llm: LlmContext;
+  drafts: DraftContext;
 }
