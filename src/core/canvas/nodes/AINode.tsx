@@ -13,7 +13,7 @@ import { type DrawableNode } from './DrawableNode';
 import { MinimalTiptap } from '@/components/ui/minimal-tiptap';
 import { cn } from '@/utils/tailwind';
 import { useNodeAsEditor } from '@/helpers/useNodeAsEditor';
-import { DEFAULT_FONT_SIZE, type FontSizeMode } from '@/components/ui/minimal-tiptap/FontSizePlugin';
+import { type FontSizeSetting } from '@/components/ui/minimal-tiptap/FontSizePlugin';
 import { AI_MODELS, type AiModel } from '../../llm/aiModels';
 import { generateAiResult, type ChatMessage } from '@/core/llm/generateAiResult';
 import { SingleLlmSelect } from '@/core/llm/SingleLlmSelect';
@@ -37,8 +37,7 @@ export type AiNodeData = {
   model?: AiModel;
   status?: AiStatus;
   result?: string; // AI-generated response
-  fontSizeMode?: FontSizeMode;
-  fontSizeValue?: number;
+  fontSize?: FontSizeSetting;
 };
 
 export type AiNodeType = Node<AiNodeData, 'ai-node'>;
@@ -79,8 +78,7 @@ export const aiNodeDrawable: DrawableNode<AiNodeType> = {
       model: 'deepseek',
       status: 'not-started',
       result: '',
-      fontSizeMode: 'auto',
-      fontSizeValue: DEFAULT_FONT_SIZE,
+      fontSize: 'auto',
     },
     width: MIN_WIDTH,
     height: MIN_HEIGHT,
@@ -155,11 +153,18 @@ const STATUS_STYLES: Record<AiStatus, string> = {
 const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   const { setNodes, setEdges, getNodes, getEdges } = useCanvasData();
   const contentRef = useRef<HTMLDivElement>(null);
-  const { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData, setTypingState } =
-    useNodeAsEditor({
-      id,
-      data,
-    });
+  const {
+    editor,
+    isTyping,
+    handleDoubleClick,
+    handleBlur,
+    updateNodeData,
+    setTypingState,
+    resolvedFontSize,
+  } = useNodeAsEditor({
+    id,
+    data,
+  });
   const model = data.model ?? 'deepseek';
   const modelLabel = useMemo(
     () => AI_MODELS.find((option) => option.value === model)?.label ?? model,
@@ -168,7 +173,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   const status = data.status ?? 'not-started';
   const result = data.result ?? '';
   const label = data.label ?? '';
-  const fontSizeValue = data.fontSizeValue ?? DEFAULT_FONT_SIZE;
 
   const form = useForm<AiNodeFormValues>({
     resolver: zodResolver(aiNodeFormSchema),
@@ -376,11 +380,11 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
           'text-slate-900',
           'break-words',
         )}
-        style={{ fontSize: `${fontSizeValue}px` }}
+        style={{ fontSize: `${resolvedFontSize}px` }}
         dangerouslySetInnerHTML={{ __html: label || '<p>No prompt yet.</p>' }}
       />
     ),
-    [label, fontSizeValue],
+    [label, resolvedFontSize],
   );
 
   /**
@@ -631,7 +635,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                           editor={editor}
                           theme="transparent"
                           className="h-full w-full"
-                          style={{ fontSize: `${fontSizeValue}px` }}
+                          style={{ fontSize: `${resolvedFontSize}px` }}
                         />
                       </div>
                     </FormControl>

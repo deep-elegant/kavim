@@ -15,7 +15,7 @@ import {
   SimpleColorPicker,
   type ColorStyle,
 } from '@/components/ui/simple-color-picker';
-import { DEFAULT_FONT_SIZE, type FontSizeMode } from '@/components/ui/minimal-tiptap/FontSizePlugin';
+import { type FontSizeSetting } from '@/components/ui/minimal-tiptap/FontSizePlugin';
 import { useAutoFontSizeObserver } from './useAutoFontSizeObserver';
 
 export type ShapeType = 'circle' | 'rectangle';
@@ -26,8 +26,7 @@ export type ShapeNodeData = {
   shapeType: ShapeType;
   isTyping?: boolean;
   color?: ColorStyle;
-  fontSizeMode?: FontSizeMode;
-  fontSizeValue?: number;
+  fontSize?: FontSizeSetting;
 };
 
 export type ShapeNode = Node<ShapeNodeData, 'shape-node'>;
@@ -57,8 +56,7 @@ export const shapeDrawable: DrawableNode<ShapeNode> = {
       shapeType: 'circle',
       isTyping: false,
       color: defaultColor,
-      fontSizeMode: 'auto',
-      fontSizeValue: DEFAULT_FONT_SIZE,
+      fontSize: 'auto',
     },
     width: CIRCLE_MIN_SIZE,
     height: CIRCLE_MIN_SIZE,
@@ -119,12 +117,17 @@ export const shapeDrawable: DrawableNode<ShapeNode> = {
  * - Toggles between edit mode (TipTap editor) and display mode (rendered HTML)
  */
 const ShapeNodeComponent = memo(({ id, data, selected }: NodeProps<ShapeNode>) => {
-  const { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData } =
-    useNodeAsEditor({ id, data });
+  const {
+    editor,
+    isTyping,
+    handleDoubleClick,
+    handleBlur,
+    updateNodeData,
+    fontSizeSetting,
+    resolvedFontSize,
+  } = useNodeAsEditor({ id, data });
   const { label = '', shapeType } = data;
   const color = data.color ?? defaultColor;
-  const fontSizeMode = data.fontSizeMode ?? 'auto';
-  const fontSizeValue = data.fontSizeValue ?? DEFAULT_FONT_SIZE;
   const containerRef = useRef<HTMLDivElement>(null);
   
   // Hidden measurement element for calculating optimal font size
@@ -138,7 +141,7 @@ const ShapeNodeComponent = memo(({ id, data, selected }: NodeProps<ShapeNode>) =
   // Dynamically adjust font size when in auto mode based on shape dimensions
   useAutoFontSizeObserver({
     editor,
-    mode: fontSizeMode,
+    fontSize: fontSizeSetting,
     html: displayHtml,
     containerRef,
     measurementRef,
@@ -208,7 +211,7 @@ const ShapeNodeComponent = memo(({ id, data, selected }: NodeProps<ShapeNode>) =
                   editor={editor}
                   theme="transparent"
                   className={cn('h-full w-full', textAlignClass)}
-                  style={{ color: color.text, fontSize: `${fontSizeValue}px` }}
+                  style={{ color: color.text, fontSize: `${resolvedFontSize}px` }}
                 />
               </div>
             ) : (
@@ -230,7 +233,7 @@ const ShapeNodeComponent = memo(({ id, data, selected }: NodeProps<ShapeNode>) =
                   '--tw-prose-quote-borders': color.border,
                   '--tw-prose-captions': color.text,
                   color: color.text,
-                  fontSize: `${fontSizeValue}px`,
+                  fontSize: `${resolvedFontSize}px`,
                 }}
                 dangerouslySetInnerHTML={{
                   __html: displayHtml,

@@ -2,6 +2,7 @@ import { Extension } from '@tiptap/core';
 import type { Editor } from '@tiptap/core';
 
 export type FontSizeMode = 'auto' | 'fixed';
+export type FontSizeSetting = number | 'auto';
 
 export interface FontSizeStorage {
   mode: FontSizeMode;
@@ -10,10 +11,16 @@ export interface FontSizeStorage {
   version: number;
 }
 
+export interface FontSizeChange {
+  mode: FontSizeMode;
+  value: number;
+  computed: number;
+}
+
 export interface FontSizeOptions {
   initialMode?: FontSizeMode;
   initialValue?: number;
-  onChange?: (mode: FontSizeMode, value: number) => void;
+  onChange?: (change: FontSizeChange) => void;
 }
 
 export const DEFAULT_FONT_SIZE = 14;
@@ -38,6 +45,16 @@ declare module '@tiptap/core' {
 
 const applySizeToEditor = (editor: Editor, size: number) => {
   editor.view.dom.style.fontSize = `${size}px`;
+};
+
+const emitChange = (options: FontSizeOptions, storage: FontSizeStorage) => {
+  const value = storage.mode === 'auto' ? storage.computed : storage.value;
+
+  options.onChange?.({
+    mode: storage.mode,
+    value,
+    computed: storage.computed,
+  });
 };
 
 export const FontSize = Extension.create<FontSizeOptions>({
@@ -89,7 +106,7 @@ export const FontSize = Extension.create<FontSizeOptions>({
 
           if (previousMode !== storage.mode || previousValue !== normalized) {
             storage.version += 1;
-            this.options.onChange?.('fixed', normalized);
+            emitChange(this.options, storage);
           }
 
           return true;
@@ -106,7 +123,7 @@ export const FontSize = Extension.create<FontSizeOptions>({
 
           if (previousMode !== storage.mode) {
             storage.version += 1;
-            this.options.onChange?.('auto', storage.computed ?? storage.value);
+            emitChange(this.options, storage);
           }
 
           return true;
@@ -124,7 +141,7 @@ export const FontSize = Extension.create<FontSizeOptions>({
             if (previousComputed !== normalized) {
               storage.version += 1;
               applySizeToEditor(editor, normalized);
-              this.options.onChange?.('auto', normalized);
+              emitChange(this.options, storage);
             } else {
               applySizeToEditor(editor, normalized);
             }

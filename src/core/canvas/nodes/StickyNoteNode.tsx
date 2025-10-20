@@ -14,7 +14,7 @@ import {
   SimpleColorPicker,
   type ColorStyle,
 } from '@/components/ui/simple-color-picker';
-import { DEFAULT_FONT_SIZE, type FontSizeMode } from '@/components/ui/minimal-tiptap/FontSizePlugin';
+import { type FontSizeSetting } from '@/components/ui/minimal-tiptap/FontSizePlugin';
 import { useAutoFontSizeObserver } from './useAutoFontSizeObserver';
 
 
@@ -23,8 +23,7 @@ export type StickyNoteData = {
   label: string;
   isTyping?: boolean; // UI-only flag, not synced to Yjs
   color?: ColorStyle;
-  fontSizeMode?: FontSizeMode;
-  fontSizeValue?: number; // Transient when mode is 'auto'
+  fontSize?: FontSizeSetting;
 };
 
 export type StickyNoteNodeType = Node<StickyNoteData, 'sticky-note'>;
@@ -52,8 +51,7 @@ export const stickyNoteDrawable: DrawableNode<StickyNoteNodeType> = {
       label: '',
       isTyping: false,
       color: defaultColor,
-      fontSizeMode: 'auto',
-      fontSizeValue: DEFAULT_FONT_SIZE,
+      fontSize: 'auto',
     },
     width: MIN_WIDTH,
     height: MIN_HEIGHT,
@@ -117,12 +115,17 @@ export const stickyNoteDrawable: DrawableNode<StickyNoteNodeType> = {
  */
 const StickyNoteNode = memo(
   ({ id, data, selected }: NodeProps<StickyNoteNodeType>) => {
-    const { editor, isTyping, handleDoubleClick, handleBlur, updateNodeData } =
-      useNodeAsEditor({ id, data });
+    const {
+      editor,
+      isTyping,
+      handleDoubleClick,
+      handleBlur,
+      updateNodeData,
+      fontSizeSetting,
+      resolvedFontSize,
+    } = useNodeAsEditor({ id, data });
     const label = data.label ?? '';
     const color = data.color ?? defaultColor;
-    const fontSizeMode = data.fontSizeMode ?? 'auto';
-    const fontSizeValue = data.fontSizeValue ?? DEFAULT_FONT_SIZE;
     const containerRef = useRef<HTMLDivElement>(null);
     
     // Hidden element used to measure rendered text dimensions for auto-sizing
@@ -135,7 +138,7 @@ const StickyNoteNode = memo(
 
     useAutoFontSizeObserver({
       editor,
-      mode: fontSizeMode,
+      fontSize: fontSizeSetting,
       html: displayHtml,
       containerRef,
       measurementRef,
@@ -198,7 +201,7 @@ const StickyNoteNode = memo(
                     editor={editor}
                     theme="transparent"
                     className={cn('h-full w-full')}
-                    style={{ color: color.text, fontSize: `${fontSizeValue}px` }}
+                    style={{ color: color.text, fontSize: `${resolvedFontSize}px` }}
                   />
                 </div>
               ) : (
@@ -226,7 +229,7 @@ const StickyNoteNode = memo(
                     '--tw-prose-quote-borders': color.border,
                     '--tw-prose-captions': color.text,
                     color: color.text,
-                    fontSize: `${fontSizeValue}px`,
+                    fontSize: `${resolvedFontSize}px`,
                   }}
                   dangerouslySetInnerHTML={{
                     __html: displayHtml,
