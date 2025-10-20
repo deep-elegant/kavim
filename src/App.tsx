@@ -8,6 +8,7 @@ import Canvas from "./core/canvas/Canvas";
 import { CanvasDataProvider } from "./core/canvas/CanvasDataContext";
 import { WebRTCProvider } from "./core/canvas/collaboration/WebRTCContext";
 import { DraftManagerProvider } from "./core/drafts/DraftManagerContext";
+import { StatsForNerdsProvider } from "./core/diagnostics/StatsForNerdsContext";
 import "./localization/i18n";
 import * as Y from "yjs";
 
@@ -30,18 +31,20 @@ export default function App() {
   return (
     // WebRTC layer enables real-time collaboration via peer-to-peer connections
     <WebRTCProvider doc={doc}>
-      {/* Draft management for auto-save and recovery */}
-      <DraftManagerProvider>
-        {/* Canvas state tied to the shared Y.Doc for CRDT-based sync */}
-        <CanvasDataProvider doc={doc}>
-          <Toaster />
-          <BaseLayout>
-            <div className="h-full w-full">
-              <Canvas />
-            </div>
-          </BaseLayout>
-        </CanvasDataProvider>
-      </DraftManagerProvider>
+      <StatsForNerdsProvider>
+        {/* Draft management for auto-save and recovery */}
+        <DraftManagerProvider>
+          {/* Canvas state tied to the shared Y.Doc for CRDT-based sync */}
+          <CanvasDataProvider doc={doc}>
+            <Toaster />
+            <BaseLayout>
+              <div className="h-full w-full">
+                <Canvas />
+              </div>
+            </BaseLayout>
+          </CanvasDataProvider>
+        </DraftManagerProvider>
+      </StatsForNerdsProvider>
     </WebRTCProvider>
   );
 }

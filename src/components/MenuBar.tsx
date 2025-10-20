@@ -19,6 +19,7 @@ import {
   type AiProvider,
 } from "@/core/llm/aiModels";
 import { useDraftManager } from "@/core/drafts/DraftManagerContext";
+import { useStatsForNerds } from "@/core/diagnostics/StatsForNerdsContext";
 
 type ProviderKeyState = Record<AiProvider, string>;
 
@@ -91,6 +92,10 @@ export default function MenuBar() {
   const [gatewaySettings, setGatewaySettings] = useState<GatewaySettingsState>(
     () => createGatewaySettingsState(),
   );
+  const { enabled: statsForNerdsEnabled, setEnabled: setStatsForNerdsEnabled } = useStatsForNerds();
+  const [statsForNerdsDraftEnabled, setStatsForNerdsDraftEnabled] = useState(
+    () => statsForNerdsEnabled,
+  );
 
   // Reload settings from storage when modal opens to reflect any external changes
   React.useEffect(() => {
@@ -98,8 +103,9 @@ export default function MenuBar() {
       setProviderKeys(createProviderKeyState());
       setGatewaySettings(createGatewaySettingsState());
       setSettingsMessage("");
+      setStatsForNerdsDraftEnabled(statsForNerdsEnabled);
     }
-  }, [isSettingsOpen]);
+  }, [isSettingsOpen, statsForNerdsEnabled]);
 
   /**
    * Computes status text for draft/autosave indicator.
@@ -380,8 +386,9 @@ export default function MenuBar() {
               : undefined,
         });
       });
+      setStatsForNerdsEnabled(statsForNerdsDraftEnabled);
       setIsSettingsOpen(false);
-      setSettingsMessage("API keys saved locally.");
+      setSettingsMessage("Settings saved locally.");
     } catch (error) {
       console.error("Failed to persist API keys", error);
       setSettingsMessage("Unable to save API keys. Please try again.");
@@ -456,6 +463,8 @@ export default function MenuBar() {
         gatewaySettings={gatewaySettings}
         setGatewaySetting={handleGatewaySettingChange}
         handleSettingsSave={handleSettingsSave}
+        statsForNerdsEnabled={statsForNerdsDraftEnabled}
+        onStatsForNerdsChange={setStatsForNerdsDraftEnabled}
       />
 
       <PeerConnectionModal

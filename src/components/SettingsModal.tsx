@@ -66,6 +66,8 @@ interface SettingsModalProps {
     updates: Partial<GatewaySettingsValue>,
   ) => void;
   handleSettingsSave: () => void;
+  statsForNerdsEnabled: boolean;
+  onStatsForNerdsChange: (value: boolean) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -76,6 +78,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   gatewaySettings,
   setGatewaySetting,
   handleSettingsSave,
+  statsForNerdsEnabled,
+  onStatsForNerdsChange,
 }) => {
   // Track visibility state for password fields (local UI state only)
   const [visibleProviders, setVisibleProviders] = React.useState<ProviderVisibilityMap>(
@@ -84,9 +88,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [visibleGateways, setVisibleGateways] = React.useState<GatewayVisibilityMap>(
     () => createInitialGatewayVisibilityMap(),
   );
-  const [activeTab, setActiveTab] = React.useState<'providers' | 'gateways'>(
-    'providers',
-  );
+  const [activeTab, setActiveTab] = React.useState<
+    'providers' | 'gateways' | 'diagnostics'
+  >('providers');
 
   // Reset UI state when modal closes to avoid leaking visible passwords
   React.useEffect(() => {
@@ -250,11 +254,31 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     </div>
   );
 
+  const renderDiagnosticsTab = () => (
+    <div className="space-y-3 text-sm">
+      <div className="space-y-1">
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border border-input"
+            checked={statsForNerdsEnabled}
+            onChange={(event) => onStatsForNerdsChange(event.target.checked)}
+          />
+          Enable stats for nerds
+        </label>
+        <p className="text-xs text-muted-foreground">
+          Track how many times <code>setNodes</code> runs each second and show a
+          small debugging overlay on the canvas.
+        </p>
+      </div>
+    </div>
+  );
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>LLM Settings</DialogTitle>
+          <DialogTitle>Application settings</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-1">
@@ -280,11 +304,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             >
               Gateway keys
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('diagnostics')}
+              className={`flex-1 rounded-sm px-3 py-1 text-sm font-medium transition-colors ${
+                activeTab === 'diagnostics'
+                  ? 'bg-background text-foreground shadow'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              Diagnostics
+            </button>
           </div>
-          {activeTab === 'providers' ? renderProviderTab() : renderGatewayTab()}
-          <p className="text-xs text-muted-foreground">
-            These API keys are stored locally using electron-store. Replace this storage approach when your secure backend is ready.
-          </p>
+          {activeTab === 'providers'
+            ? renderProviderTab()
+            : activeTab === 'gateways'
+              ? renderGatewayTab()
+              : renderDiagnosticsTab()}
+          {activeTab === 'diagnostics' ? null : (
+            <p className="text-xs text-muted-foreground">
+              These API keys are stored locally using electron-store. Replace this storage approach when your secure backend is
+              ready.
+            </p>
+          )}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>
