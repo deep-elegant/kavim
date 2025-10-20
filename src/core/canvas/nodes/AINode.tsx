@@ -374,6 +374,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
           'prose-li:my-0',
           'min-h-[1.5rem] px-3 py-2',
           'text-slate-900',
+          'font-semibold',
           'break-words',
         )}
         style={{ fontSize: `${fontSizeValue}px` }}
