@@ -419,7 +419,8 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
         await generateAiResult({
           model,
           messages,
-          onChunk: (chunk) => {
+          minimumUpdateIntervalMs: 50,
+          onUpdate: (fullResponse) => {
             // Only update if this is still the current request (user hasn't changed prompt)
             if (requestIdRef.current === currentRequestId) {
               setNodes((nodes) =>
@@ -429,7 +430,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                       ...n,
                       data: {
                         ...n.data,
-                        result: (n.data.result ?? '') + chunk,
+                        result: fullResponse,
                       },
                     };
                   }
