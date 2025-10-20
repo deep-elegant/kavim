@@ -178,16 +178,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     },
   });
 
-  // Sync model changes from form back to node data (allows model switching mid-conversation)
-  const watchedModel = useWatch({ control: form.control, name: 'model' });
-  useEffect(() => {
-    if (!watchedModel) {
-      return;
-    }
-    if (data.model !== watchedModel) {
-      updateNodeData({ model: watchedModel });
-    }
-  }, [watchedModel, data.model, updateNodeData]);
 
   const [isPromptOpen, setPromptOpen] = useState(false);
 
@@ -560,8 +550,8 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     [handleBlur],
   );
 
-  const onChangeModel = useCallback((value: string) => {
-    form.setValue('model', value as AiModel);
+  const onChangeModel   = useCallback((value: string) => {
+    updateNodeData({ model: value as AiModel })
     setTypingState(true);
     const currentEditor = editor;
     if (currentEditor) {
