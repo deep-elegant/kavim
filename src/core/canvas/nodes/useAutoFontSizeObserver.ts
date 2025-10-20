@@ -39,14 +39,14 @@ export const useAutoFontSizeObserver = ({
       return; // Manual mode: user controls font size explicitly
     }
 
-    const container = containerRef.current;
-    const measurement = measurementRef.current;
+    const containerElement = containerRef.current;
+    const measurementElement = measurementRef.current;
 
-    if (!container || !measurement) {
+    if (!containerElement || !measurementElement) {
       return;
     }
 
-    const { clientWidth, clientHeight } = container;
+    const { clientWidth, clientHeight } = containerElement;
     if (clientWidth <= 0 || clientHeight <= 0) {
       return; // Skip if container not yet rendered or hidden
     }
@@ -63,11 +63,12 @@ export const useAutoFontSizeObserver = ({
 
     while (low <= high) {
       const mid = Math.floor((low + high) / 2);
-      measurement.style.fontSize = `${mid}px`;
+      // eslint-disable-next-line react-compiler/react-compiler -- mutate hidden probe element to test candidate font size
+      measurementElement.style.fontSize = `${mid}px`;
 
       const overflow =
-        measurement.scrollWidth > clientWidth ||
-        measurement.scrollHeight > clientHeight;
+        measurementElement.scrollWidth > clientWidth ||
+        measurementElement.scrollHeight > clientHeight;
 
       if (!overflow) {
         best = mid; // This size fits, try larger
@@ -81,16 +82,17 @@ export const useAutoFontSizeObserver = ({
   }, [editor, fontSize, containerRef, measurementRef, minSize, maxSize]);
 
   // useLayoutEffect ensures measurement happens before paint to avoid flicker
+  const container = containerRef.current;
+  const measurement = measurementRef.current;
   useLayoutEffect(() => {
     measure();
-  }, [measure, html, fontSize]);
+  }, [measure, html, fontSize, container, measurement]);
 
   useEffect(() => {
     if (!editor || fontSize !== 'auto') {
       return;
     }
 
-    const container = containerRef.current;
     if (!container || typeof ResizeObserver === 'undefined') {
       return;
     }
@@ -103,5 +105,5 @@ export const useAutoFontSizeObserver = ({
     observer.observe(container);
 
     return () => observer.disconnect();
-  }, [editor, fontSize, containerRef, measure]);
+  }, [editor, fontSize, container, measure]);
 };

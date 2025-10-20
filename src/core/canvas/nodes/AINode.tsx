@@ -1,6 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState, type FocusEvent } from 'react';
 import { type NodeProps, type Node, type Edge } from '@xyflow/react';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { Split } from 'lucide-react';
@@ -14,6 +14,7 @@ import { MinimalTiptap } from '@/components/ui/minimal-tiptap';
 import { cn } from '@/utils/tailwind';
 import { useNodeAsEditor } from '@/helpers/useNodeAsEditor';
 import { type FontSizeSetting } from '@/components/ui/minimal-tiptap/FontSizePlugin';
+import { useAutoFontSizeObserver } from './useAutoFontSizeObserver';
 import { AI_MODELS, type AiModel } from '../../llm/aiModels';
 import { generateAiResult, type ChatMessage } from '@/core/llm/generateAiResult';
 import { SingleLlmSelect } from '@/core/llm/SingleLlmSelect';
@@ -45,6 +46,20 @@ export type AiNodeType = Node<AiNodeData, 'ai-node'>;
 const MIN_WIDTH = 360;
 const MIN_HEIGHT = 270;
 const NODE_HORIZONTAL_GAP = 80; // Spacing when creating split nodes
+
+const PROMPT_PLACEHOLDER_HTML = '<p>No prompt yet.</p>';
+const PROMPT_TYPOGRAPHY = cn(
+  'prose prose-sm w-full max-w-none',
+  'prose-h1:text-xl prose-h1:leading-tight',
+  'prose-h2:text-lg prose-h2:leading-snug',
+  'prose-h3:text-base prose-h3:leading-snug',
+  'prose-p:my-1 prose-p:leading-normal',
+  'prose-ul:my-1 prose-ol:my-1',
+  'prose-li:my-0',
+  'min-h-[1.5rem] px-3 py-2',
+  'text-slate-900',
+  'break-words',
+);
 
 /** Strips HTML tags to get plain text for AI prompts (preserves semantic content only) */
 const htmlToPlainText = (value: string): string =>
@@ -153,6 +168,8 @@ const STATUS_STYLES: Record<AiStatus, string> = {
 const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   const { setNodes, setEdges, getNodes, getEdges } = useCanvasData();
   const contentRef = useRef<HTMLDivElement>(null);
+  const promptContainerRef = useRef<HTMLDivElement>(null);
+  const promptMeasurementRef = useRef<HTMLDivElement>(null);
   const {
     editor,
     isTyping,
@@ -160,6 +177,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     handleBlur,
     updateNodeData,
     setTypingState,
+    fontSizeSetting,
     resolvedFontSize,
   } = useNodeAsEditor({
     id,
@@ -174,12 +192,25 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   const result = data.result ?? '';
   const label = data.label ?? '';
 
+  const promptHasContent = useMemo(() => htmlToPlainText(label).length > 0, [label]);
+  const promptDisplayHtml = promptHasContent ? label : PROMPT_PLACEHOLDER_HTML;
+  const promptMeasurementHtml = promptHasContent ? label : '<p></p>';
+
   const form = useForm<AiNodeFormValues>({
     resolver: zodResolver(aiNodeFormSchema),
     values: {
       model,
       prompt: label,
     },
+  });
+
+  useAutoFontSizeObserver({
+    editor,
+    fontSize: fontSizeSetting,
+    html: promptMeasurementHtml,
+    containerRef: promptContainerRef,
+    measurementRef: promptMeasurementRef,
+    maxSize: 36,
   });
 
 
@@ -367,24 +398,24 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   // Memoized prompt display (shown in top section of node when not editing)
   const renderPromptContent = useMemo(
     () => (
-      <div
-        className={cn(
-          'prose prose-sm w-full max-w-none',
-          'prose-h1:text-xl prose-h1:leading-tight',
-          'prose-h2:text-lg prose-h2:leading-snug',
-          'prose-h3:text-base prose-h3:leading-snug',
-          'prose-p:my-1 prose-p:leading-normal',
-          'prose-ul:my-1 prose-ol:my-1',
-          'prose-li:my-0',
-          'min-h-[1.5rem] px-3 py-2',
-          'text-slate-900',
-          'break-words',
-        )}
-        style={{ fontSize: `${resolvedFontSize}px` }}
-        dangerouslySetInnerHTML={{ __html: label || '<p>No prompt yet.</p>' }}
-      />
+      <div ref={promptContainerRef} className="relative w-full">
+        <div
+          className={PROMPT_TYPOGRAPHY}
+          style={{ fontSize: `${resolvedFontSize}px` }}
+          dangerouslySetInnerHTML={{ __html: promptDisplayHtml }}
+        />
+        <div
+          ref={promptMeasurementRef}
+          aria-hidden
+          className={cn(
+            'pointer-events-none absolute inset-0 box-border overflow-hidden opacity-0',
+            PROMPT_TYPOGRAPHY,
+          )}
+          dangerouslySetInnerHTML={{ __html: promptMeasurementHtml }}
+        />
+      </div>
     ),
-    [label, resolvedFontSize],
+    [promptDisplayHtml, promptMeasurementHtml, resolvedFontSize],
   );
 
   /**
@@ -629,13 +660,23 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                     <FormLabel className="text-xs font-medium text-slate-600">Prompt</FormLabel>
                     <FormControl className="mt-1 min-h-[120px] flex-1">
                       <div
-                        className="h-full overflow-hidden rounded-md border border-slate-300"
+                        ref={promptContainerRef}
+                        className="relative h-full overflow-hidden rounded-md border border-slate-300"
                       >
                         <MinimalTiptap
                           editor={editor}
                           theme="transparent"
                           className="h-full w-full"
                           style={{ fontSize: `${resolvedFontSize}px` }}
+                        />
+                        <div
+                          ref={promptMeasurementRef}
+                          aria-hidden
+                          className={cn(
+                            'pointer-events-none absolute inset-0 box-border overflow-hidden opacity-0',
+                            PROMPT_TYPOGRAPHY,
+                          )}
+                          dangerouslySetInnerHTML={{ __html: promptMeasurementHtml }}
                         />
                       </div>
                     </FormControl>
