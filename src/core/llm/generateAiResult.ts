@@ -134,11 +134,13 @@ const assertLlmBridgeAvailable = (): asserts window is Window & {
 export const generateAiResult = async ({
   model,
   messages,
-  onChunk,
+  onUpdate,
+  minimumUpdateIntervalMs = 50,
 }: {
   model: AiModel;
   messages: ChatMessage[];
-  onChunk: (chunk: string) => void;
+  onUpdate: (chunk: string) => void;
+  minimumUpdateIntervalMs?: number;
 }): Promise<void> => {
   const settings = MODEL_SETTINGS[model];
 
@@ -154,12 +156,39 @@ export const generateAiResult = async ({
   await new Promise<void>((resolve, reject) => {
     // Track event listeners to unsubscribe when stream completes/errors
     const cleanupCallbacks: Array<() => void> = [];
+    let pendingTimeout: number | null = null;
+    let aggregatedResponse = '';
+    let lastEmittedValue = '';
+    let lastEmitTime = 0;
+
+    const clearPendingTimeout = () => {
+      if (pendingTimeout !== null) {
+        window.clearTimeout(pendingTimeout);
+        pendingTimeout = null;
+      }
+    };
+
+    const flushBuffer = (force = false) => {
+      clearPendingTimeout();
+
+      if (!force && aggregatedResponse === lastEmittedValue) {
+        return;
+      }
+
+      lastEmittedValue = aggregatedResponse;
+      lastEmitTime = performance.now();
+      onUpdate(aggregatedResponse);
+    };
 
     const cleanup = () => {
       while (cleanupCallbacks.length > 0) {
-        const unsubscribe = cleanupCallbacks.pop();      unsubscribe?.();
-    }
+        const unsubscribe = cleanupCallbacks.pop();
+        unsubscribe?.();
+      }
+      clearPendingTimeout();
     };
+
+    cleanupCallbacks.push(clearPendingTimeout);
 
     // Match requestId to prevent cross-request contamination (multiple parallel streams)
     const handleChunk = (payload: LlmChunkPayload) => {
@@ -167,7 +196,21 @@ export const generateAiResult = async ({
         return;
       }
 
-      onChunk(payload.content);
+      aggregatedResponse += payload.content;
+
+      const now = performance.now();
+      if (now - lastEmitTime >= minimumUpdateIntervalMs) {
+        flushBuffer();
+        return;
+      }
+
+      clearPendingTimeout();
+
+      const delay = Math.max(0, minimumUpdateIntervalMs - (now - lastEmitTime));
+      pendingTimeout = window.setTimeout(() => {
+        pendingTimeout = null;
+        flushBuffer();
+      }, delay);
     };
 
     const handleError = (payload: LlmErrorPayload) => {
@@ -175,6 +218,7 @@ export const generateAiResult = async ({
         return;
       }
 
+      flushBuffer(true);
       cleanup();
       reject(new Error(payload.error));
     };
@@ -184,6 +228,7 @@ export const generateAiResult = async ({
         return;
       }
 
+      flushBuffer(true);
       cleanup();
       resolve();
     };
