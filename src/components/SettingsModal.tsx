@@ -85,7 +85,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     () => createInitialGatewayVisibilityMap(),
   );
   const [activeTab, setActiveTab] = React.useState<
-    'providers' | 'gateways' | 'diagnostics'
+    'providers' | 'gateways'
   >('providers');
 
   // Reset UI state when modal closes to avoid leaking visible passwords
@@ -254,7 +254,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Application settings</DialogTitle>
+          <DialogTitle>LLM settings</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-1">
