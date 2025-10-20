@@ -190,16 +190,6 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
               },
             };
           }
-          // Disable typing on all other nodes when entering edit mode
-          if (value && node.data?.isTyping) {
-            return {
-              ...node,
-              data: {
-                ...(node.data as NodeDataWithLabel),
-                isTyping: false,
-              },
-            };
-          }
           return node;
         }),
       );
