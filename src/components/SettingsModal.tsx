@@ -66,8 +66,6 @@ interface SettingsModalProps {
     updates: Partial<GatewaySettingsValue>,
   ) => void;
   handleSettingsSave: () => void;
-  statsForNerdsEnabled: boolean;
-  onStatsForNerdsChange: (value: boolean) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -78,8 +76,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   gatewaySettings,
   setGatewaySetting,
   handleSettingsSave,
-  statsForNerdsEnabled,
-  onStatsForNerdsChange,
 }) => {
   // Track visibility state for password fields (local UI state only)
   const [visibleProviders, setVisibleProviders] = React.useState<ProviderVisibilityMap>(
@@ -254,26 +250,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     </div>
   );
 
-  const renderDiagnosticsTab = () => (
-    <div className="space-y-3 text-sm">
-      <div className="space-y-1">
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <input
-            type="checkbox"
-            className="h-4 w-4 rounded border border-input"
-            checked={statsForNerdsEnabled}
-            onChange={(event) => onStatsForNerdsChange(event.target.checked)}
-          />
-          Enable stats for nerds
-        </label>
-        <p className="text-xs text-muted-foreground">
-          Track how many times <code>setNodes</code> runs each second and show a
-          small debugging overlay on the canvas.
-        </p>
-      </div>
-    </div>
-  );
-
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
@@ -304,29 +280,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             >
               Gateway keys
             </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab('diagnostics')}
-              className={`flex-1 rounded-sm px-3 py-1 text-sm font-medium transition-colors ${
-                activeTab === 'diagnostics'
-                  ? 'bg-background text-foreground shadow'
-                  : 'text-muted-foreground'
-              }`}
-            >
-              Diagnostics
-            </button>
           </div>
           {activeTab === 'providers'
             ? renderProviderTab()
             : activeTab === 'gateways'
               ? renderGatewayTab()
-              : renderDiagnosticsTab()}
-          {activeTab === 'diagnostics' ? null : (
-            <p className="text-xs text-muted-foreground">
-              These API keys are stored locally using electron-store. Replace this storage approach when your secure backend is
-              ready.
-            </p>
-          )}
+              : null}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>

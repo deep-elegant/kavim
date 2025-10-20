@@ -93,9 +93,6 @@ export default function MenuBar() {
     () => createGatewaySettingsState(),
   );
   const { enabled: statsForNerdsEnabled, setEnabled: setStatsForNerdsEnabled } = useStatsForNerds();
-  const [statsForNerdsDraftEnabled, setStatsForNerdsDraftEnabled] = useState(
-    () => statsForNerdsEnabled,
-  );
 
   // Reload settings from storage when modal opens to reflect any external changes
   React.useEffect(() => {
@@ -103,7 +100,6 @@ export default function MenuBar() {
       setProviderKeys(createProviderKeyState());
       setGatewaySettings(createGatewaySettingsState());
       setSettingsMessage("");
-      setStatsForNerdsDraftEnabled(statsForNerdsEnabled);
     }
   }, [isSettingsOpen, statsForNerdsEnabled]);
 
@@ -386,7 +382,6 @@ export default function MenuBar() {
               : undefined,
         });
       });
-      setStatsForNerdsEnabled(statsForNerdsDraftEnabled);
       setIsSettingsOpen(false);
       setSettingsMessage("Settings saved locally.");
     } catch (error) {
@@ -416,6 +411,9 @@ export default function MenuBar() {
             <MenubarContent>
               <MenubarItem onClick={() => setIsSettingsOpen(true)}>
                 {i18n.t("menuBar.llm")}
+              </MenubarItem>
+              <MenubarItem onClick={() => setStatsForNerdsEnabled(!statsForNerdsEnabled)}>
+                {statsForNerdsEnabled ? i18n.t("menuBar.statsForNerdsEnabled") : i18n.t("menuBar.statsForNerdsDisabled")}
               </MenubarItem>
             </MenubarContent>
           </MenubarMenu>
@@ -463,8 +461,6 @@ export default function MenuBar() {
         gatewaySettings={gatewaySettings}
         setGatewaySetting={handleGatewaySettingChange}
         handleSettingsSave={handleSettingsSave}
-        statsForNerdsEnabled={statsForNerdsDraftEnabled}
-        onStatsForNerdsChange={setStatsForNerdsDraftEnabled}
       />
 
       <PeerConnectionModal
