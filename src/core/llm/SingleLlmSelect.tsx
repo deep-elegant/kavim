@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
     Select,
     SelectContent,
@@ -25,12 +25,12 @@ export const SingleLlmSelect = ({
     onChange: (value: string) => void;
 }) => {
     // Split models by access level (general availability vs. org-verified beta)
-    const unrestrictedModels = AI_MODELS.filter(
+    const unrestrictedModels = useMemo(() => AI_MODELS.filter(
         (model) => !(model as any).requiresOrganizationVerification,
-    );
-    const restrictedModels = AI_MODELS.filter(
+    ), []);
+    const restrictedModels = useMemo(() => AI_MODELS.filter(
         (model) => (model as any).requiresOrganizationVerification,
-    );
+    ), []);
 
     return (
         <Select
