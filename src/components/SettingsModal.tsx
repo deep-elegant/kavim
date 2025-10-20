@@ -84,9 +84,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [visibleGateways, setVisibleGateways] = React.useState<GatewayVisibilityMap>(
     () => createInitialGatewayVisibilityMap(),
   );
-  const [activeTab, setActiveTab] = React.useState<'providers' | 'gateways'>(
-    'providers',
-  );
+  const [activeTab, setActiveTab] = React.useState<
+    'providers' | 'gateways'
+  >('providers');
 
   // Reset UI state when modal closes to avoid leaking visible passwords
   React.useEffect(() => {
@@ -254,7 +254,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>LLM Settings</DialogTitle>
+          <DialogTitle>LLM settings</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
           <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-1">
@@ -281,10 +281,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               Gateway keys
             </button>
           </div>
-          {activeTab === 'providers' ? renderProviderTab() : renderGatewayTab()}
-          <p className="text-xs text-muted-foreground">
-            These API keys are stored locally using electron-store. Replace this storage approach when your secure backend is ready.
-          </p>
+          {activeTab === 'providers'
+            ? renderProviderTab()
+            : activeTab === 'gateways'
+              ? renderGatewayTab()
+              : null}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={onClose}>

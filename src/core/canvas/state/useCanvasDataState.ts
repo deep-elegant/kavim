@@ -5,6 +5,7 @@ import type { EditableEdgeData } from '../edges/EditableEdge';
 import { useCanvasDoc } from './useCanvasDoc';
 import { useCanvasNodes } from './useCanvasNodes';
 import { useCanvasEdges } from './useCanvasEdges';
+import { useStatsForNerds } from '../../diagnostics/StatsForNerdsContext';
 
 /** Main API surface for canvas state management with Yjs synchronization */
 export type CanvasDataContextValue = {
@@ -26,7 +27,9 @@ export type CanvasDataContextValue = {
  */
 export const useCanvasDataState = (doc?: Y.Doc): CanvasDataContextValue => {
   const { canvasDoc, nodeOrder, nodesMap, edgeOrder, edgesMap } = useCanvasDoc(doc);
-  const { nodes, setNodes, getNodes, updateLocalNodesState, replaceNodesInDoc } =
+  const { recordSetNodesInvocation } = useStatsForNerds();
+
+  const { nodes, setNodes: setNodesInternal, getNodes, updateLocalNodesState, replaceNodesInDoc } =
     useCanvasNodes({
       canvasDoc,
       nodeOrder,
@@ -38,6 +41,14 @@ export const useCanvasDataState = (doc?: Y.Doc): CanvasDataContextValue => {
       edgeOrder,
       edgesMap,
     });
+
+  const setNodes: Dispatch<SetStateAction<Node[]>> = useCallback(
+    (value) => {
+      recordSetNodesInvocation();
+      setNodesInternal(value);
+    },
+    [recordSetNodesInvocation, setNodesInternal],
+  );
 
   // Replace entire graph in one transaction for atomic updates
   const setCanvasState = useCallback(

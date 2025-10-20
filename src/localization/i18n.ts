@@ -13,6 +13,8 @@ i18n.use(initReactI18next).init({
           saveDraft: "Save Draft",
           llm: "LLM",
           settings: "Settings",
+          statsForNerdsEnabled: "Stats for Nerds (Disable)",
+          statsForNerdsDisabled: "Stats for Nerds (Enable)",
         },
         appName: "DeepElegant - Kavim",
       },

@@ -19,6 +19,7 @@ import {
   type AiProvider,
 } from "@/core/llm/aiModels";
 import { useDraftManager } from "@/core/drafts/DraftManagerContext";
+import { useStatsForNerds } from "@/core/diagnostics/StatsForNerdsContext";
 
 type ProviderKeyState = Record<AiProvider, string>;
 
@@ -91,6 +92,7 @@ export default function MenuBar() {
   const [gatewaySettings, setGatewaySettings] = useState<GatewaySettingsState>(
     () => createGatewaySettingsState(),
   );
+  const { enabled: statsForNerdsEnabled, setEnabled: setStatsForNerdsEnabled } = useStatsForNerds();
 
   // Reload settings from storage when modal opens to reflect any external changes
   React.useEffect(() => {
@@ -99,7 +101,7 @@ export default function MenuBar() {
       setGatewaySettings(createGatewaySettingsState());
       setSettingsMessage("");
     }
-  }, [isSettingsOpen]);
+  }, [isSettingsOpen, statsForNerdsEnabled]);
 
   /**
    * Computes status text for draft/autosave indicator.
@@ -381,7 +383,7 @@ export default function MenuBar() {
         });
       });
       setIsSettingsOpen(false);
-      setSettingsMessage("API keys saved locally.");
+      setSettingsMessage("Settings saved locally.");
     } catch (error) {
       console.error("Failed to persist API keys", error);
       setSettingsMessage("Unable to save API keys. Please try again.");
@@ -409,6 +411,9 @@ export default function MenuBar() {
             <MenubarContent>
               <MenubarItem onClick={() => setIsSettingsOpen(true)}>
                 {i18n.t("menuBar.llm")}
+              </MenubarItem>
+              <MenubarItem onClick={() => setStatsForNerdsEnabled(!statsForNerdsEnabled)}>
+                {statsForNerdsEnabled ? i18n.t("menuBar.statsForNerdsEnabled") : i18n.t("menuBar.statsForNerdsDisabled")}
               </MenubarItem>
             </MenubarContent>
           </MenubarMenu>

@@ -60,6 +60,7 @@ import useCanvasImageNodes, {
   readFileAsDataUrl,
 } from './hooks/useCanvasImageNodes';
 import type { CanvasNode, ToolId } from './types';
+import { StatsForNerdsOverlay } from '@/components/diagnostics/StatsForNerdsOverlay';
 
 
 // Available drawing tools in the toolbar
@@ -391,6 +392,7 @@ const CanvasInner = () => {
 
   return (
     <div
+      className="relative"
       style={{ height: '100%', width: '100%' }}
       ref={reactFlowWrapperRef}
       onPaste={handlePaste}
@@ -489,6 +491,8 @@ const CanvasInner = () => {
             />
           ) : null,
         )}
+
+      <StatsForNerdsOverlay />
     </div>
   );
 };
