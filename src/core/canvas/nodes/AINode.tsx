@@ -190,12 +190,12 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   }, [watchedModel, data.model, updateNodeData]);
 
   const [isPromptOpen, setPromptOpen] = useState(false);
-  
+
   // Increment on each new request to cancel stale responses (prevents race conditions)
   const requestIdRef = useRef(0);
   const lastPromptRef = useRef(label);
   const wasTypingRef = useRef(isTyping);
-  
+
   /**
    * Builds conversation history by traversing connected AI nodes upstream.
    * - Follows edges backwards to find parent AI nodes
@@ -209,7 +209,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       const flowEdges = getEdges();
 
       const nodeMap = new Map(flowNodes.map((node) => [node.id, node] as const));
-      
+
       // Build reverse lookup: target node ID -> incoming edges
       const incomingMap = new Map<string, Edge[]>();
       flowEdges.forEach((edge) => {
@@ -273,7 +273,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
         return collectFromNode(sourceId);
       });
-      
+
       // Add current prompt as the final user message
       const promptText = htmlToPlainText(promptHtml);
       if (promptText) {
@@ -560,6 +560,18 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     [handleBlur],
   );
 
+  const onChangeModel = useCallback((value: string) => {
+    form.setValue('model', value as AiModel);
+    setTypingState(true);
+    const currentEditor = editor;
+    if (currentEditor) {
+    setTimeout(() => {
+        currentEditor.commands.focus('end');
+    }, 0);
+    }
+  }, [form, editor, setTypingState])
+
+
   return (
     <NodeInteractionOverlay
       nodeId={id}
@@ -608,16 +620,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                     <FormControl>
                       <SingleLlmSelect
                         value={field.value}
-                        onChange={(value) => {
-                          field.onChange(value);
-                          setTypingState(true);
-                          const currentEditor = editor;
-                          if (currentEditor) {
-                            setTimeout(() => {
-                              currentEditor.commands.focus('end');
-                            }, 0);
-                          }
-                        }}
+                        onChange={onChangeModel}
                       />
                     </FormControl>
                     <FormMessage />
