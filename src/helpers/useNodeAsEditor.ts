@@ -181,22 +181,13 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
     (value: boolean) => {
       setNodes((nodes) =>
         nodes.map((node) => {
+          // Set typing state for this node, the rest of the nodes will be set by the onBlur event, so we don't need to do it here
           if (node.id === id) {
             return {
               ...node,
               data: {
                 ...(node.data as NodeDataWithLabel),
                 isTyping: value,
-              },
-            };
-          }
-          // Disable typing on all other nodes when entering edit mode
-          if (value && node.data?.isTyping) {
-            return {
-              ...node,
-              data: {
-                ...(node.data as NodeDataWithLabel),
-                isTyping: false,
               },
             };
           }
