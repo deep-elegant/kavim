@@ -37,6 +37,24 @@ const hasTransientEditingFlag = (data: Node['data']): boolean => {
   return false;
 };
 
+const dedupeNodeIds = (ids: string[]) => {
+  const seenIds = new Set<string>();
+  const dedupedIds: string[] = [];
+  let duplicateFound = false;
+
+  ids.forEach((id) => {
+    if (seenIds.has(id)) {
+      duplicateFound = true;
+      return;
+    }
+
+    seenIds.add(id);
+    dedupedIds.push(id);
+  });
+
+  return { dedupedIds, duplicateFound };
+};
+
 const mergeNodeWhileActiveEdit = (docNode: Node, previousNode?: Node): Node => {
   if (!previousNode || !hasTransientEditingFlag(previousNode.data)) {
     return docNode;
@@ -103,13 +121,25 @@ export const useCanvasNodes = ({
    */
   const snapshotNodesFromDoc = useCallback(() => {
     const order = nodeOrder.toArray();
+    const { dedupedIds: dedupedOrder, duplicateFound } = dedupeNodeIds(order);
+
+    if (duplicateFound) {
+      const doc = nodeOrder.doc ?? canvasDoc;
+      doc?.transact(() => {
+        nodeOrder.delete(0, nodeOrder.length);
+        if (dedupedOrder.length > 0) {
+          nodeOrder.insert(0, dedupedOrder);
+        }
+      }, 'canvas');
+    }
+
     const indexMap = new Map<string, number>();
     const nextNodes: Node[] = [];
     const previousSerialization = nodeSerializationRef.current;
     const nextSerialization = new Map<string, string>();
     const previousNodesById = new Map(nodesRef.current.map((node) => [node.id, node]));
 
-    order.forEach((id) => {
+    dedupedOrder.forEach((id) => {
       const node = nodesMap.get(id);
       if (!node) {
         return;
@@ -137,7 +167,7 @@ export const useCanvasNodes = ({
     nodeSerializationRef.current = nextSerialization;
     nodesRef.current = nextNodes;
     return nextNodes;
-  }, [mergeNodeWhileActiveEdit, nodeOrder, nodesMap, restoreTransientNodeState]);
+  }, [canvasDoc, mergeNodeWhileActiveEdit, nodeOrder, nodesMap, restoreTransientNodeState]);
 
   const emit = useCallback(() => {
     listenersRef.current.forEach((listener) => listener());
@@ -267,9 +297,11 @@ export const useCanvasNodes = ({
       updateLocalNodesState(next);
 
       const nextIds = next.map((node) => node.id);
+      const { dedupedIds: dedupedNextIds } = dedupeNodeIds(nextIds);
+
       const currentIds = current.map((node) => node.id);
-      const orderChanged = !compareArrays(currentIds, nextIds);
-      const nextIdSet = new Set(nextIds);
+      const orderChanged = !compareArrays(currentIds, dedupedNextIds);
+      const nextIdSet = new Set(dedupedNextIds);
       const removedIds: string[] = [];
 
       // Collect IDs of deleted nodes
@@ -318,8 +350,8 @@ export const useCanvasNodes = ({
       canvasDoc.transact(() => {
         if (orderChanged) {
           nodeOrder.delete(0, nodeOrder.length);
-          if (nextIds.length > 0) {
-            nodeOrder.insert(0, nextIds);
+          if (dedupedNextIds.length > 0) {
+            nodeOrder.insert(0, dedupedNextIds);
           }
         }
 

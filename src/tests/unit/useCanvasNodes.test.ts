@@ -68,4 +68,27 @@ describe('useCanvasNodes', () => {
     const docNode = nodesMap.get('node-1');
     expect(docNode?.data).toMatchObject({ label: 'Local draft label' });
   });
+
+  it('deduplicates node order when snapshotting from the document', () => {
+    const canvasDoc = new Y.Doc();
+    const nodeOrder = canvasDoc.getArray<string>('node-order');
+    const nodesMap = canvasDoc.getMap<Node>('nodes-map');
+
+    const nodeOne = createNode({ label: 'Node 1' });
+    const nodeTwo = { ...createNode({ label: 'Node 2' }), id: 'node-2' } as Node;
+    const nodeThree = { ...createNode({ label: 'Node 3' }), id: 'node-3' } as Node;
+
+    canvasDoc.transact(() => {
+      nodeOrder.push(['node-1', 'node-2', 'node-1', 'node-3', 'node-2']);
+      nodesMap.set('node-1', nodeOne);
+      nodesMap.set('node-2', nodeTwo);
+      nodesMap.set('node-3', nodeThree);
+    });
+
+    const { result } = renderHook(() => useCanvasNodes({ canvasDoc, nodeOrder, nodesMap }));
+
+    const nodes = result.current.getNodes();
+    expect(nodes.map((node) => node.id)).toEqual(['node-1', 'node-2', 'node-3']);
+    expect(nodeOrder.toArray()).toEqual(['node-1', 'node-2', 'node-3']);
+  });
 });
