@@ -66,6 +66,10 @@ const BASE64_CHUNK_SIZE = 0x8000;
 // WebRTC data channel has 16KB limit, stay under with overhead
 const MAX_MESSAGE_CHUNK_SIZE = 15_000;
 
+// Pause outgoing traffic when the data channel buffer is saturated.
+const DATA_CHANNEL_MAX_BUFFER = 256_000;
+const DATA_CHANNEL_RESUME_THRESHOLD = 128_000;
+
 type PendingChunk = {
   total: number;
   received: number;
@@ -126,6 +130,8 @@ export function useWebRTCManual(doc: Y.Doc) {
   
   // Queue outgoing updates when channel not ready
   const pendingYUpdatesRef = useRef<Uint8Array[]>([]);
+  const isBufferDrainingRef = useRef(false);
+  const flushPendingYUpdatesRef = useRef<() => void>(() => {});
   
   // Reassemble chunked messages from remote peer
   const incomingChunksRef = useRef<Map<string, PendingChunk>>(new Map());
@@ -137,6 +143,83 @@ export function useWebRTCManual(doc: Y.Doc) {
   // Stable client ID for presence tracking
   const localClientKey = useMemo(() => String(doc.clientID), [doc]);
   const presenceMap = useMemo(() => doc.getMap<CursorPresence>('presence'), [doc]);
+
+  const scheduleBufferDrain = useCallback(() => {
+    const channel = dataChannelRef.current;
+    if (!channel || channel.readyState !== 'open') {
+      return;
+    }
+
+    if (channel.bufferedAmount <= DATA_CHANNEL_RESUME_THRESHOLD) {
+      if (typeof queueMicrotask === 'function') {
+        queueMicrotask(() => {
+          flushPendingYUpdatesRef.current();
+        });
+      } else {
+        Promise.resolve().then(() => {
+          flushPendingYUpdatesRef.current();
+        });
+      }
+      return;
+    }
+
+    if (isBufferDrainingRef.current) {
+      return;
+    }
+
+    isBufferDrainingRef.current = true;
+  }, []);
+
+  const enqueueYUpdate = useCallback(
+    (update: Uint8Array) => {
+      pendingYUpdatesRef.current.push(update);
+      scheduleBufferDrain();
+    },
+    [scheduleBufferDrain],
+  );
+
+  const sendJSONMessage = useCallback(
+    (
+      message: ChannelMessage,
+      options: { onBackpressure?: () => void; context?: string } = {},
+    ): boolean => {
+      const channel = dataChannelRef.current;
+      if (!channel || channel.readyState !== 'open') {
+        return false;
+      }
+
+      if (channel.bufferedAmount >= DATA_CHANNEL_MAX_BUFFER) {
+        options.onBackpressure?.();
+        scheduleBufferDrain();
+        return false;
+      }
+
+      const serialized = JSON.stringify(message);
+
+      try {
+        channel.send(serialized);
+
+        if (channel.bufferedAmount >= DATA_CHANNEL_MAX_BUFFER) {
+          scheduleBufferDrain();
+        }
+
+        return true;
+      } catch (error) {
+        const isOperationError =
+          error instanceof DOMException && error.name === 'OperationError';
+
+        console.error(options.context ?? 'Failed to send data channel message:', error);
+
+        if (isOperationError) {
+          options.onBackpressure?.();
+          scheduleBufferDrain();
+        }
+
+        return false;
+      }
+    },
+    [scheduleBufferDrain],
+  );
 
   /**
    * Send our current state vector to remote peer.
@@ -152,12 +235,8 @@ export function useWebRTCManual(doc: Y.Doc) {
     const vector = encodeToBase64(Y.encodeStateVector(doc));
     const message: SyncMessage = { type: 'yjs-sync', vector };
 
-    try {
-      channel.send(JSON.stringify(message));
-    } catch (error) {
-      console.error('Failed to send state vector:', error);
-    }
-  }, [doc]);
+    void sendJSONMessage(message, { context: 'Failed to send state vector' });
+  }, [doc, sendJSONMessage]);
 
   /**
    * Send a Yjs update to remote peer.
@@ -165,59 +244,65 @@ export function useWebRTCManual(doc: Y.Doc) {
    * - Chunks large updates to stay under WebRTC size limit
    * - Re-queues on send failure for retry
    */
-  const sendYUpdate = useCallback((update: Uint8Array) => {
-    const channel = dataChannelRef.current;
-    const updateCopy = update.slice();
+  const sendYUpdate = useCallback(
+    (update: Uint8Array): boolean => {
+      const channel = dataChannelRef.current;
+      const updateCopy = update.slice();
 
-    // Queue for later if channel not open
-    if (!channel || channel.readyState !== 'open') {
-      pendingYUpdatesRef.current.push(updateCopy);
-      return;
-    }
-
-    const encoded = encodeToBase64(updateCopy);
-
-    const sendMessage = (message: ChannelMessage) => {
-      try {
-        channel.send(JSON.stringify(message));
-        return true;
-      } catch (error) {
-        console.error('Failed to send Yjs update message:', error);
-        pendingYUpdatesRef.current.push(updateCopy);
+      if (!channel || channel.readyState !== 'open') {
+        enqueueYUpdate(updateCopy);
         return false;
       }
-    };
 
-    // Small enough to send in one message
-    if (encoded.length <= MAX_MESSAGE_CHUNK_SIZE) {
-      void sendMessage({ type: 'yjs-update', update: encoded });
-      return;
-    }
-
-    // Large update: split into chunks
-    const chunkId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-
-    const totalChunks = Math.ceil(encoded.length / MAX_MESSAGE_CHUNK_SIZE);
-
-    for (let index = 0; index < totalChunks; index += 1) {
-      const start = index * MAX_MESSAGE_CHUNK_SIZE;
-      const end = start + MAX_MESSAGE_CHUNK_SIZE;
-      const chunk = encoded.slice(start, end);
-      const success = sendMessage({
-        type: 'yjs-update-chunk',
-        id: chunkId,
-        index,
-        total: totalChunks,
-        chunk,
-      });
-      // Stop sending if one chunk fails (avoid partial state)
-      if (!success) {
-        break;
+      if (channel.bufferedAmount >= DATA_CHANNEL_MAX_BUFFER) {
+        enqueueYUpdate(updateCopy);
+        return false;
       }
-    }
-  }, []);
+
+      const encoded = encodeToBase64(updateCopy);
+      const sendChunk = (message: ChannelMessage, context: string) =>
+        sendJSONMessage(message, {
+          onBackpressure: () => enqueueYUpdate(updateCopy),
+          context,
+        });
+
+      if (encoded.length <= MAX_MESSAGE_CHUNK_SIZE) {
+        return sendChunk(
+          { type: 'yjs-update', update: encoded },
+          'Failed to send Yjs update message',
+        );
+      }
+
+      const chunkId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+      const totalChunks = Math.ceil(encoded.length / MAX_MESSAGE_CHUNK_SIZE);
+
+      for (let index = 0; index < totalChunks; index += 1) {
+        const start = index * MAX_MESSAGE_CHUNK_SIZE;
+        const end = start + MAX_MESSAGE_CHUNK_SIZE;
+        const chunk = encoded.slice(start, end);
+        const success = sendChunk(
+          {
+            type: 'yjs-update-chunk',
+            id: chunkId,
+            index,
+            total: totalChunks,
+            chunk,
+          },
+          'Failed to send Yjs update chunk',
+        );
+
+        if (!success) {
+          return false;
+        }
+      }
+
+      return true;
+    },
+    [enqueueYUpdate, sendJSONMessage],
+  );
 
   /**
    * Send all queued Yjs updates when channel becomes ready.
@@ -229,16 +314,35 @@ export function useWebRTCManual(doc: Y.Doc) {
       return;
     }
 
-    if (pendingYUpdatesRef.current.length === 0) {
-      return;
-    }
+    while (pendingYUpdatesRef.current.length > 0) {
+      if (channel.bufferedAmount >= DATA_CHANNEL_MAX_BUFFER) {
+        scheduleBufferDrain();
+        return;
+      }
 
-    const updates = pendingYUpdatesRef.current;
-    pendingYUpdatesRef.current = [];
-    updates.forEach((update) => {
-      sendYUpdate(update);
-    });
-  }, [sendYUpdate]);
+      const nextUpdate = pendingYUpdatesRef.current.shift();
+      if (!nextUpdate) {
+        break;
+      }
+
+      const sent = sendYUpdate(nextUpdate);
+      if (!sent) {
+        return;
+      }
+    }
+  }, [scheduleBufferDrain, sendYUpdate]);
+
+  useEffect(() => {
+    flushPendingYUpdatesRef.current = flushPendingYUpdates;
+    return () => {
+      flushPendingYUpdatesRef.current = () => {};
+    };
+  }, [flushPendingYUpdates]);
+
+  const handleBufferedAmountLow = useCallback(() => {
+    isBufferDrainingRef.current = false;
+    flushPendingYUpdates();
+  }, [flushPendingYUpdates]);
 
   /**
    * Merge and send batched local document changes.
@@ -410,10 +514,13 @@ export function useWebRTCManual(doc: Y.Doc) {
    */
   const setupDataChannel = useCallback((channel: RTCDataChannel) => {
     channel.binaryType = 'arraybuffer';
+    channel.bufferedAmountLowThreshold = DATA_CHANNEL_RESUME_THRESHOLD;
+    channel.addEventListener('bufferedamountlow', handleBufferedAmountLow);
     setDataChannelState(channel.readyState as DataChannelState);
 
     channel.onopen = () => {
       setDataChannelState('open');
+      isBufferDrainingRef.current = false;
       sendStateVector(); // Request missing updates from peer
       flushLocalUpdates(); // Send our pending changes
       flushPendingYUpdates(); // Send queued remote updates
@@ -421,9 +528,10 @@ export function useWebRTCManual(doc: Y.Doc) {
 
     channel.onclose = () => {
       setDataChannelState('closed');
+      channel.removeEventListener('bufferedamountlow', handleBufferedAmountLow);
+      isBufferDrainingRef.current = false;
       setRemotePresenceByClient({}); // Clear collaborator cursors
       incomingChunksRef.current.clear();
-      pendingYUpdatesRef.current = [];
     };
 
     channel.onmessage = (event) => {
@@ -465,6 +573,7 @@ export function useWebRTCManual(doc: Y.Doc) {
     applyYUpdate,
     flushLocalUpdates,
     flushPendingYUpdates,
+    handleBufferedAmountLow,
     handleStringMessage,
     sendStateVector,
     setDataChannelState,
@@ -618,22 +727,26 @@ export function useWebRTCManual(doc: Y.Doc) {
    * Send chat message (for testing connection).
    * - Returns false if channel not ready
    */
-  const sendMessage = useCallback((message: WebRTCChatMessage) => {
-    const channel = dataChannelRef.current;
-    if (!channel || channel.readyState !== 'open') {
-      console.warn('Data channel not open');
-      return false;
-    }
+  const sendMessage = useCallback(
+    (message: WebRTCChatMessage) => {
+      const channel = dataChannelRef.current;
+      if (!channel || channel.readyState !== 'open') {
+        console.warn('Data channel not open');
+        return false;
+      }
 
-    try {
-      channel.send(JSON.stringify(message));
-      setMessages(prev => [...prev, message]);
-      return true;
-    } catch (err) {
-      console.error('Failed to send message:', err);
-      return false;
-    }
-  }, []);
+      const sent = sendJSONMessage(message, {
+        context: 'Failed to send chat message',
+      });
+
+      if (sent) {
+        setMessages(prev => [...prev, message]);
+      }
+
+      return sent;
+    },
+    [sendJSONMessage],
+  );
 
   /**
    * Update local user's presence data (cursor, selection, typing).
