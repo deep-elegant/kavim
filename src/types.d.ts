@@ -68,6 +68,7 @@ interface FileSystemContext {
   readFileAsDataUrl: (filePath: string) => Promise<string>;
   openFile: (options?: DialogOpenFileOptions) => Promise<string | null>;
   openDirectory: () => Promise<string | null>;
+  saveClipboardImage: (base64Data: string, extension: string) => Promise<string>;
 }
 
 interface LlmContext {

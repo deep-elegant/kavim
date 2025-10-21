@@ -3,6 +3,7 @@ import type { Node, XYPosition } from '@xyflow/react';
 
 import { IMAGE_NODE_MIN_HEIGHT, IMAGE_NODE_MIN_WIDTH, type ImageNodeType } from '../nodes/ImageNode';
 import type { CanvasNode, ToolId } from '../types';
+import type { UsePakAssetsReturn } from '@/core/pak/usePakAssets';
 
 /** File filter for image selection dialog */
 export const IMAGE_FILE_FILTERS = [
@@ -31,26 +32,9 @@ export const loadImageDimensions = (src: string) =>
     image.src = src;
   });
 
-/** Converts a File to a data URL for embedding */
-export const readFileAsDataUrl = (file: File) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        resolve(reader.result);
-      } else {
-        reject(new Error('Unable to read file as data URL.'));
-      }
-    };
-    reader.onerror = () => {
-      reject(reader.error ?? new Error('Unable to read file.'));
-    };
-    reader.readAsDataURL(file);
-  });
-
 /** Extracts filename from full path (works with both / and \ separators) */
 export const getFileName = (filePath: string) => {
-  const segments = filePath.split(/[\/\\]/);
+  const segments = filePath.split(/[/\\]/);
   return segments[segments.length - 1] ?? filePath;
 };
 
@@ -74,6 +58,8 @@ export interface UseCanvasImageNodesParams {
   setSelectedTool: Dispatch<SetStateAction<ToolId | null>>;
   screenToFlowPosition: (position: XYPosition) => XYPosition;
   getCanvasCenterPosition: () => XYPosition;
+  registerAssetFromFilePath: UsePakAssetsReturn['registerAssetFromFilePath'];
+  registerAssetFromFile: UsePakAssetsReturn['registerAssetFromFile'];
 }
 
 /**
@@ -88,6 +74,8 @@ export const useCanvasImageNodes = ({
   setSelectedTool,
   screenToFlowPosition,
   getCanvasCenterPosition,
+  registerAssetFromFilePath,
+  registerAssetFromFile,
 }: UseCanvasImageNodesParams) => {
   /**
    * Adds a new image node to the canvas.
@@ -171,15 +159,14 @@ export const useCanvasImageNodes = ({
         return;
       }
 
-      const dataUrl = await window.fileSystem.readFileAsDataUrl(filePath);
-      const fileName = getFileName(filePath);
+      const asset = await registerAssetFromFilePath(filePath);
       const centerPosition = getCanvasCenterPosition();
 
-      await addImageNode(dataUrl, centerPosition, fileName);
+      await addImageNode(asset.uri, centerPosition, asset.fileName);
     } catch (error) {
       console.error('Failed to add image node', error);
     }
-  }, [addImageNode, getCanvasCenterPosition]);
+  }, [addImageNode, getCanvasCenterPosition, registerAssetFromFilePath]);
 
   /** Required to allow dropping files on the canvas */
   const handleDragOver = useCallback((event: React.DragEvent) => {
@@ -212,21 +199,21 @@ export const useCanvasImageNodes = ({
       });
 
       files.forEach((file, index) => {
-        readFileAsDataUrl(file)
-          .then((dataUrl) => {
+        registerAssetFromFile(file)
+          .then((asset) => {
             const offset = index * 24;
             void addImageNode(
-              dataUrl,
+              asset.uri,
               { x: dropPosition.x + offset, y: dropPosition.y + offset },
-              file.name,
+              asset.fileName,
             );
           })
           .catch((error) => {
-            console.error('Failed to read dropped image', error);
+            console.error('Failed to process dropped image', error);
           });
       });
     },
-    [addImageNode, screenToFlowPosition, setSelectedTool],
+    [addImageNode, registerAssetFromFile, screenToFlowPosition, setSelectedTool],
   );
 
   return {

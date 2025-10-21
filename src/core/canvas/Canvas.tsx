@@ -54,13 +54,10 @@ import { RemoteCursor } from './collaboration/RemoteCursor';
 import { RemoteNodePresenceProvider } from './collaboration/RemoteNodePresenceContext';
 import { useCanvasCollaboration } from './collaboration/useCanvasCollaboration';
 import { useCanvasCopyPaste } from './hooks/useCanvasCopyPaste';
-import useCanvasImageNodes, {
-  getFileName,
-  isImageFile,
-  readFileAsDataUrl,
-} from './hooks/useCanvasImageNodes';
+import useCanvasImageNodes, { getFileName, isImageFile } from './hooks/useCanvasImageNodes';
 import type { CanvasNode, ToolId } from './types';
 import { StatsForNerdsOverlay } from '@/components/diagnostics/StatsForNerdsOverlay';
+import { usePakAssets } from '@/core/pak/usePakAssets';
 
 
 // Available drawing tools in the toolbar
@@ -231,12 +228,16 @@ const CanvasInner = () => {
     });
   }, [screenToFlowPosition]);
 
+  const pakAssets = usePakAssets();
+
   const { addImageNode, handleAddImageFromDialog, handleDragOver, handleDrop } =
     useCanvasImageNodes({
       setNodes,
       setSelectedTool,
       screenToFlowPosition,
       getCanvasCenterPosition,
+      registerAssetFromFilePath: pakAssets.registerAssetFromFilePath,
+      registerAssetFromFile: pakAssets.registerAssetFromFile,
     });
 
   // Image tool opens file picker, other tools toggle active state
@@ -385,7 +386,7 @@ const CanvasInner = () => {
     setSelectedTool,
     addImageNode,
     getCanvasCenterPosition,
-    readFileAsDataUrl,
+    registerAssetFromBytes: pakAssets.registerAssetFromBytes,
     getFileName,
     isImageFile,
   });
