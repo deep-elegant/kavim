@@ -10,7 +10,59 @@ import {
 import type { Node } from '@xyflow/react';
 import type * as Y from 'yjs';
 import { arraysShallowEqual } from './arrayUtils';
-import { restoreTransientNodeState, sanitizeNodeForSync } from './nodeSync';
+import {
+  TRANSIENT_NODE_DATA_KEYS,
+  restoreTransientNodeState,
+  sanitizeNodeForSync,
+} from './nodeSync';
+
+type NodeDataRecord = Record<string, unknown>;
+
+const isRecord = (value: unknown): value is NodeDataRecord =>
+  !!value && typeof value === 'object';
+
+const hasTransientEditingFlag = (data: Node['data']): boolean => {
+  if (!isRecord(data)) {
+    return false;
+  }
+
+  const record = data as NodeDataRecord;
+
+  for (const key of TRANSIENT_NODE_DATA_KEYS) {
+    if (Boolean(record[key])) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const mergeNodeWhileActiveEdit = (docNode: Node, previousNode?: Node): Node => {
+  if (!previousNode || !hasTransientEditingFlag(previousNode.data)) {
+    return docNode;
+  }
+
+  const docData = docNode.data;
+  const previousData = previousNode.data;
+
+  const mergedData = isRecord(docData)
+    ? ({
+        ...(docData as NodeDataRecord),
+        ...(previousData as NodeDataRecord),
+      } as Node['data'])
+    : previousData;
+
+  return {
+    ...docNode,
+    data: mergedData,
+    width: previousNode.width,
+    height: previousNode.height,
+    style: previousNode.style,
+    measured: previousNode.measured,
+    positionAbsolute: previousNode.positionAbsolute,
+    dragging: previousNode.dragging,
+  } as Node;
+};
 
 /** API for managing nodes with Yjs synchronization and local state optimization */
 export type CanvasNodeHandles = {
@@ -65,33 +117,7 @@ export const useCanvasNodes = ({
 
       const index = nextNodes.length;
       const previousNode = previousNodesById.get(id);
-      let nodeForSnapshot = node;
-
-      if (previousNode) {
-        const previousData = previousNode.data;
-        if (
-          previousData &&
-          typeof previousData === 'object' &&
-          (previousData as { isTyping?: boolean }).isTyping
-        ) {
-          const docData = node.data;
-
-          if (docData && typeof docData === 'object') {
-            nodeForSnapshot = {
-              ...node,
-              data: {
-                ...(docData as Record<string, unknown>),
-                ...(previousData as Record<string, unknown>),
-              } as Node['data'],
-            } as Node;
-          } else {
-            nodeForSnapshot = {
-              ...node,
-              data: previousNode.data,
-            } as Node;
-          }
-        }
-      }
+      const nodeForSnapshot = mergeNodeWhileActiveEdit(node, previousNode);
 
       const restoredNode = restoreTransientNodeState(nodeForSnapshot, previousNode);
       nextNodes.push(restoredNode);
@@ -111,7 +137,7 @@ export const useCanvasNodes = ({
     nodeSerializationRef.current = nextSerialization;
     nodesRef.current = nextNodes;
     return nextNodes;
-  }, [nodeOrder, nodesMap, restoreTransientNodeState]);
+  }, [mergeNodeWhileActiveEdit, nodeOrder, nodesMap, restoreTransientNodeState]);
 
   const emit = useCallback(() => {
     listenersRef.current.forEach((listener) => listener());
