@@ -37,6 +37,11 @@ interface PakOperationResult {
   filePath: string;
 }
 
+interface PakAssetSummary {
+  path: string;
+  size: number;
+}
+
 interface PakContext {
   save: (payload: {
     fileName: string;
@@ -45,6 +50,9 @@ interface PakContext {
     assets?: { path: string; data: unknown }[];
   }) => Promise<PakOperationResult>;
   load: (filePath: string) => Promise<PakOperationResult>;
+  addAsset: (asset: { path: string; data: unknown }) => Promise<PakAssetSummary>;
+  removeAsset: (assetPath: string) => Promise<boolean>;
+  listAssets: () => Promise<PakAssetSummary[]>;
 }
 
 type DialogFileFilter = {
