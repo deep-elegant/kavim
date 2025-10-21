@@ -64,18 +64,47 @@ export const useCanvasNodes = ({
       }
 
       const index = nextNodes.length;
-      const restoredNode = restoreTransientNodeState(node, previousNodesById.get(id));
+      const previousNode = previousNodesById.get(id);
+      let nodeForSnapshot = node;
+
+      if (previousNode) {
+        const previousData = previousNode.data;
+        if (
+          previousData &&
+          typeof previousData === 'object' &&
+          (previousData as { isTyping?: boolean }).isTyping
+        ) {
+          const docData = node.data;
+
+          if (docData && typeof docData === 'object') {
+            nodeForSnapshot = {
+              ...node,
+              data: {
+                ...(docData as Record<string, unknown>),
+                ...(previousData as Record<string, unknown>),
+              } as Node['data'],
+            } as Node;
+          } else {
+            nodeForSnapshot = {
+              ...node,
+              data: previousNode.data,
+            } as Node;
+          }
+        }
+      }
+
+      const restoredNode = restoreTransientNodeState(nodeForSnapshot, previousNode);
       nextNodes.push(restoredNode);
       indexMap.set(id, index);
 
-      // Reuse existing serialization if available (optimization)
+      const serializedDocNode = JSON.stringify(node);
       const existingSerialization = previousSerialization.get(id);
-      if (existingSerialization !== undefined) {
+      if (existingSerialization !== undefined && existingSerialization === serializedDocNode) {
         nextSerialization.set(id, existingSerialization);
         return;
       }
 
-      nextSerialization.set(id, JSON.stringify(node));
+      nextSerialization.set(id, serializedDocNode);
     });
 
     nodeIndexRef.current = indexMap;
