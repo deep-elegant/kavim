@@ -118,15 +118,11 @@ export function useWebRTCManual(doc: Y.Doc) {
 
         return true;
       } catch (error) {
-        const isOperationError =
-          error instanceof DOMException && error.name === 'OperationError';
-
         console.error(options.context ?? 'Failed to send data channel message:', error);
 
-        if (isOperationError) {
-          options.onBackpressure?.();
-          scheduleBufferDrain();
-        }
+        options.onBackpressure?.();
+        scheduleBufferDrain();
+        resyncNeededRef.current = true;
 
         return false;
       }
