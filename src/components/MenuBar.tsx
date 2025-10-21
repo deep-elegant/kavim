@@ -68,7 +68,7 @@ const createGatewaySettingsState = (): GatewaySettingsState =>
 export default function MenuBar() {
   const { i18n } = useTranslation();
   const { nodes, edges, setCanvasState } = useCanvasData();
-  const { connectionState, dataChannelState } = useWebRTC();
+  const { connectionState, dataChannelState, requestSync } = useWebRTC();
   const {
     activeDraftId,
     setActiveFilePath,
@@ -425,6 +425,9 @@ export default function MenuBar() {
               </MenubarItem>
               <MenubarItem onClick={() => { setIsPeerConnectionOpen(true); setConnectionRole('responder'); }}>
                 Connect as Responder
+              </MenubarItem>
+              <MenubarItem onClick={() => requestSync?.()}>
+                Resync
               </MenubarItem>
             </MenubarContent>
           </MenubarMenu>

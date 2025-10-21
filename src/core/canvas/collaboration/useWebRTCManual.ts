@@ -61,6 +61,8 @@ export function useWebRTCManual(doc: Y.Doc) {
 
   // Batch local doc changes to reduce network chatter
   const pendingLocalUpdatesRef = useRef<Uint8Array[]>([]);
+  const docGuidRef = useRef(doc.guid);
+  const resyncNeededRef = useRef(true);
   const localFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scheduleBufferDrain = useCallback(() => {
@@ -162,6 +164,29 @@ export function useWebRTCManual(doc: Y.Doc) {
     };
   }, [flushPendingYUpdates]);
 
+  useEffect(() => {
+    if (docGuidRef.current === doc.guid) {
+      return;
+    }
+
+    docGuidRef.current = doc.guid;
+    pendingLocalUpdatesRef.current = [];
+    resetPendingQueue();
+    resyncNeededRef.current = true;
+
+    const channel = dataChannelRef.current;
+    if (channel?.readyState === 'open') {
+      sendStateVector();
+      resyncNeededRef.current = false;
+    }
+  }, [dataChannelRef, doc, resetPendingQueue, sendStateVector]);
+
+  useEffect(() => {
+    if (dataChannelState !== 'open') {
+      resyncNeededRef.current = true;
+    }
+  }, [dataChannelState]);
+
   const handleBufferedAmountLow = useCallback(() => {
     isBufferDrainingRef.current = false;
     flushPendingYUpdates();
@@ -215,18 +240,26 @@ export function useWebRTCManual(doc: Y.Doc) {
       channel.onopen = () => {
         setDataChannelState('open');
         isBufferDrainingRef.current = false;
-        sendStateVector();
+        if (resyncNeededRef.current) {
+          sendStateVector();
+          resyncNeededRef.current = false;
+        }
         flushLocalUpdates();
         flushPendingYUpdates();
       };
 
       channel.onclose = () => {
+        resyncNeededRef.current = true;
         setDataChannelState('closed');
         channel.removeEventListener('bufferedamountlow', handleBufferedAmountLow);
         isBufferDrainingRef.current = false;
         clearRemotePresence();
         clearDataChannel();
         resetChunkAssembly();
+      };
+
+      channel.onerror = () => {
+        resyncNeededRef.current = true;
       };
 
       channel.onmessage = (event) => {
@@ -325,6 +358,15 @@ export function useWebRTCManual(doc: Y.Doc) {
     [sendJSONMessage],
   );
 
+  const requestSync = useCallback(() => {
+    resyncNeededRef.current = true;
+    const channel = dataChannelRef.current;
+    if (channel?.readyState === 'open') {
+      sendStateVector();
+      resyncNeededRef.current = false;
+    }
+  }, [dataChannelRef, sendStateVector]);
+
   /**
    * Cleanup on unmount.
    * - Flushes pending updates before closing
@@ -374,5 +416,6 @@ export function useWebRTCManual(doc: Y.Doc) {
     dataChannelState,
     messages,
     remotePresenceByClient,
+    requestSync,
   };
 }
