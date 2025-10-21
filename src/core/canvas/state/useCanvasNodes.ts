@@ -3,7 +3,7 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
+  useSyncExternalStore,
   type Dispatch,
   type SetStateAction,
 } from 'react';
@@ -39,6 +39,8 @@ export const useCanvasNodes = ({
   // Stores the latest snapshot of nodes mirrored from the document to serve as
   // the canonical local state reference for optimistic updates.
   const nodesRef = useRef<Node[]>([]);
+  const listenersRef = useRef(new Set<() => void>());
+  const shouldSyncFromDocRef = useRef(true);
 
   const compareArrays = useCallback(arraysShallowEqual, []);
 
@@ -82,7 +84,9 @@ export const useCanvasNodes = ({
     return nextNodes;
   }, [nodeOrder, nodesMap, restoreTransientNodeState]);
 
-  const [nodes, setNodesState] = useState<Node[]>(() => snapshotNodesFromDoc());
+  const emit = useCallback(() => {
+    listenersRef.current.forEach((listener) => listener());
+  }, []);
 
   /**
    * Updates local node state and refs without writing to Yjs.
@@ -96,11 +100,33 @@ export const useCanvasNodes = ({
       });
 
       nodeIndexRef.current = indexMap;
+
+      shouldSyncFromDocRef.current = false;
+
+      const previous = nodesRef.current;
       nodesRef.current = nextNodes;
-      setNodesState((current) => (compareArrays(current, nextNodes) ? current : nextNodes));
+      if (!compareArrays(previous, nextNodes)) {
+        emit();
+      }
     },
-    [compareArrays],
+    [compareArrays, emit],
   );
+
+  const subscribe = useCallback((listener: () => void) => {
+    listenersRef.current.add(listener);
+    return () => {
+      listenersRef.current.delete(listener);
+    };
+  }, []);
+
+  useEffect(() => {
+    shouldSyncFromDocRef.current = false;
+    const previous = nodesRef.current;
+    const snapshot = snapshotNodesFromDoc();
+    if (!compareArrays(previous, snapshot)) {
+      emit();
+    }
+  }, [compareArrays, emit, snapshotNodesFromDoc]);
 
   // Listen to Yjs events and sync to React state
   useEffect(() => {
@@ -110,8 +136,12 @@ export const useCanvasNodes = ({
         return; // Skip our own writes to avoid feedback loop
       }
 
+      const previous = nodesRef.current;
       const snapshot = snapshotNodesFromDoc();
-      setNodesState((current) => (compareArrays(current, snapshot) ? current : snapshot));
+      shouldSyncFromDocRef.current = false;
+      if (!compareArrays(previous, snapshot)) {
+        emit();
+      }
     };
 
     // Map change: targeted updates for modified nodes
@@ -124,43 +154,18 @@ export const useCanvasNodes = ({
         return;
       }
 
-      setNodesState((current) => {
-        let next: Node[] | undefined;
-        let changed = false;
-
-        event.keysChanged.forEach((key) => {
-          const index = nodeIndexRef.current.get(key);
-          if (index === undefined) {
-            return;
-          }
-          const value = nodesMap.get(key);
-          if (!value) {
-            // Remove any stale serialization for nodes that were deleted in the
-            // document so the cache reflects current reality.
-            nodeSerializationRef.current.delete(key);
-            return;
-          }
-          if (!next) {
-            next = [...current];
-          }
-          // Merge persisted data with transient fields (selection, dragging, etc.)
-          // so external edits do not wipe in-flight UI state.
-          const restoredNode = restoreTransientNodeState(value, current[index]);
-          if (next[index] !== restoredNode) {
-            next[index] = restoredNode;
-            changed = true;
-          }
-
-          nodeSerializationRef.current.set(key, JSON.stringify(value));
-        });
-
-        if (!next || !changed) {
-          return current;
+      event.keysChanged.forEach((key) => {
+        if (!nodesMap.has(key)) {
+          nodeSerializationRef.current.delete(key);
         }
-
-        nodesRef.current = next;
-        return next;
       });
+
+      const previous = nodesRef.current;
+      const snapshot = snapshotNodesFromDoc();
+      shouldSyncFromDocRef.current = false;
+      if (!compareArrays(previous, snapshot)) {
+        emit();
+      }
     };
 
     nodeOrder.observe(handleNodeOrderChange);
@@ -170,7 +175,19 @@ export const useCanvasNodes = ({
       nodeOrder.unobserve(handleNodeOrderChange);
       nodesMap.unobserve(handleNodesMapChange);
     };
-  }, [compareArrays, nodeOrder, nodesMap, snapshotNodesFromDoc]);
+  }, [compareArrays, emit, nodeOrder, nodesMap, snapshotNodesFromDoc]);
+
+  const getSnapshot = useCallback(() => {
+    if (shouldSyncFromDocRef.current) {
+      const snapshot = snapshotNodesFromDoc();
+      shouldSyncFromDocRef.current = false;
+      return snapshot;
+    }
+
+    return nodesRef.current;
+  }, [snapshotNodesFromDoc]);
+
+  const nodes = useSyncExternalStore(subscribe, getSnapshot);
 
   /**
    * ReactFlow-compatible setter for nodes.
