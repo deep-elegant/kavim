@@ -16,6 +16,7 @@ import {
 } from './manual-webrtc/usePeerConnection';
 import { usePresenceSync } from './manual-webrtc/usePresenceSync';
 import { useYjsSync } from './manual-webrtc/useYjsSync';
+import { useStatsForNerds } from '../../diagnostics/StatsForNerdsContext';
 
 export type {
   CollaboratorInteraction,
@@ -33,6 +34,7 @@ export type {
 
 export function useWebRTCManual(doc: Y.Doc) {
   const [messages, setMessages] = useState<WebRTCChatMessage[]>([]);
+  const { setDataChannelBufferedAmount } = useStatsForNerds();
 
   const {
     pcRef,
@@ -101,9 +103,14 @@ export function useWebRTCManual(doc: Y.Doc) {
         return false;
       }
 
+      const updateBufferedMetrics = () => {
+        setDataChannelBufferedAmount(channel.bufferedAmount);
+      };
+
       if (channel.bufferedAmount >= DATA_CHANNEL_MAX_BUFFER) {
         options.onBackpressure?.();
         scheduleBufferDrain();
+        updateBufferedMetrics();
         return false;
       }
 
@@ -111,6 +118,7 @@ export function useWebRTCManual(doc: Y.Doc) {
 
       try {
         channel.send(serialized);
+        updateBufferedMetrics();
 
         if (channel.bufferedAmount >= DATA_CHANNEL_MAX_BUFFER) {
           scheduleBufferDrain();
@@ -123,11 +131,12 @@ export function useWebRTCManual(doc: Y.Doc) {
         options.onBackpressure?.();
         scheduleBufferDrain();
         resyncNeededRef.current = true;
+        updateBufferedMetrics();
 
         return false;
       }
     },
-    [scheduleBufferDrain],
+    [scheduleBufferDrain, setDataChannelBufferedAmount],
   );
 
   const handleRemoteChatMessage = useCallback(
@@ -185,8 +194,12 @@ export function useWebRTCManual(doc: Y.Doc) {
 
   const handleBufferedAmountLow = useCallback(() => {
     isBufferDrainingRef.current = false;
+    const channel = dataChannelRef.current;
+    if (channel) {
+      setDataChannelBufferedAmount(channel.bufferedAmount);
+    }
     flushPendingYUpdates();
-  }, [flushPendingYUpdates]);
+  }, [flushPendingYUpdates, setDataChannelBufferedAmount]);
 
   /**
    * Merge and send batched local document changes.
@@ -236,6 +249,7 @@ export function useWebRTCManual(doc: Y.Doc) {
       channel.onopen = () => {
         setDataChannelState('open');
         isBufferDrainingRef.current = false;
+        setDataChannelBufferedAmount(channel.bufferedAmount);
         if (resyncNeededRef.current) {
           sendStateVector();
           resyncNeededRef.current = false;
@@ -249,6 +263,7 @@ export function useWebRTCManual(doc: Y.Doc) {
         setDataChannelState('closed');
         channel.removeEventListener('bufferedamountlow', handleBufferedAmountLow);
         isBufferDrainingRef.current = false;
+        setDataChannelBufferedAmount(0);
         clearRemotePresence();
         clearDataChannel();
         resetChunkAssembly();
@@ -267,11 +282,13 @@ export function useWebRTCManual(doc: Y.Doc) {
         }
 
         if (data instanceof ArrayBuffer) {
+          setDataChannelBufferedAmount(channel.bufferedAmount);
           applyYUpdate(new Uint8Array(data));
           return;
         }
 
         if (data instanceof Blob) {
+          setDataChannelBufferedAmount(channel.bufferedAmount);
           data
             .arrayBuffer()
             .then((buffer) => {
@@ -285,6 +302,7 @@ export function useWebRTCManual(doc: Y.Doc) {
 
         if (ArrayBuffer.isView(data)) {
           const view = data as ArrayBufferView;
+          setDataChannelBufferedAmount(channel.bufferedAmount);
           applyYUpdate(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
           return;
         }
@@ -349,9 +367,11 @@ export function useWebRTCManual(doc: Y.Doc) {
         setMessages((prev) => [...prev, message]);
       }
 
+      setDataChannelBufferedAmount(channel.bufferedAmount);
+
       return sent;
     },
-    [sendJSONMessage],
+    [sendJSONMessage, setDataChannelBufferedAmount],
   );
 
   const requestSync = useCallback(() => {

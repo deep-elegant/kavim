@@ -9,6 +9,7 @@ import {
   WebRTCChatMessage,
 } from './types';
 import { decodeFromBase64, encodeToBase64 } from './encoding';
+import { useStatsForNerds } from '../../../diagnostics/StatsForNerdsContext';
 
 interface UseYjsSyncParams {
   doc: Y.Doc;
@@ -37,6 +38,11 @@ type PendingChunk = {
   parts: string[];
 };
 
+const estimateDecodedSizeFromBase64 = (value: string) => {
+  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0;
+  return Math.max(0, Math.ceil((value.length * 3) / 4) - padding);
+};
+
 export const useYjsSync = ({
   doc,
   dataChannelRef,
@@ -46,13 +52,23 @@ export const useYjsSync = ({
 }: UseYjsSyncParams): UseYjsSyncResult => {
   const pendingYUpdatesRef = useRef<Uint8Array[]>([]);
   const incomingChunksRef = useRef<Map<string, PendingChunk>>(new Map());
+  const pendingBytesRef = useRef(0);
+
+  const { recordYjsOutbound, recordYjsInbound, setYjsQueueSnapshot } =
+    useStatsForNerds();
+
+  const updateQueueMetrics = useCallback(() => {
+    setYjsQueueSnapshot(pendingYUpdatesRef.current.length, pendingBytesRef.current);
+  }, [setYjsQueueSnapshot]);
 
   const enqueueYUpdate = useCallback(
     (update: Uint8Array) => {
       pendingYUpdatesRef.current.push(update);
+      pendingBytesRef.current += update.byteLength;
+      updateQueueMetrics();
       scheduleBufferDrain();
     },
-    [scheduleBufferDrain],
+    [scheduleBufferDrain, updateQueueMetrics],
   );
 
   const sendYUpdate = useCallback(
@@ -78,7 +94,14 @@ export const useYjsSync = ({
         });
 
       if (encoded.length <= MAX_MESSAGE_CHUNK_SIZE) {
-        return sendChunk({ type: 'yjs-update', update: encoded }, 'Failed to send Yjs update message');
+        const sent = sendChunk(
+          { type: 'yjs-update', update: encoded },
+          'Failed to send Yjs update message',
+        );
+        if (sent) {
+          recordYjsOutbound(estimateDecodedSizeFromBase64(encoded));
+        }
+        return sent;
       }
 
       const chunkId =
@@ -106,11 +129,13 @@ export const useYjsSync = ({
         if (!success) {
           return false;
         }
+
+        recordYjsOutbound(estimateDecodedSizeFromBase64(chunk));
       }
 
       return true;
     },
-    [dataChannelRef, enqueueYUpdate, sendJSONMessage],
+    [dataChannelRef, enqueueYUpdate, recordYjsOutbound, sendJSONMessage],
   );
 
   const flushPendingYUpdates = useCallback(() => {
@@ -130,22 +155,25 @@ export const useYjsSync = ({
         break;
       }
 
+      pendingBytesRef.current = Math.max(0, pendingBytesRef.current - nextUpdate.byteLength);
+      updateQueueMetrics();
       const sent = sendYUpdate(nextUpdate);
       if (!sent) {
         return;
       }
     }
-  }, [dataChannelRef, scheduleBufferDrain, sendYUpdate]);
+  }, [dataChannelRef, scheduleBufferDrain, sendYUpdate, updateQueueMetrics]);
 
   const applyYUpdate = useCallback(
     (update: Uint8Array) => {
+      recordYjsInbound(update.byteLength);
       try {
         Y.applyUpdate(doc, update, 'webrtc');
       } catch (error) {
         console.error('Failed to apply Yjs update:', error);
       }
     },
-    [doc],
+    [doc, recordYjsInbound],
   );
 
   const sendStateVector = useCallback(() => {
@@ -186,7 +214,8 @@ export const useYjsSync = ({
       }
 
       if (message.type === 'yjs-update') {
-        applyYUpdate(decodeFromBase64(message.update));
+        const decoded = decodeFromBase64(message.update);
+        applyYUpdate(decoded);
         return;
       }
 
@@ -221,7 +250,8 @@ export const useYjsSync = ({
         if (entry.received === entry.total) {
           incomingChunksRef.current.delete(id);
           const combined = entry.parts.join('');
-          applyYUpdate(decodeFromBase64(combined));
+          const decoded = decodeFromBase64(combined);
+          applyYUpdate(decoded);
         }
       }
     },
@@ -240,7 +270,9 @@ export const useYjsSync = ({
 
   const resetPendingQueue = useCallback(() => {
     pendingYUpdatesRef.current = [];
-  }, []);
+    pendingBytesRef.current = 0;
+    updateQueueMetrics();
+  }, [updateQueueMetrics]);
 
   return useMemo(
     () => ({
