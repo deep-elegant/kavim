@@ -86,8 +86,15 @@ export const useFileTransferChannel = ({
   const configuredChannelRef = useRef<RTCDataChannel | null>(null);
   const channelCleanupRef = useRef<(() => void) | null>(null);
 
-  const { queuePacket, clearPacketsForTransfer, resetQueue } = useSendQueue(channelRef);
-  const { recordFileTransferOutbound, recordFileTransferInbound } = useStatsForNerds();
+  const {
+    recordFileTransferOutbound,
+    recordFileTransferInbound,
+    setFileTransferQueueSnapshot,
+  } = useStatsForNerds();
+  const { queuePacket, clearPacketsForTransfer, resetQueue } = useSendQueue(
+    channelRef,
+    setFileTransferQueueSnapshot,
+  );
   const textEncoder = useMemo(() => new TextEncoder(), []);
 
   const queueFilePacket = useCallback(

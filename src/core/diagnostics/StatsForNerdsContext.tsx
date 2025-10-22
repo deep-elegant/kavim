@@ -27,6 +27,8 @@ export type StatsForNerdsMetrics = {
   yjsInboundUpdatesPerSecond: MetricSeries;
   yjsQueueLength: MetricSeries;
   yjsQueueBytes: MetricSeries;
+  fileQueueLength: MetricSeries;
+  fileQueueBytes: MetricSeries;
   dataChannelBufferedAmount: MetricSeries;
 };
 
@@ -39,6 +41,7 @@ type StatsForNerdsContextValue = {
   recordFileTransferOutbound: (bytes: number) => void;
   recordFileTransferInbound: (bytes: number) => void;
   setYjsQueueSnapshot: (length: number, totalBytes: number) => void;
+  setFileTransferQueueSnapshot: (length: number, totalBytes: number) => void;
   setDataChannelBufferedAmount: (amount: number) => void;
   metrics: StatsForNerdsMetrics;
 };
@@ -82,6 +85,8 @@ const createEmptyHistories = () => ({
   yjsInboundUpdates: [] as number[],
   yjsQueueLength: [] as number[],
   yjsQueueBytes: [] as number[],
+  fileQueueLength: [] as number[],
+  fileQueueBytes: [] as number[],
   dataChannelBufferedAmount: [] as number[],
 });
 
@@ -261,6 +266,20 @@ export const StatsForNerdsProvider: React.FC<{ children: React.ReactNode }> = ({
     [enabled],
   );
 
+  const setFileTransferQueueSnapshot = useCallback(
+    (length: number, totalBytes: number) => {
+      if (!enabled) {
+        return;
+      }
+      setHistories((previous) => ({
+        ...previous,
+        fileQueueLength: pushCapped(previous.fileQueueLength, length),
+        fileQueueBytes: pushCapped(previous.fileQueueBytes, totalBytes),
+      }));
+    },
+    [enabled],
+  );
+
   const setDataChannelBufferedAmount = useCallback(
     (amount: number) => {
       if (!enabled) {
@@ -294,6 +313,8 @@ export const StatsForNerdsProvider: React.FC<{ children: React.ReactNode }> = ({
       yjsInboundUpdatesPerSecond: toSeries(histories.yjsInboundUpdates),
       yjsQueueLength: toSeries(histories.yjsQueueLength),
       yjsQueueBytes: toSeries(histories.yjsQueueBytes),
+      fileQueueLength: toSeries(histories.fileQueueLength),
+      fileQueueBytes: toSeries(histories.fileQueueBytes),
       dataChannelBufferedAmount: toSeries(histories.dataChannelBufferedAmount),
     };
   }, [histories]);
@@ -308,6 +329,7 @@ export const StatsForNerdsProvider: React.FC<{ children: React.ReactNode }> = ({
       recordFileTransferOutbound,
       recordFileTransferInbound,
       setYjsQueueSnapshot,
+      setFileTransferQueueSnapshot,
       setDataChannelBufferedAmount,
       metrics,
     }),
@@ -320,6 +342,7 @@ export const StatsForNerdsProvider: React.FC<{ children: React.ReactNode }> = ({
       recordFileTransferOutbound,
       recordYjsOutbound,
       setDataChannelBufferedAmount,
+      setFileTransferQueueSnapshot,
       setEnabled,
       setYjsQueueSnapshot,
     ],

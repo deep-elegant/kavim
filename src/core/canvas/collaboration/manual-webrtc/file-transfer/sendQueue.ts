@@ -1,4 +1,4 @@
-import { MutableRefObject, useCallback, useRef } from 'react';
+import { MutableRefObject, useCallback, useEffect, useRef } from 'react';
 
 import { DATA_CHANNEL_MAX_BUFFER } from '../types';
 
@@ -9,9 +9,27 @@ export interface PendingChunkPacket {
   size: number;
 }
 
-export const useSendQueue = (channelRef: MutableRefObject<RTCDataChannel | null>) => {
+type QueueSnapshotCallback = (length: number, totalBytes: number) => void;
+
+export const useSendQueue = (
+  channelRef: MutableRefObject<RTCDataChannel | null>,
+  onSnapshotUpdate?: QueueSnapshotCallback,
+) => {
   const queueRef = useRef<PendingChunkPacket[]>([]);
+  const queuedBytesRef = useRef(0);
   const drainScheduledRef = useRef(false);
+  const diagnosticsCallbackRef = useRef<QueueSnapshotCallback | undefined>(onSnapshotUpdate);
+
+  useEffect(() => {
+    diagnosticsCallbackRef.current = onSnapshotUpdate;
+  }, [onSnapshotUpdate]);
+
+  const emitSnapshot = useCallback(() => {
+    const callback = diagnosticsCallbackRef.current;
+    if (callback) {
+      callback(queueRef.current.length, queuedBytesRef.current);
+    }
+  }, []);
 
   const scheduleDrain = useCallback(() => {
     if (drainScheduledRef.current) {
@@ -43,25 +61,34 @@ export const useSendQueue = (channelRef: MutableRefObject<RTCDataChannel | null>
           console.error('Failed to send data channel frame', error);
           break;
         }
+
+        queuedBytesRef.current = Math.max(0, queuedBytesRef.current - packet.size);
+        emitSnapshot();
       }
     });
-  }, [channelRef]);
+  }, [channelRef, emitSnapshot]);
 
   const queuePacket = useCallback(
     (packet: PendingChunkPacket) => {
       queueRef.current.push(packet);
+      queuedBytesRef.current += packet.size;
+      emitSnapshot();
       scheduleDrain();
     },
-    [scheduleDrain],
+    [emitSnapshot, scheduleDrain],
   );
 
   const clearPacketsForTransfer = useCallback((id: string) => {
     queueRef.current = queueRef.current.filter((packet) => packet.id !== id);
-  }, []);
+    queuedBytesRef.current = queueRef.current.reduce((sum, packet) => sum + packet.size, 0);
+    emitSnapshot();
+  }, [emitSnapshot]);
 
   const resetQueue = useCallback(() => {
     queueRef.current = [];
-  }, []);
+    queuedBytesRef.current = 0;
+    emitSnapshot();
+  }, [emitSnapshot]);
 
   return {
     queuePacket,

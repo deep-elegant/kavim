@@ -367,6 +367,14 @@ export const StatsForNerdsOverlay: React.FC = () => {
           </div>
           <div className="flex items-center justify-between">
             <span className="text-[0.6rem] uppercase text-muted-foreground">
+              File transfer queue
+            </span>
+            <span className="font-semibold">
+              {metrics.fileQueueLength.latest} chunks · {formatBytes(metrics.fileQueueBytes.latest)}
+            </span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-[0.6rem] uppercase text-muted-foreground">
               RTC buffered amount
             </span>
             <span className="font-semibold">

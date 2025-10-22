@@ -120,6 +120,7 @@ vi.mock('../../core/diagnostics/StatsForNerdsContext', () => ({
     recordFileTransferOutbound: vi.fn(),
     recordFileTransferInbound: vi.fn(),
     setYjsQueueSnapshot: vi.fn(),
+    setFileTransferQueueSnapshot: vi.fn(),
   }),
 }));
 
