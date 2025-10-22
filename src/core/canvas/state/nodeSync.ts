@@ -15,28 +15,20 @@ const asNodeDataRecord = (value: Node['data']): NodeDataRecord | undefined => {
  * with the shared Yjs document. Stripping them keeps the collaborative state
  * focused on the persisted node shape.
  */
-export const TRANSIENT_NODE_DATA_KEYS = new Set(['isTyping', 'isEditing', 'isActive']);
+export const TRANSIENT_NODE_DATA_KEYS = new Set([
+  'isTyping',
+  'isEditing',
+  'isActive',
+  'assetStatus',
+  'assetError',
+]);
 
 /**
  * Determines if a key should be excluded from Yjs sync.
  * - Always excludes UI-only flags (isTyping, isEditing, isActive).
- * - Excludes fontSizeValue when mode is 'auto' (it's computed, not authored).
  */
-export const isTransientNodeDataKey = (key: string, data?: Node['data']) => {
-  if (TRANSIENT_NODE_DATA_KEYS.has(key)) {
-    return true;
-  }
-
-  // Auto-calculated font size shouldn't be synced; each client computes their own
-  if (key === 'fontSizeValue' && data && typeof data === 'object') {
-    const { fontSizeMode } = data as { fontSizeMode?: unknown };
-    if (fontSizeMode === 'auto') {
-      return true;
-    }
-  }
-
-  return false;
-};
+export const isTransientNodeDataKey = (key: string) =>
+  TRANSIENT_NODE_DATA_KEYS.has(key);
 
 /**
  * Removes transient UI keys from a node's data object before sending it to Yjs.
@@ -46,10 +38,15 @@ export const sanitizeNodeDataForSync = (data: Node['data']) => {
     return data;
   }
 
+  const record = asNodeDataRecord(data);
+  if (!record) {
+    return data;
+  }
+
   let hasTransientKey = false;
 
-  const sanitizedEntries = Object.entries(data).filter(([key]) => {
-    if (isTransientNodeDataKey(key, data)) {
+  const sanitizedEntries = Object.entries(record).filter(([key]) => {
+    if (isTransientNodeDataKey(key)) {
       hasTransientKey = true;
       return false;
     }
@@ -91,8 +88,9 @@ export type MutableNodeRecord = {
 };
 
 export const createMutableNodeRecord = (node: Node): MutableNodeRecord => {
+  const baseRecord = asNodeDataRecord(node.data) ?? {};
   const record = {
-    ...(asNodeDataRecord(node.data) ?? {}),
+    ...baseRecord,
   } satisfies NodeDataRecord;
 
   return {
@@ -135,43 +133,6 @@ export const restoreTransientKeys = (
 };
 
 /**
- * Restores auto-calculated font size from previous state when still in auto mode.
- * Prevents losing locally computed value when receiving updates from Yjs.
- */
-export const restoreAutoFontSize = (
-  mutableData: NodeDataRecord,
-  previousData?: Node['data'],
-): boolean => {
-  const previousRecord = asNodeDataRecord(previousData);
-  if (!previousRecord) {
-    return false;
-  }
-
-  const previousMode = previousRecord['fontSizeMode'];
-  if (previousMode !== 'auto') {
-    return false; // Was manual, don't restore
-  }
-
-  const previousValue = previousRecord['fontSizeValue'];
-  if (typeof previousValue !== 'number') {
-    return false;
-  }
-
-  const nextMode = mutableData['fontSizeMode'];
-  if (typeof nextMode === 'string' && nextMode !== 'auto') {
-    return false; // Switched to manual, use new value
-  }
-
-  if (typeof mutableData['fontSizeValue'] === 'number') {
-    return false; // Already has a value from Yjs
-  }
-
-  mutableData['fontSizeMode'] = 'auto';
-  mutableData['fontSizeValue'] = previousValue;
-  return true;
-};
-
-/**
  * Reconciles the selected flag between incoming doc node and previous local state.
  * Keeps local selection state stable during remote updates.
  */
@@ -196,7 +157,6 @@ export const reconcileSelectedFlag = (mutableNode: Node, previousNode: Node): bo
 /**
  * Main entry point for merging Yjs document node with local transient state.
  * - Restores UI flags (isTyping, selection).
- * - Preserves auto-calculated font sizes.
  * - Returns original node if no restoration was needed (preserves identity).
  */
 export const restoreTransientNodeState = (docNode: Node, previousNode?: Node) => {
@@ -207,10 +167,9 @@ export const restoreTransientNodeState = (docNode: Node, previousNode?: Node) =>
   const mutable = createMutableNodeRecord(docNode);
 
   const restoredTransient = restoreTransientKeys(mutable.data, previousNode.data);
-  const restoredFontSize = restoreAutoFontSize(mutable.data, previousNode.data);
   const reconciledSelected = reconcileSelectedFlag(mutable.node, previousNode);
 
-  if (!restoredTransient && !restoredFontSize && !reconciledSelected) {
+  if (!restoredTransient && !reconciledSelected) {
     return docNode;
   }
 

@@ -54,13 +54,12 @@ import { RemoteCursor } from './collaboration/RemoteCursor';
 import { RemoteNodePresenceProvider } from './collaboration/RemoteNodePresenceContext';
 import { useCanvasCollaboration } from './collaboration/useCanvasCollaboration';
 import { useCanvasCopyPaste } from './hooks/useCanvasCopyPaste';
-import useCanvasImageNodes, {
-  getFileName,
-  isImageFile,
-  readFileAsDataUrl,
-} from './hooks/useCanvasImageNodes';
+import useCanvasImageNodes, { getFileName, isImageFile } from './hooks/useCanvasImageNodes';
+import useImageAssetTransfers from './hooks/useImageAssetTransfers';
 import type { CanvasNode, ToolId } from './types';
 import { StatsForNerdsOverlay } from '@/components/diagnostics/StatsForNerdsOverlay';
+import { usePakAssets } from '@/core/pak/usePakAssets';
+import { useWebRTC } from './collaboration/WebRTCContext';
 
 
 // Available drawing tools in the toolbar
@@ -120,6 +119,12 @@ const CanvasInner = () => {
     broadcastSelection,
     broadcastTyping,
   } = useCanvasCollaboration();
+  const {
+    completedTransfers,
+    failedTransfers,
+    requestAsset: requestRemoteAsset,
+    releaseAssetRequest: releaseRemoteAssetRequest,
+  } = useWebRTC();
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -231,13 +236,31 @@ const CanvasInner = () => {
     });
   }, [screenToFlowPosition]);
 
+  const pakAssets = usePakAssets();
+
   const { addImageNode, handleAddImageFromDialog, handleDragOver, handleDrop } =
     useCanvasImageNodes({
       setNodes,
       setSelectedTool,
       screenToFlowPosition,
       getCanvasCenterPosition,
+      registerAssetFromFilePath: pakAssets.registerAssetFromFilePath,
+      registerAssetFromFile: pakAssets.registerAssetFromFile,
     });
+
+  useImageAssetTransfers({
+    nodes,
+    setNodes,
+    requestAsset: requestRemoteAsset,
+    releaseAssetRequest: releaseRemoteAssetRequest,
+    completedTransfers,
+    failedTransfers,
+    pakAssets: {
+      hasAsset: pakAssets.hasAsset,
+      registerAssetAtPath: pakAssets.registerAssetAtPath,
+      isReady: pakAssets.isReady,
+    },
+  });
 
   // Image tool opens file picker, other tools toggle active state
   const handleToolSelect = useCallback(
@@ -385,7 +408,7 @@ const CanvasInner = () => {
     setSelectedTool,
     addImageNode,
     getCanvasCenterPosition,
-    readFileAsDataUrl,
+    registerAssetFromBytes: pakAssets.registerAssetFromBytes,
     getFileName,
     isImageFile,
   });

@@ -1,6 +1,6 @@
 import { protocol } from "electron";
-import path from "node:path";
-import type { PakReadResult } from "./types";
+import type { PakAssetInput, PakReadResult } from "./types";
+import { guessMimeType } from "./mimeTypes";
 
 /**
  * Manages custom pak:// protocol for loading assets from .pak archives.
@@ -11,20 +11,32 @@ import type { PakReadResult } from "./types";
 let isRegistered = false;
 let activePak: (PakReadResult & { filePath: string }) | null = null;
 
-// Map file extensions to MIME types for proper browser rendering
-const mimeTypes: Record<string, string> = {
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".svg": "image/svg+xml",
-  ".bmp": "image/bmp",
-};
+const createEmptyPak = (): PakReadResult & { filePath: string } => ({
+  manifest: {
+    name: "untitled",
+    savedAt: new Date().toISOString(),
+    version: 1,
+  },
+  files: {},
+  version: 1,
+  fileCount: 0,
+  filePath: "",
+});
 
-const guessMimeType = (assetPath: string) => {
-  const extension = path.extname(assetPath).toLowerCase();
-  return mimeTypes[extension] ?? "application/octet-stream";
+export const toBuffer = (data: PakAssetInput["data"]): Buffer => {
+  if (Buffer.isBuffer(data)) {
+    return data;
+  }
+  if (data instanceof Uint8Array) {
+    return Buffer.from(data);
+  }
+  if (data instanceof ArrayBuffer) {
+    return Buffer.from(new Uint8Array(data));
+  }
+  if (Array.isArray(data)) {
+    return Buffer.from(data);
+  }
+  return Buffer.from(String(data));
 };
 
 /** Strip protocol and decode URL to get internal pak file path */
@@ -77,3 +89,28 @@ export const setActivePak = (pak: (PakReadResult & { filePath: string }) | null)
 };
 
 export const getActivePak = () => activePak;
+
+export const ensureActivePak = () => {
+  if (!activePak) {
+    activePak = createEmptyPak();
+  }
+  return activePak;
+};
+
+export const upsertPakAsset = (asset: PakAssetInput) => {
+  const pak = ensureActivePak();
+  const buffer = toBuffer(asset.data);
+  pak.files[asset.path] = buffer;
+  pak.fileCount = Object.keys(pak.files).length;
+  return buffer;
+};
+
+export const removePakAsset = (assetPath: string) => {
+  const pak = ensureActivePak();
+  if (!(assetPath in pak.files)) {
+    return false;
+  }
+  delete pak.files[assetPath];
+  pak.fileCount = Object.keys(pak.files).length;
+  return true;
+};

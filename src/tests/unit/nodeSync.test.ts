@@ -4,9 +4,9 @@ import { describe, expect, it } from 'vitest';
 import {
   createMutableNodeRecord,
   reconcileSelectedFlag,
-  restoreAutoFontSize,
   restoreTransientKeys,
   restoreTransientNodeState,
+  sanitizeNodeDataForSync,
 } from '@/core/canvas/state/nodeSync';
 
 const createNode = (data: Node['data'] = {}): Node =>
@@ -42,37 +42,24 @@ describe('restoreTransientKeys', () => {
   });
 });
 
-describe('restoreAutoFontSize', () => {
-  it('restores the auto font size value when the document omits it', () => {
-    const mutableData: Record<string, unknown> = {
-      fontSizeMode: 'auto',
-    };
-
-    const changed = restoreAutoFontSize(mutableData, {
-      fontSizeMode: 'auto',
-      fontSizeValue: 42,
+describe('sanitizeNodeDataForSync', () => {
+  it('removes transient keys from node data', () => {
+    const sanitized = sanitizeNodeDataForSync({
+      label: 'hello',
+      isTyping: true,
+      isEditing: false,
     });
 
-    expect(changed).toBe(true);
-    expect(mutableData).toMatchObject({
-      fontSizeMode: 'auto',
-      fontSizeValue: 42,
-    });
+    expect(sanitized).toMatchObject({ label: 'hello' });
+    expect('isTyping' in (sanitized as Record<string, unknown>)).toBe(false);
+    expect('isEditing' in (sanitized as Record<string, unknown>)).toBe(false);
   });
 
-  it('skips restoration when the document already has a numeric value', () => {
-    const mutableData: Record<string, unknown> = {
-      fontSizeMode: 'auto',
-      fontSizeValue: 24,
-    };
+  it('returns the original reference when no transient keys are present', () => {
+    const data = { label: 'hello', fontSize: 'auto' };
+    const sanitized = sanitizeNodeDataForSync(data);
 
-    const changed = restoreAutoFontSize(mutableData, {
-      fontSizeMode: 'auto',
-      fontSizeValue: 42,
-    });
-
-    expect(changed).toBe(false);
-    expect(mutableData['fontSizeValue']).toBe(24);
+    expect(sanitized).toBe(data);
   });
 });
 
@@ -118,25 +105,6 @@ describe('restoreTransientNodeState', () => {
     expect(result).not.toBe(docNode);
     expect(result.data).toMatchObject({ label: 'hello', isTyping: true });
     expect(docNode.data).toMatchObject({ label: 'hello' });
-  });
-
-  it('preserves locally computed auto font sizes from the previous node', () => {
-    const docNode = createNode({
-      label: 'hello',
-      fontSizeMode: 'auto',
-    });
-    const previousNode = createNode({
-      label: 'hello',
-      fontSizeMode: 'auto',
-      fontSizeValue: 32,
-    });
-
-    const result = restoreTransientNodeState(docNode, previousNode);
-
-    expect(result.data).toMatchObject({
-      fontSizeMode: 'auto',
-      fontSizeValue: 32,
-    });
   });
 
   it('reconciles the selected flag with the previous node snapshot', () => {

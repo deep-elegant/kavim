@@ -3,7 +3,7 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
+  useSyncExternalStore,
   type Dispatch,
   type SetStateAction,
 } from 'react';
@@ -51,6 +51,8 @@ export const useCanvasEdges = ({
   const edgeIndexRef = useRef<Map<string, number>>(new Map());
   // Always-current snapshot avoids stale closures in callbacks
   const edgesRef = useRef<Edge<EditableEdgeData>[]>([]);
+  const listenersRef = useRef(new Set<() => void>());
+  const shouldSyncFromDocRef = useRef(true);
 
   const compareArrays = useCallback(arraysShallowEqual, []);
 
@@ -79,7 +81,9 @@ export const useCanvasEdges = ({
     return nextEdges;
   }, [edgeOrder, edgesMap]);
 
-  const [edges, setEdgesState] = useState<Edge<EditableEdgeData>[]>(() => snapshotEdgesFromDoc());
+  const emit = useCallback(() => {
+    listenersRef.current.forEach((listener) => listener());
+  }, []);
 
   /**
    * Updates local React state without touching Yjs.
@@ -93,11 +97,33 @@ export const useCanvasEdges = ({
       });
 
       edgeIndexRef.current = indexMap;
+
+      shouldSyncFromDocRef.current = false;
+
+      const previous = edgesRef.current;
       edgesRef.current = nextEdges;
-      setEdgesState((current) => (compareArrays(current, nextEdges) ? current : nextEdges));
+      if (!compareArrays(previous, nextEdges)) {
+        emit();
+      }
     },
-    [compareArrays],
+    [compareArrays, emit],
   );
+
+  const subscribe = useCallback((listener: () => void) => {
+    listenersRef.current.add(listener);
+    return () => {
+      listenersRef.current.delete(listener);
+    };
+  }, []);
+
+  useEffect(() => {
+    shouldSyncFromDocRef.current = false;
+    const previous = edgesRef.current;
+    const snapshot = snapshotEdgesFromDoc();
+    if (!compareArrays(previous, snapshot)) {
+      emit();
+    }
+  }, [compareArrays, emit, snapshotEdgesFromDoc]);
 
   useEffect(() => {
     const handleEdgeOrderChange = (event: Y.YArrayEvent<string>) => {
@@ -106,8 +132,12 @@ export const useCanvasEdges = ({
         return;
       }
 
+      const previous = edgesRef.current;
       const snapshot = snapshotEdgesFromDoc();
-      setEdgesState((current) => (compareArrays(current, snapshot) ? current : snapshot));
+      shouldSyncFromDocRef.current = false;
+      if (!compareArrays(previous, snapshot)) {
+        emit();
+      }
     };
 
     const handleEdgesMapChange = (event: Y.YMapEvent<Edge<EditableEdgeData>>) => {
@@ -120,36 +150,12 @@ export const useCanvasEdges = ({
         return;
       }
 
-      setEdgesState((current) => {
-        let next: Edge<EditableEdgeData>[] | undefined;
-        let changed = false;
-
-        event.keysChanged.forEach((key) => {
-          // Patch only the changed edges using cached index - avoids full array rebuild
-          const index = edgeIndexRef.current.get(key);
-          if (index === undefined) {
-            return;
-          }
-          const value = edgesMap.get(key);
-          if (!value) {
-            return;
-          }
-          if (!next) {
-            next = [...current];
-          }
-          if (next[index] !== value) {
-            next[index] = value;
-            changed = true;
-          }
-        });
-
-        if (!next || !changed) {
-          return current;
-        }
-
-        edgesRef.current = next;
-        return next;
-      });
+      const previous = edgesRef.current;
+      const snapshot = snapshotEdgesFromDoc();
+      shouldSyncFromDocRef.current = false;
+      if (!compareArrays(previous, snapshot)) {
+        emit();
+      }
     };
 
     edgeOrder.observe(handleEdgeOrderChange);
@@ -159,7 +165,19 @@ export const useCanvasEdges = ({
       edgeOrder.unobserve(handleEdgeOrderChange);
       edgesMap.unobserve(handleEdgesMapChange);
     };
-  }, [compareArrays, edgeOrder, edgesMap, snapshotEdgesFromDoc]);
+  }, [compareArrays, emit, edgeOrder, edgesMap, snapshotEdgesFromDoc]);
+
+  const getSnapshot = useCallback(() => {
+    if (shouldSyncFromDocRef.current) {
+      const snapshot = snapshotEdgesFromDoc();
+      shouldSyncFromDocRef.current = false;
+      return snapshot;
+    }
+
+    return edgesRef.current;
+  }, [snapshotEdgesFromDoc]);
+
+  const edges = useSyncExternalStore(subscribe, getSnapshot);
 
   /**
    * Updates edges in both React state and Yjs document atomically.

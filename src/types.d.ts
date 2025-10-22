@@ -37,6 +37,17 @@ interface PakOperationResult {
   filePath: string;
 }
 
+interface PakAssetSummary {
+  path: string;
+  size: number;
+}
+
+interface PakAssetData {
+  path: string;
+  data: ArrayBuffer;
+  mimeType: string;
+}
+
 interface PakContext {
   save: (payload: {
     fileName: string;
@@ -45,6 +56,10 @@ interface PakContext {
     assets?: { path: string; data: unknown }[];
   }) => Promise<PakOperationResult>;
   load: (filePath: string) => Promise<PakOperationResult>;
+  addAsset: (asset: { path: string; data: unknown }) => Promise<PakAssetSummary>;
+  removeAsset: (assetPath: string) => Promise<boolean>;
+  listAssets: () => Promise<PakAssetSummary[]>;
+  getAssetData: (assetPath: string) => Promise<PakAssetData | null>;
 }
 
 type DialogFileFilter = {
@@ -60,6 +75,7 @@ interface FileSystemContext {
   readFileAsDataUrl: (filePath: string) => Promise<string>;
   openFile: (options?: DialogOpenFileOptions) => Promise<string | null>;
   openDirectory: () => Promise<string | null>;
+  saveClipboardImage: (base64Data: string, extension: string) => Promise<string>;
 }
 
 interface LlmContext {

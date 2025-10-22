@@ -1,6 +1,8 @@
 import { useCallback, useEffect, type Dispatch, type SetStateAction } from 'react';
 import type { ClipboardEvent as ReactClipboardEvent } from 'react';
 import type { Node } from '@xyflow/react';
+import { Buffer } from 'buffer';
+import type { PakAssetRegistration } from '@/core/pak/usePakAssets';
 
 import type { CanvasNode, ToolId } from '../types';
 
@@ -52,7 +54,10 @@ export interface UseCanvasCopyPasteParams {
   setSelectedTool: Dispatch<SetStateAction<ToolId | null>>;
   addImageNode: (src: string, position: { x: number; y: number }, fileName?: string) => Promise<void>;
   getCanvasCenterPosition: () => { x: number; y: number };
-  readFileAsDataUrl: (file: File) => Promise<string>;
+  registerAssetFromBytes: (
+    bytes: ArrayBuffer | Uint8Array,
+    options?: { fileName?: string; extension?: string },
+  ) => Promise<PakAssetRegistration>;
   getFileName: (filePath: string) => string;
   isImageFile: (file: File) => boolean;
 }
@@ -69,7 +74,7 @@ export const useCanvasCopyPaste = ({
   setSelectedTool,
   addImageNode,
   getCanvasCenterPosition,
-  readFileAsDataUrl,
+  registerAssetFromBytes,
   getFileName,
   isImageFile,
 }: UseCanvasCopyPasteParams) => {
@@ -163,23 +168,32 @@ export const useCanvasCopyPaste = ({
 
         for (const [index, file] of files.entries()) {
           try {
-            const dataUrl = await readFileAsDataUrl(file);
-            const base64Data = dataUrl.split(',')[1];
-            if (!base64Data) {
-              continue;
-            }
-
-            const extension = file.type.split('/')[1] ?? 'png';
+            const arrayBuffer = await file.arrayBuffer();
+            const bytes = new Uint8Array(arrayBuffer);
+            const extension = (() => {
+              if (file.name && file.name.includes('.')) {
+                const nameExtension = file.name.split('.').pop();
+                if (nameExtension) {
+                  return nameExtension.toLowerCase();
+                }
+              }
+              const typeExtension = file.type.split('/')[1];
+              return typeExtension ?? 'png';
+            })();
+            const base64Data = Buffer.from(bytes).toString('base64');
             const filePath = await window.fileSystem.saveClipboardImage(base64Data, extension);
-            const newSrc = await window.fileSystem.readFileAsDataUrl(filePath);
             const fileName = getFileName(filePath);
+            const asset = await registerAssetFromBytes(bytes, {
+              fileName,
+              extension,
+            });
 
             // Offset multiple images slightly
             const offset = index * 24;
             await addImageNode(
-              newSrc,
+              asset.uri,
               { x: pastePosition.x + offset, y: pastePosition.y + offset },
-              fileName,
+              asset.fileName,
             );
           } catch (error) {
             console.error('Failed to paste image', error);
@@ -192,7 +206,7 @@ export const useCanvasCopyPaste = ({
       getCanvasCenterPosition,
       getFileName,
       isImageFile,
-      readFileAsDataUrl,
+      registerAssetFromBytes,
       setNodes,
       setSelectedTool,
     ],

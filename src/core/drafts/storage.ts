@@ -2,14 +2,14 @@ import { app } from "electron";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import type { PakManifest } from "@/core/pak/types";
+import type { PakAssetInput, PakManifest } from "@/core/pak/types";
 import {
   buildManifest,
   createPakArchive,
   readPakArchive,
 } from "@/core/pak/pak-utils";
 import { readPak } from "@/core/pak/unpacker";
-import { setActivePak } from "@/core/pak/pak-manager";
+import { getActivePak, setActivePak, toBuffer } from "@/core/pak/pak-manager";
 import type {
   CleanupDraftsRequest,
   DraftDetail,
@@ -153,7 +153,29 @@ export const saveDraft = async (payload: SaveDraftRequest): Promise<DraftDetail>
     }),
   );
 
-  await createPakArchive(archivePath, payload.canvas, manifest, payload.assets);
+  const activePakFiles = getActivePak()?.files;
+  const cachedAssets: PakAssetInput[] = activePakFiles
+    ? Object.entries(activePakFiles)
+        .filter(([assetPath]) => assetPath.startsWith("assets/"))
+        .map(([assetPath, data]) => ({ path: assetPath, data }))
+    : [];
+
+  const assetMap = new Map<string, Buffer>();
+  cachedAssets.forEach((asset) => {
+    const buffer = Buffer.isBuffer(asset.data) ? asset.data : toBuffer(asset.data);
+    assetMap.set(asset.path, buffer);
+  });
+
+  (payload.assets ?? []).forEach((asset) => {
+    assetMap.set(asset.path, toBuffer(asset.data));
+  });
+
+  const mergedAssets: PakAssetInput[] = Array.from(assetMap.entries()).map(([assetPath, data]) => ({
+    path: assetPath,
+    data,
+  }));
+
+  await createPakArchive(archivePath, payload.canvas, manifest, mergedAssets);
 
   const pak = await readPakArchive(archivePath);
   const record = manifestToRecord(pak.manifest, archivePath);

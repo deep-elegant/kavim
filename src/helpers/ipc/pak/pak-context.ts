@@ -1,4 +1,11 @@
-import { PAK_LOAD_CHANNEL, PAK_SAVE_CHANNEL } from "./pak-channels";
+import {
+  PAK_ADD_ASSET_CHANNEL,
+  PAK_GET_ASSET_CHANNEL,
+  PAK_LIST_ASSETS_CHANNEL,
+  PAK_LOAD_CHANNEL,
+  PAK_REMOVE_ASSET_CHANNEL,
+  PAK_SAVE_CHANNEL,
+} from "./pak-channels";
 
 type CanvasSnapshot = {
   nodes: unknown[];
@@ -18,6 +25,11 @@ type PakOperationResult = {
   filePath: string;
 };
 
+type PakAssetSummary = {
+  path: string;
+  size: number;
+};
+
 export function exposePakContext() {
   const { contextBridge, ipcRenderer } = window.require("electron");
 
@@ -26,5 +38,12 @@ export function exposePakContext() {
       ipcRenderer.invoke(PAK_SAVE_CHANNEL, payload),
     load: (filePath: string): Promise<PakOperationResult> =>
       ipcRenderer.invoke(PAK_LOAD_CHANNEL, filePath),
+    addAsset: (asset: { path: string; data: unknown }): Promise<PakAssetSummary> =>
+      ipcRenderer.invoke(PAK_ADD_ASSET_CHANNEL, asset),
+    removeAsset: (assetPath: string): Promise<boolean> =>
+      ipcRenderer.invoke(PAK_REMOVE_ASSET_CHANNEL, assetPath),
+    listAssets: (): Promise<PakAssetSummary[]> =>
+      ipcRenderer.invoke(PAK_LIST_ASSETS_CHANNEL),
+    getAssetData: (assetPath: string) => ipcRenderer.invoke(PAK_GET_ASSET_CHANNEL, assetPath),
   });
 }

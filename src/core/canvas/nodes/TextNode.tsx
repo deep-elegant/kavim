@@ -6,15 +6,14 @@ import { type DrawableNode } from './DrawableNode';
 import { MinimalTiptap } from '@/components/ui/minimal-tiptap';
 import { cn } from '@/utils/tailwind';
 import { useNodeAsEditor } from '@/helpers/useNodeAsEditor';
-import { DEFAULT_FONT_SIZE, type FontSizeMode } from '@/components/ui/minimal-tiptap/FontSizePlugin';
+import { type FontSizeSetting } from '@/components/ui/minimal-tiptap/FontSizePlugin';
 import { useAutoFontSizeObserver } from './useAutoFontSizeObserver';
 
 /** Data structure for text nodes with rich text editing capabilities */
 export type TextNodeData = {
   label: string;
   isTyping?: boolean;
-  fontSizeMode?: FontSizeMode;
-  fontSizeValue?: number;
+  fontSize?: FontSizeSetting;
 };
 
 export type TextNode = Node<TextNodeData, 'text-node'>;
@@ -34,8 +33,7 @@ export const textDrawable: DrawableNode<TextNode> = {
     data: {
       label: '',
       isTyping: false,
-      fontSizeMode: 'auto',
-      fontSizeValue: DEFAULT_FONT_SIZE,
+      fontSize: 'auto',
     },
     width: MIN_WIDTH,
     height: MIN_HEIGHT,
@@ -93,10 +91,15 @@ export const textDrawable: DrawableNode<TextNode> = {
  * - Double-click to enter edit mode.
  */
 const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => {
-  const { editor, isTyping, handleDoubleClick, handleBlur } = useNodeAsEditor({ id, data });
+  const {
+    editor,
+    isTyping,
+    handleDoubleClick,
+    handleBlur,
+    fontSizeSetting,
+    resolvedFontSize,
+  } = useNodeAsEditor({ id, data });
   const label = data.label ?? '';
-  const fontSizeMode = data.fontSizeMode ?? 'auto';
-  const fontSizeValue = data.fontSizeValue ?? DEFAULT_FONT_SIZE;
   const containerRef = useRef<HTMLDivElement>(null);
   
   // Hidden measurement element for calculating optimal font size
@@ -110,7 +113,7 @@ const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => 
   // Dynamically adjust font size when in auto mode based on container dimensions
   useAutoFontSizeObserver({
     editor,
-    mode: fontSizeMode,
+    fontSize: fontSizeSetting,
     html: displayHtml,
     containerRef,
     measurementRef,
@@ -141,7 +144,7 @@ const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => 
                 editor={editor}
                 theme="transparent"
                 className="h-full w-full"
-                style={{ fontSize: `${fontSizeValue}px` }}
+                style={{ fontSize: `${resolvedFontSize}px` }}
               />
             </div>
           ) : (
@@ -159,7 +162,7 @@ const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => 
                 'text-slate-900',
                 'break-words',
               )}
-              style={{ fontSize: `${fontSizeValue}px` }}
+              style={{ fontSize: `${resolvedFontSize}px` }}
               dangerouslySetInnerHTML={{ __html: displayHtml }}
             />
           )}

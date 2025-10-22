@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect } from 'react';
 import type { Editor } from '@tiptap/react';
 
-import type { FontSizeMode } from '@/components/ui/minimal-tiptap/FontSizePlugin';
+import type { FontSizeSetting } from '@/components/ui/minimal-tiptap/FontSizePlugin';
 
 export interface UseAutoFontSizeObserverOptions {
   editor: Editor | null;
-  mode: FontSizeMode;
+  fontSize: FontSizeSetting;
   html: string;
   containerRef: React.RefObject<HTMLElement>;
   measurementRef: React.RefObject<HTMLElement>; // Hidden clone used for overflow detection
@@ -14,15 +14,6 @@ export interface UseAutoFontSizeObserverOptions {
 }
 
 const DEFAULT_MIN_SIZE = 8;
-const DEFAULT_MAX_SIZE = 96;
-
-/** Enforce reasonable bounds to prevent illegible or absurdly large text */
-const clampBounds = (min?: number, max?: number) => {
-  const safeMin = Math.max(1, Math.floor(min ?? DEFAULT_MIN_SIZE));
-  const safeMax = Math.max(safeMin, Math.floor(max ?? DEFAULT_MAX_SIZE));
-
-  return [safeMin, safeMax] as const;
-};
 
 /**
  * Automatically scales font size to fit content within container bounds.
@@ -32,7 +23,7 @@ const clampBounds = (min?: number, max?: number) => {
  */
 export const useAutoFontSizeObserver = ({
   editor,
-  mode,
+  fontSize,
   html,
   containerRef,
   measurementRef,
@@ -44,36 +35,40 @@ export const useAutoFontSizeObserver = ({
       return;
     }
 
-    if (mode !== 'auto') {
+    if (fontSize !== 'auto') {
       return; // Manual mode: user controls font size explicitly
     }
 
-    const container = containerRef.current;
-    const measurement = measurementRef.current;
+    const containerElement = containerRef.current;
+    const measurementElement = measurementRef.current;
 
-    if (!container || !measurement) {
+    if (!containerElement || !measurementElement) {
       return;
     }
 
-    const { clientWidth, clientHeight } = container;
+    const { clientWidth, clientHeight } = containerElement;
     if (clientWidth <= 0 || clientHeight <= 0) {
       return; // Skip if container not yet rendered or hidden
     }
 
-    const [min, max] = clampBounds(minSize, maxSize);
+    const minBound = Math.max(1, Math.floor(minSize ?? DEFAULT_MIN_SIZE));
+    const maxCandidate =
+      maxSize ?? Math.max(clientWidth, clientHeight, minBound);
+    const maxBound = Math.max(minBound, Math.floor(maxCandidate));
 
     // Binary search to find largest font size that doesn't overflow
-    let low = min;
-    let high = max;
-    let best = min;
+    let low = minBound;
+    let high = maxBound;
+    let best = minBound;
 
     while (low <= high) {
       const mid = Math.floor((low + high) / 2);
-      measurement.style.fontSize = `${mid}px`;
+      // eslint-disable-next-line react-compiler/react-compiler -- mutate hidden probe element to test candidate font size
+      measurementElement.style.fontSize = `${mid}px`;
 
       const overflow =
-        measurement.scrollWidth > clientWidth ||
-        measurement.scrollHeight > clientHeight;
+        measurementElement.scrollWidth > clientWidth ||
+        measurementElement.scrollHeight > clientHeight;
 
       if (!overflow) {
         best = mid; // This size fits, try larger
@@ -84,19 +79,20 @@ export const useAutoFontSizeObserver = ({
     }
 
     editor.commands.updateAutoFontSize(best);
-  }, [editor, mode, containerRef, measurementRef, minSize, maxSize]);
+  }, [editor, fontSize, containerRef, measurementRef, minSize, maxSize]);
 
   // useLayoutEffect ensures measurement happens before paint to avoid flicker
+  const container = containerRef.current;
+  const measurement = measurementRef.current;
   useLayoutEffect(() => {
     measure();
-  }, [measure, html, mode]);
+  }, [measure, html, fontSize, container, measurement]);
 
   useEffect(() => {
-    if (!editor || mode !== 'auto') {
+    if (!editor || fontSize !== 'auto') {
       return;
     }
 
-    const container = containerRef.current;
     if (!container || typeof ResizeObserver === 'undefined') {
       return;
     }
@@ -109,5 +105,5 @@ export const useAutoFontSizeObserver = ({
     observer.observe(container);
 
     return () => observer.disconnect();
-  }, [editor, mode, containerRef, measure]);
+  }, [editor, fontSize, container, measure]);
 };

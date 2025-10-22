@@ -19,7 +19,7 @@ import * as Y from "yjs";
  */
 export default function App() {
   const { i18n } = useTranslation();
-  
+
   // Memoized to ensure only one Y.Doc instance exists (required for proper collaboration)
   const doc = useMemo(() => new Y.Doc(), []);
 
@@ -30,8 +30,8 @@ export default function App() {
 
   return (
     // WebRTC layer enables real-time collaboration via peer-to-peer connections
-    <WebRTCProvider doc={doc}>
-      <StatsForNerdsProvider>
+    <StatsForNerdsProvider>
+      <WebRTCProvider doc={doc}>
         {/* Draft management for auto-save and recovery */}
         <DraftManagerProvider>
           {/* Canvas state tied to the shared Y.Doc for CRDT-based sync */}
@@ -44,8 +44,8 @@ export default function App() {
             </BaseLayout>
           </CanvasDataProvider>
         </DraftManagerProvider>
-      </StatsForNerdsProvider>
-    </WebRTCProvider>
+      </WebRTCProvider>
+    </StatsForNerdsProvider>
   );
 }
 
