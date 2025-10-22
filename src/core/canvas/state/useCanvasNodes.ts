@@ -29,7 +29,7 @@ const hasTransientEditingFlag = (data: Node['data']): boolean => {
   const record = data as NodeDataRecord;
 
   for (const key of TRANSIENT_NODE_DATA_KEYS) {
-    if (Boolean(record[key])) {
+    if (record[key]) {
       return true;
     }
   }

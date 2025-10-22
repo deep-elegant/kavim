@@ -166,7 +166,7 @@ const EditableEdge = memo(
 
     // Determine arrow icon orientation based on connection direction
     const isSourceLeft = sourceX < targetX;
-    let [sourceMarkerPath, targetMarkerPath] = [ARROW_HEAD_LEFT, ARROW_HEAD_RIGHT];
+    const [sourceMarkerPath, targetMarkerPath] = [ARROW_HEAD_LEFT, ARROW_HEAD_RIGHT];
 
     const controlPoints = data?.controlPoints ?? [];
     const sourceMarker = data?.sourceMarker ?? DEFAULT_MARKER;
