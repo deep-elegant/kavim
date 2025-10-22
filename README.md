@@ -75,7 +75,13 @@ See [CONTRIBUTING](./CONTRIBUTING.md)
 
 ## 📸 Screenshots
 
-TBD
+<p align="center">
+  <img src="./images/marketing.png" alt="Kavim Canvas Features" width="100%" />
+</p>
+
+<p align="center">
+  <img src="./images/startup-ideas.png" alt="Startup Ideas Brainstorming on Kavim" width="100%" />
+</p>
 
 ## 📝 Documentation
 
