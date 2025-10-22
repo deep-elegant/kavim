@@ -1,5 +1,5 @@
-import { useEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
+import { useEditor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 import {
   useCallback,
   useEffect,
@@ -8,16 +8,16 @@ import {
   useState,
   type FocusEvent,
   type MouseEvent,
-} from 'react';
-import { cn } from '@/utils/tailwind';
+} from "react";
+import { cn } from "@/utils/tailwind";
 import {
   DEFAULT_FONT_SIZE,
   FontSize,
   type FontSizeChange,
   type FontSizeSetting,
   type FontSizeStorage,
-} from '../components/ui/minimal-tiptap/FontSizePlugin';
-import { useCanvasData } from '@/core/canvas/CanvasDataContext';
+} from "../components/ui/minimal-tiptap/FontSizePlugin";
+import { useCanvasData } from "@/core/canvas/CanvasDataContext";
 
 /**
  * Base shape for node data that supports rich text editing.
@@ -43,11 +43,14 @@ export type UseNodeAsEditorParams<T extends NodeDataWithLabel> = {
  * - Handles font size persistence (auto-scaling or fixed size).
  * - Prevents node dragging while typing by toggling `.nodrag` class.
  */
-export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNodeAsEditorParams<T>) => {
+export const useNodeAsEditor = <T extends NodeDataWithLabel>({
+  id,
+  data,
+}: UseNodeAsEditorParams<T>) => {
   const { setNodes } = useCanvasData();
   const isTyping = Boolean(data.isTyping);
-  const label = data.label ?? '';
-  const fontSizeSetting = data.fontSize ?? 'auto';
+  const label = data.label ?? "";
+  const fontSizeSetting = data.fontSize ?? "auto";
 
   /** Merges partial updates into this node's data object. */
   const updateNodeData = useCallback(
@@ -73,12 +76,12 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
   const updateNodeDataRef = useRef(updateNodeData);
   const initialFontSizeSetting = useRef<FontSizeSetting>(fontSizeSetting);
   const initialFontSizeValue = useRef<number>(
-    typeof initialFontSizeSetting.current === 'number'
+    typeof initialFontSizeSetting.current === "number"
       ? initialFontSizeSetting.current
       : DEFAULT_FONT_SIZE,
   );
   const [autoFontSize, setAutoFontSize] = useState<number>(
-    typeof initialFontSizeSetting.current === 'number'
+    typeof initialFontSizeSetting.current === "number"
       ? initialFontSizeSetting.current
       : initialFontSizeValue.current,
   );
@@ -103,19 +106,18 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
       // Custom extension to persist font size changes back to node data
       FontSize.configure({
         initialMode:
-          typeof initialFontSizeSetting.current === 'number' ? 'fixed' : 'auto',
+          typeof initialFontSizeSetting.current === "number" ? "fixed" : "auto",
         initialValue: initialFontSizeValue.current,
         onChange: ({ mode, value, computed }: FontSizeChange) => {
           setAutoFontSize(computed);
 
-          const nextSetting: FontSizeSetting =
-            mode === 'auto' ? 'auto' : value;
+          const nextSetting: FontSizeSetting = mode === "auto" ? "auto" : value;
           const previousSetting = fontSizeSettingRef.current;
 
           const settingsEqual =
-            (previousSetting === 'auto' && nextSetting === 'auto') ||
-            (typeof previousSetting === 'number' &&
-              typeof nextSetting === 'number' &&
+            (previousSetting === "auto" && nextSetting === "auto") ||
+            (typeof previousSetting === "number" &&
+              typeof nextSetting === "number" &&
               previousSetting === nextSetting);
 
           if (settingsEqual) {
@@ -140,14 +142,14 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
     editorProps: {
       attributes: {
         class: cn(
-          'prose prose-sm w-full max-w-none focus:outline-none',
-          'prose-h1:text-xl prose-h1:leading-tight',
-          'prose-h2:text-lg prose-h2:leading-snug',
-          'prose-h3:text-base prose-h3:leading-snug',
-          'prose-p:my-1 prose-p:leading-normal',
-          'prose-ul:my-1 prose-ol:my-1',
-          'prose-li:my-0',
-          'min-h-[1.5rem] border-0 px-3 py-2',
+          "prose prose-sm w-full max-w-none focus:outline-none",
+          "prose-h1:text-xl prose-h1:leading-tight",
+          "prose-h2:text-lg prose-h2:leading-snug",
+          "prose-h3:text-base prose-h3:leading-snug",
+          "prose-p:my-1 prose-p:leading-normal",
+          "prose-ul:my-1 prose-ol:my-1",
+          "prose-li:my-0",
+          "min-h-[1.5rem] border-0 px-3 py-2",
         ),
       },
     },
@@ -158,7 +160,7 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
   }, [fontSizeSetting]);
 
   useEffect(() => {
-    if (typeof fontSizeSetting !== 'number') {
+    if (typeof fontSizeSetting !== "number") {
       return;
     }
 
@@ -174,14 +176,14 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
     }
 
     const storage = (editor.storage.fontSize ?? {}) as Partial<FontSizeStorage>;
-    if (fontSizeSetting === 'auto') {
-      if (storage.mode !== 'auto') {
+    if (fontSizeSetting === "auto") {
+      if (storage.mode !== "auto") {
         editor.commands.setAutoFontSize();
       }
       return;
     }
 
-    if (storage.mode !== 'fixed' || storage.value !== fontSizeSetting) {
+    if (storage.mode !== "fixed" || storage.value !== fontSizeSetting) {
       editor.commands.setFontSize(fontSizeSetting);
     }
   }, [editor, fontSizeSetting]);
@@ -198,10 +200,10 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
     if (editor) {
       editor.setEditable(isTyping);
       if (isTyping) {
-        editor.view.dom.classList.add('nodrag');
-        editor.commands.focus('end');
+        editor.view.dom.classList.add("nodrag");
+        editor.commands.focus("end");
       } else {
-        editor.view.dom.classList.remove('nodrag');
+        editor.view.dom.classList.remove("nodrag");
       }
     }
   }, [isTyping, editor]);
@@ -247,7 +249,7 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
     const relatedTarget = event.relatedTarget as HTMLElement | null;
 
     // Keep editing if focus moved to the formatting toolbar
-    if (relatedTarget?.closest('[data-editor-toolbar]')) {
+    if (relatedTarget?.closest("[data-editor-toolbar]")) {
       return;
     }
 
@@ -259,7 +261,7 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({ id, data }: UseNo
   };
 
   const resolvedFontSize =
-    fontSizeSetting === 'auto' ? autoFontSize : fontSizeSetting;
+    fontSizeSetting === "auto" ? autoFontSize : fontSizeSetting;
 
   return {
     editor,

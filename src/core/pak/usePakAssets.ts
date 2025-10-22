@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Buffer } from 'buffer';
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Buffer } from "buffer";
 
 export type PakAssetRegistration = {
   /** Internal pak-relative path (e.g., assets/image.png) */
@@ -16,8 +16,8 @@ type RegisterBytesOptions = {
   mimeType?: string;
 };
 
-const DEFAULT_FILE_NAME = 'image';
-const DEFAULT_EXTENSION = 'png';
+const DEFAULT_FILE_NAME = "image";
+const DEFAULT_EXTENSION = "png";
 
 const stripDirectories = (value: string) => {
   const segments = value.split(/[\\/]/);
@@ -26,18 +26,20 @@ const stripDirectories = (value: string) => {
 
 const sanitizeBaseName = (base: string) =>
   base
-    .replace(/[^a-zA-Z0-9]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
     .toLowerCase();
 
 const ensureFileMetadata = (fileName?: string, extensionHint?: string) => {
-  const extracted = fileName ? stripDirectories(fileName.trim()) : '';
-  const lastDotIndex = extracted.lastIndexOf('.');
-  const basePart = lastDotIndex > 0 ? extracted.slice(0, lastDotIndex) : extracted;
-  const extensionPart = lastDotIndex > 0 ? extracted.slice(lastDotIndex + 1) : '';
+  const extracted = fileName ? stripDirectories(fileName.trim()) : "";
+  const lastDotIndex = extracted.lastIndexOf(".");
+  const basePart =
+    lastDotIndex > 0 ? extracted.slice(0, lastDotIndex) : extracted;
+  const extensionPart =
+    lastDotIndex > 0 ? extracted.slice(lastDotIndex + 1) : "";
   const extension = (extensionPart || extensionHint || DEFAULT_EXTENSION)
-    .replace(/^\./, '')
+    .replace(/^\./, "")
     .toLowerCase();
   const sanitizedBase = sanitizeBaseName(basePart);
   const base = sanitizedBase || DEFAULT_FILE_NAME;
@@ -55,7 +57,8 @@ const ensureFileMetadata = (fileName?: string, extensionHint?: string) => {
 const toUint8Array = (input: ArrayBuffer | Uint8Array) =>
   input instanceof Uint8Array ? new Uint8Array(input) : new Uint8Array(input);
 
-const base64ToUint8Array = (base64: string) => new Uint8Array(Buffer.from(base64, 'base64'));
+const base64ToUint8Array = (base64: string) =>
+  new Uint8Array(Buffer.from(base64, "base64"));
 
 const buildPakUri = (assetPath: string) => `pak://${assetPath}`;
 
@@ -77,7 +80,7 @@ export const usePakAssets = () => {
       usedPathsRef.current = new Set(assets.map((asset) => asset.path));
       initializedRef.current = true;
     } catch (error) {
-      console.error('Failed to list pak assets', error);
+      console.error("Failed to list pak assets", error);
       usedPathsRef.current = new Set();
       initializedRef.current = true;
     }
@@ -117,13 +120,17 @@ export const usePakAssets = () => {
   const reserveAssetPath = useCallback((assetFileName: string) => {
     const usedPaths = usedPathsRef.current;
 
-    const lastDotIndex = assetFileName.lastIndexOf('.');
-    const base = lastDotIndex >= 0 ? assetFileName.slice(0, lastDotIndex) : assetFileName;
-    const extension = lastDotIndex >= 0 ? assetFileName.slice(lastDotIndex + 1) : DEFAULT_EXTENSION;
+    const lastDotIndex = assetFileName.lastIndexOf(".");
+    const base =
+      lastDotIndex >= 0 ? assetFileName.slice(0, lastDotIndex) : assetFileName;
+    const extension =
+      lastDotIndex >= 0
+        ? assetFileName.slice(lastDotIndex + 1)
+        : DEFAULT_EXTENSION;
 
     let counter = 0;
     while (true) {
-      const suffix = counter === 0 ? '' : `-${counter}`;
+      const suffix = counter === 0 ? "" : `-${counter}`;
       const candidateFileName = `${base}${suffix}.${extension}`;
       const candidatePath = `assets/${candidateFileName}`;
       if (!usedPaths.has(candidatePath)) {
@@ -136,11 +143,15 @@ export const usePakAssets = () => {
   }, []);
 
   const registerAssetFromBytes = useCallback(
-    async (input: ArrayBuffer | Uint8Array, options?: RegisterBytesOptions): Promise<PakAssetRegistration> => {
+    async (
+      input: ArrayBuffer | Uint8Array,
+      options?: RegisterBytesOptions,
+    ): Promise<PakAssetRegistration> => {
       await ensureInitialized();
 
       const bytes = toUint8Array(input);
-      const extensionHint = options?.extension ?? options?.mimeType?.split('/')?.[1];
+      const extensionHint =
+        options?.extension ?? options?.mimeType?.split("/")?.[1];
       const { assetFileName, displayFileName } = ensureFileMetadata(
         options?.fileName,
         extensionHint,
@@ -168,9 +179,9 @@ export const usePakAssets = () => {
   const registerAssetFromFilePath = useCallback(
     async (filePath: string) => {
       const dataUrl = await window.fileSystem.readFileAsDataUrl(filePath);
-      const [, base64] = dataUrl.split(',');
+      const [, base64] = dataUrl.split(",");
       if (!base64) {
-        throw new Error('Unable to decode selected file.');
+        throw new Error("Unable to decode selected file.");
       }
       const bytes = base64ToUint8Array(base64);
       return registerAssetFromBytes(bytes, { fileName: filePath });
@@ -181,7 +192,9 @@ export const usePakAssets = () => {
   const registerAssetFromFile = useCallback(
     async (file: File) => {
       const arrayBuffer = await file.arrayBuffer();
-      const extensionHint = file.type.startsWith('image/') ? file.type.split('/')[1] : undefined;
+      const extensionHint = file.type.startsWith("image/")
+        ? file.type.split("/")[1]
+        : undefined;
       return registerAssetFromBytes(arrayBuffer, {
         fileName: file.name,
         extension: extensionHint,
@@ -192,12 +205,20 @@ export const usePakAssets = () => {
   );
 
   const registerAssetAtPath = useCallback(
-    async (path: string, input: ArrayBuffer | Uint8Array, options?: RegisterBytesOptions) => {
+    async (
+      path: string,
+      input: ArrayBuffer | Uint8Array,
+      options?: RegisterBytesOptions,
+    ) => {
       await ensureInitialized();
 
       const bytes = toUint8Array(input);
-      const extensionHint = options?.extension ?? options?.mimeType?.split('/')?.[1];
-      const { displayFileName } = ensureFileMetadata(options?.fileName, extensionHint);
+      const extensionHint =
+        options?.extension ?? options?.mimeType?.split("/")?.[1];
+      const { displayFileName } = ensureFileMetadata(
+        options?.fileName,
+        extensionHint,
+      );
 
       await window.projectPak.addAsset({ path, data: bytes });
       usedPathsRef.current.add(path);
@@ -213,7 +234,10 @@ export const usePakAssets = () => {
     [ensureInitialized],
   );
 
-  const hasAsset = useCallback((path: string) => usedPathsRef.current.has(path), []);
+  const hasAsset = useCallback(
+    (path: string) => usedPathsRef.current.has(path),
+    [],
+  );
 
   return {
     registerAssetFromBytes,

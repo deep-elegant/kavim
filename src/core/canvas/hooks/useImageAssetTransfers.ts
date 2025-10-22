@@ -1,20 +1,20 @@
-import { useCallback, useEffect, useRef } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
-import type { Node } from '@xyflow/react';
+import { useCallback, useEffect, useRef } from "react";
+import type { Dispatch, SetStateAction } from "react";
+import type { Node } from "@xyflow/react";
 
-import type { ImageNodeData } from '../nodes/ImageNode';
-import type { FileTransfer } from '@/core/canvas/collaboration/manual-webrtc/file-transfer/types';
-import type { UsePakAssetsReturn } from '@/core/pak/usePakAssets';
+import type { ImageNodeData } from "../nodes/ImageNode";
+import type { FileTransfer } from "@/core/canvas/collaboration/manual-webrtc/file-transfer/types";
+import type { UsePakAssetsReturn } from "@/core/pak/usePakAssets";
 
 const extractAssetPath = (src?: string | null) => {
-  if (!src || typeof src !== 'string') {
+  if (!src || typeof src !== "string") {
     return null;
   }
 
-  return src.startsWith('pak://') ? src.slice('pak://'.length) : src;
+  return src.startsWith("pak://") ? src.slice("pak://".length) : src;
 };
 
-const defaultErrorMessage = 'Failed to download image asset';
+const defaultErrorMessage = "Failed to download image asset";
 
 type UseImageAssetTransfersParams = {
   nodes: Node[];
@@ -23,7 +23,10 @@ type UseImageAssetTransfersParams = {
   releaseAssetRequest: (assetPath: string) => void;
   completedTransfers: FileTransfer[];
   failedTransfers: FileTransfer[];
-  pakAssets: Pick<UsePakAssetsReturn, 'hasAsset' | 'registerAssetAtPath' | 'isReady'>;
+  pakAssets: Pick<
+    UsePakAssetsReturn,
+    "hasAsset" | "registerAssetAtPath" | "isReady"
+  >;
 };
 
 const useImageAssetTransfers = ({
@@ -41,12 +44,16 @@ const useImageAssetTransfers = ({
   const { hasAsset, registerAssetAtPath, isReady } = pakAssets;
 
   const setAssetStatus = useCallback(
-    (assetPath: string, status: 'downloading' | 'error', errorMessage?: string) => {
+    (
+      assetPath: string,
+      status: "downloading" | "error",
+      errorMessage?: string,
+    ) => {
       let changed = false;
       setNodes((current) => {
         let mutated = false;
         const next = current.map((node) => {
-          if (node.type !== 'image-node') {
+          if (node.type !== "image-node") {
             return node;
           }
 
@@ -57,10 +64,12 @@ const useImageAssetTransfers = ({
           }
 
           const desiredError =
-            status === 'error' ? errorMessage ?? defaultErrorMessage : undefined;
+            status === "error"
+              ? (errorMessage ?? defaultErrorMessage)
+              : undefined;
 
           if (data.assetStatus === status && data.assetError === desiredError) {
-            if (status !== 'error' && data.assetError !== undefined) {
+            if (status !== "error" && data.assetError !== undefined) {
               const nextData: ImageNodeData = { ...data };
               delete (nextData as Partial<ImageNodeData>).assetError;
               mutated = true;
@@ -78,9 +87,9 @@ const useImageAssetTransfers = ({
             assetStatus: status,
           };
 
-          if (status === 'error') {
+          if (status === "error") {
             nextData.assetError = desiredError;
-          } else if ('assetError' in nextData) {
+          } else if ("assetError" in nextData) {
             delete (nextData as Partial<ImageNodeData>).assetError;
           }
 
@@ -100,7 +109,7 @@ const useImageAssetTransfers = ({
       });
 
       if (changed) {
-        console.info('[ImageAssetTransfers] set asset status', {
+        console.info("[ImageAssetTransfers] set asset status", {
           assetPath,
           status,
           errorMessage,
@@ -116,7 +125,7 @@ const useImageAssetTransfers = ({
       setNodes((current) => {
         let mutated = false;
         const next = current.map((node) => {
-          if (node.type !== 'image-node') {
+          if (node.type !== "image-node") {
             return node;
           }
 
@@ -150,7 +159,7 @@ const useImageAssetTransfers = ({
       });
 
       if (changed) {
-        console.info('[ImageAssetTransfers] cleared asset status', {
+        console.info("[ImageAssetTransfers] cleared asset status", {
           assetPath,
         });
       }
@@ -166,7 +175,7 @@ const useImageAssetTransfers = ({
     const referencedPaths = new Set<string>();
 
     for (const node of nodes) {
-      if (node.type !== 'image-node') {
+      if (node.type !== "image-node") {
         continue;
       }
 
@@ -185,22 +194,25 @@ const useImageAssetTransfers = ({
       }
 
       const displayName =
-        data.fileName ?? data.alt ?? assetPath.split('/').pop() ?? 'image asset';
+        data.fileName ??
+        data.alt ??
+        assetPath.split("/").pop() ??
+        "image asset";
 
       const requested = requestAsset(assetPath, displayName);
       if (requested) {
         requestedAssetsRef.current.add(assetPath);
-        setAssetStatus(assetPath, 'downloading');
-        console.info('[ImageAssetTransfers] requested remote asset', {
+        setAssetStatus(assetPath, "downloading");
+        console.info("[ImageAssetTransfers] requested remote asset", {
           assetPath,
           displayName,
         });
       } else if (!requestedAssetsRef.current.has(assetPath)) {
-        console.warn('[ImageAssetTransfers] failed to request remote asset', {
+        console.warn("[ImageAssetTransfers] failed to request remote asset", {
           assetPath,
           displayName,
         });
-        setAssetStatus(assetPath, 'error');
+        setAssetStatus(assetPath, "error");
       }
     }
 
@@ -212,7 +224,7 @@ const useImageAssetTransfers = ({
       requestedAssetsRef.current.delete(assetPath);
       releaseAssetRequest(assetPath);
       clearAssetStatus(assetPath);
-      console.info('[ImageAssetTransfers] released unreferenced asset', {
+      console.info("[ImageAssetTransfers] released unreferenced asset", {
         assetPath,
       });
     });
@@ -233,7 +245,7 @@ const useImageAssetTransfers = ({
 
     completedTransfers.forEach((transfer) => {
       if (
-        transfer.direction !== 'incoming' ||
+        transfer.direction !== "incoming" ||
         !transfer.assetPath ||
         !transfer.payload ||
         processedCompletedRef.current.has(transfer.id)
@@ -247,7 +259,7 @@ const useImageAssetTransfers = ({
 
       void (async () => {
         try {
-          console.info('[ImageAssetTransfers] registering incoming asset', {
+          console.info("[ImageAssetTransfers] registering incoming asset", {
             transferId: transfer.id,
             assetPath,
             name: transfer.name,
@@ -262,12 +274,12 @@ const useImageAssetTransfers = ({
           requestedAssetsRef.current.delete(assetPath);
           releaseAssetRequest(assetPath);
           clearAssetStatus(assetPath);
-          console.info('[ImageAssetTransfers] asset registration complete', {
+          console.info("[ImageAssetTransfers] asset registration complete", {
             transferId: transfer.id,
             assetPath,
           });
         } catch (error) {
-          console.error('Failed to register incoming asset', {
+          console.error("Failed to register incoming asset", {
             assetPath,
             transferId: transfer.id,
             error,
@@ -276,7 +288,7 @@ const useImageAssetTransfers = ({
           releaseAssetRequest(assetPath);
           setAssetStatus(
             assetPath,
-            'error',
+            "error",
             error instanceof Error ? error.message : defaultErrorMessage,
           );
         }
@@ -297,7 +309,7 @@ const useImageAssetTransfers = ({
 
     failedTransfers.forEach((transfer) => {
       if (
-        transfer.direction !== 'incoming' ||
+        transfer.direction !== "incoming" ||
         !transfer.assetPath ||
         processedFailedRef.current.has(transfer.id)
       ) {
@@ -307,14 +319,14 @@ const useImageAssetTransfers = ({
       processedFailedRef.current.add(transfer.id);
       requestedAssetsRef.current.delete(transfer.assetPath);
       releaseAssetRequest(transfer.assetPath);
-      console.error('[ImageAssetTransfers] transfer failed', {
+      console.error("[ImageAssetTransfers] transfer failed", {
         assetPath: transfer.assetPath,
         transferId: transfer.id,
         error: transfer.error,
       });
       setAssetStatus(
         transfer.assetPath,
-        'error',
+        "error",
         transfer.error ?? defaultErrorMessage,
       );
     });

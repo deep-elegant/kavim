@@ -2,10 +2,10 @@ const BASE64_CHUNK_SIZE = 0x8000;
 
 export const encodeToBase64 = (bytes: Uint8Array): string => {
   if (bytes.length === 0) {
-    return '';
+    return "";
   }
 
-  let binary = '';
+  let binary = "";
   for (let i = 0; i < bytes.length; i += BASE64_CHUNK_SIZE) {
     const chunk = bytes.subarray(i, i + BASE64_CHUNK_SIZE);
     binary += String.fromCharCode(...chunk);

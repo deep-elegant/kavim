@@ -1,13 +1,13 @@
-import React, { memo, useMemo, useRef } from 'react';
-import { type NodeProps, type Node } from '@xyflow/react';
+import React, { memo, useMemo, useRef } from "react";
+import { type NodeProps, type Node } from "@xyflow/react";
 
-import NodeInteractionOverlay from './NodeInteractionOverlay';
-import { type DrawableNode } from './DrawableNode';
-import { MinimalTiptap } from '@/components/ui/minimal-tiptap';
-import { cn } from '@/utils/tailwind';
-import { useNodeAsEditor } from '@/helpers/useNodeAsEditor';
-import { type FontSizeSetting } from '@/components/ui/minimal-tiptap/FontSizePlugin';
-import { useAutoFontSizeObserver } from './useAutoFontSizeObserver';
+import NodeInteractionOverlay from "./NodeInteractionOverlay";
+import { type DrawableNode } from "./DrawableNode";
+import { MinimalTiptap } from "@/components/ui/minimal-tiptap";
+import { cn } from "@/utils/tailwind";
+import { useNodeAsEditor } from "@/helpers/useNodeAsEditor";
+import { type FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
+import { useAutoFontSizeObserver } from "./useAutoFontSizeObserver";
 
 /** Data structure for text nodes with rich text editing capabilities */
 export type TextNodeData = {
@@ -16,7 +16,7 @@ export type TextNodeData = {
   fontSize?: FontSizeSetting;
 };
 
-export type TextNode = Node<TextNodeData, 'text-node'>;
+export type TextNode = Node<TextNodeData, "text-node">;
 
 const MIN_WIDTH = 80;
 const MIN_HEIGHT = 32;
@@ -28,12 +28,12 @@ const MIN_HEIGHT = 32;
 export const textDrawable: DrawableNode<TextNode> = {
   onPaneMouseDown: (id, position) => ({
     id,
-    type: 'text-node',
+    type: "text-node",
     position,
     data: {
-      label: '',
+      label: "",
       isTyping: false,
-      fontSize: 'auto',
+      fontSize: "auto",
     },
     width: MIN_WIDTH,
     height: MIN_HEIGHT,
@@ -63,8 +63,14 @@ export const textDrawable: DrawableNode<TextNode> = {
   },
 
   onPaneMouseUp: (node) => {
-    const width = Math.max(Number(node.style?.width ?? node.width ?? 0), MIN_WIDTH);
-    const height = Math.max(Number(node.style?.height ?? node.height ?? 0), MIN_HEIGHT);
+    const width = Math.max(
+      Number(node.style?.width ?? node.width ?? 0),
+      MIN_WIDTH,
+    );
+    const height = Math.max(
+      Number(node.style?.height ?? node.height ?? 0),
+      MIN_HEIGHT,
+    );
 
     return {
       ...node,
@@ -90,107 +96,112 @@ export const textDrawable: DrawableNode<TextNode> = {
  * - Toggles between edit mode (TipTap editor) and display mode (rendered HTML).
  * - Double-click to enter edit mode.
  */
-const TextNodeComponent = memo(({ id, data, selected }: NodeProps<TextNode>) => {
-  const {
-    editor,
-    isTyping,
-    handleDoubleClick,
-    handleBlur,
-    fontSizeSetting,
-    resolvedFontSize,
-  } = useNodeAsEditor({ id, data });
-  const label = data.label ?? '';
-  const containerRef = useRef<HTMLDivElement>(null);
-  
-  // Hidden measurement element for calculating optimal font size
-  const measurementRef = useRef<HTMLDivElement>(null);
-  
-  const displayHtml = useMemo(
-    () => label || '<p>Click to add text</p>',
-    [label],
-  );
+const TextNodeComponent = memo(
+  ({ id, data, selected }: NodeProps<TextNode>) => {
+    const {
+      editor,
+      isTyping,
+      handleDoubleClick,
+      handleBlur,
+      fontSizeSetting,
+      resolvedFontSize,
+    } = useNodeAsEditor({ id, data });
+    const label = data.label ?? "";
+    const containerRef = useRef<HTMLDivElement>(null);
 
-  // Dynamically adjust font size when in auto mode based on container dimensions
-  useAutoFontSizeObserver({
-    editor,
-    fontSize: fontSizeSetting,
-    html: displayHtml,
-    containerRef,
-    measurementRef,
-  });
+    // Hidden measurement element for calculating optimal font size
+    const measurementRef = useRef<HTMLDivElement>(null);
 
-  return (
-    <NodeInteractionOverlay
-      nodeId={id}
-      isActive={selected}
-      isEditing={isTyping}
-      minWidth={MIN_WIDTH}
-      minHeight={MIN_HEIGHT}
-      className="text-slate-900"
-      editor={editor}
-      contextMenuItems={undefined}
-    >
-      <div
-        className="relative flex h-full w-full cursor-text items-center"
-        onDoubleClick={handleDoubleClick}
-        onBlur={handleBlur}
-        role="presentation"
+    const displayHtml = useMemo(
+      () => label || "<p>Click to add text</p>",
+      [label],
+    );
+
+    // Dynamically adjust font size when in auto mode based on container dimensions
+    useAutoFontSizeObserver({
+      editor,
+      fontSize: fontSizeSetting,
+      html: displayHtml,
+      containerRef,
+      measurementRef,
+    });
+
+    return (
+      <NodeInteractionOverlay
+        nodeId={id}
+        isActive={selected}
+        isEditing={isTyping}
+        minWidth={MIN_WIDTH}
+        minHeight={MIN_HEIGHT}
+        className="text-slate-900"
+        editor={editor}
+        contextMenuItems={undefined}
       >
-        <div ref={containerRef} className="relative h-full w-full">
-          {isTyping ? (
-            // Stop propagation to prevent node dragging while editing
-            <div className="h-full w-full" onMouseDown={(e) => e.stopPropagation()}>
-              <MinimalTiptap
-                editor={editor}
-                theme="transparent"
+        <div
+          className="relative flex h-full w-full cursor-text items-center"
+          onDoubleClick={handleDoubleClick}
+          onBlur={handleBlur}
+          role="presentation"
+        >
+          <div ref={containerRef} className="relative h-full w-full">
+            {isTyping ? (
+              // Stop propagation to prevent node dragging while editing
+              <div
                 className="h-full w-full"
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <MinimalTiptap
+                  editor={editor}
+                  theme="transparent"
+                  className="h-full w-full"
+                  style={{ fontSize: `${resolvedFontSize}px` }}
+                />
+              </div>
+            ) : (
+              // Rendered view with prose styles for readable typography
+              <div
+                className={cn(
+                  "prose prose-sm w-full max-w-none",
+                  "prose-h1:text-xl prose-h1:leading-tight",
+                  "prose-h2:text-lg prose-h2:leading-snug",
+                  "prose-h3:text-base prose-h3:leading-snug",
+                  "prose-p:my-1 prose-p:leading-normal",
+                  "prose-ul:my-1 prose-ol:my-1",
+                  "prose-li:my-0",
+                  "min-h-[1.5rem] px-3 py-2",
+                  "text-slate-900",
+                  "break-words",
+                )}
                 style={{ fontSize: `${resolvedFontSize}px` }}
+                dangerouslySetInnerHTML={{ __html: displayHtml }}
               />
-            </div>
-          ) : (
-            // Rendered view with prose styles for readable typography
+            )}
+
+            {/* Hidden measurement element with identical styling for font size calculation */}
             <div
+              ref={measurementRef}
+              aria-hidden
               className={cn(
-                'prose prose-sm w-full max-w-none',
-                'prose-h1:text-xl prose-h1:leading-tight',
-                'prose-h2:text-lg prose-h2:leading-snug',
-                'prose-h3:text-base prose-h3:leading-snug',
-                'prose-p:my-1 prose-p:leading-normal',
-                'prose-ul:my-1 prose-ol:my-1',
-                'prose-li:my-0',
-                'min-h-[1.5rem] px-3 py-2',
-                'text-slate-900',
-                'break-words',
+                "pointer-events-none absolute inset-0 box-border overflow-hidden opacity-0",
+                "prose prose-sm w-full max-w-none",
+                "prose-h1:text-xl prose-h1:leading-tight",
+                "prose-h2:text-lg prose-h2:leading-snug",
+                "prose-h3:text-base prose-h3:leading-snug",
+                "prose-p:my-1 prose-p:leading-normal",
+                "prose-ul:my-1 prose-ol:my-1",
+                "prose-li:my-0",
+                "min-h-[1.5rem] px-3 py-2",
+                "break-words",
               )}
-              style={{ fontSize: `${resolvedFontSize}px` }}
               dangerouslySetInnerHTML={{ __html: displayHtml }}
             />
-          )}
-
-          {/* Hidden measurement element with identical styling for font size calculation */}
-          <div
-            ref={measurementRef}
-            aria-hidden
-            className={cn(
-              'pointer-events-none absolute inset-0 box-border overflow-hidden opacity-0',
-              'prose prose-sm w-full max-w-none',
-              'prose-h1:text-xl prose-h1:leading-tight',
-              'prose-h2:text-lg prose-h2:leading-snug',
-              'prose-h3:text-base prose-h3:leading-snug',
-              'prose-p:my-1 prose-p:leading-normal',
-              'prose-ul:my-1 prose-ol:my-1',
-              'prose-li:my-0',
-              'min-h-[1.5rem] px-3 py-2',
-              'break-words',
-            )}
-            dangerouslySetInnerHTML={{ __html: displayHtml }}
-          />
+          </div>
         </div>
-      </div>
-    </NodeInteractionOverlay>
-  );
-});
+      </NodeInteractionOverlay>
+    );
+  },
+);
 
-TextNodeComponent.displayName = 'TextNode';
+TextNodeComponent.displayName = "TextNode";
 
 export default TextNodeComponent;

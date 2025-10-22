@@ -52,7 +52,10 @@ const getCanvasFromPak = (files: Record<string, Buffer>): CanvasSnapshot => {
 };
 
 /** Generate manifest metadata using filename and current timestamp */
-const buildManifest = (filePath: string, extras?: Partial<PakManifest>): PakManifest => {
+const buildManifest = (
+  filePath: string,
+  extras?: Partial<PakManifest>,
+): PakManifest => {
   const fileName = path.parse(filePath).name;
   return {
     name: fileName,

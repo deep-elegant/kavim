@@ -1,24 +1,24 @@
-import React, { memo, useCallback, useMemo, useRef } from 'react';
-import { type NodeProps, type Node } from '@xyflow/react';
+import React, { memo, useCallback, useMemo, useRef } from "react";
+import { type NodeProps, type Node } from "@xyflow/react";
 
-import { cn } from '@/utils/tailwind';
+import { cn } from "@/utils/tailwind";
 
-import NodeInteractionOverlay from './NodeInteractionOverlay';
-import { type DrawableNode } from './DrawableNode';
-import { useNodeAsEditor } from '@/helpers/useNodeAsEditor';
-import { MinimalTiptap } from '@/components/ui/minimal-tiptap';
+import NodeInteractionOverlay from "./NodeInteractionOverlay";
+import { type DrawableNode } from "./DrawableNode";
+import { useNodeAsEditor } from "@/helpers/useNodeAsEditor";
+import { MinimalTiptap } from "@/components/ui/minimal-tiptap";
 import {
   defaultToolbarItems,
   type ToolbarItem,
-} from '@/components/ui/minimal-tiptap/TiptapToolbar';
+} from "@/components/ui/minimal-tiptap/TiptapToolbar";
 import {
   SimpleColorPicker,
   type ColorStyle,
-} from '@/components/ui/simple-color-picker';
-import { type FontSizeSetting } from '@/components/ui/minimal-tiptap/FontSizePlugin';
-import { useAutoFontSizeObserver } from './useAutoFontSizeObserver';
+} from "@/components/ui/simple-color-picker";
+import { type FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
+import { useAutoFontSizeObserver } from "./useAutoFontSizeObserver";
 
-export type ShapeType = 'circle' | 'rectangle';
+export type ShapeType = "circle" | "rectangle";
 
 /** Data structure for shape nodes with customizable colors and text */
 export type ShapeNodeData = {
@@ -29,7 +29,7 @@ export type ShapeNodeData = {
   fontSize?: FontSizeSetting;
 };
 
-export type ShapeNode = Node<ShapeNodeData, 'shape-node'>;
+export type ShapeNode = Node<ShapeNodeData, "shape-node">;
 
 export const CIRCLE_MIN_SIZE = 80;
 export const RECTANGLE_MIN_WIDTH = 120;
@@ -37,9 +37,9 @@ export const RECTANGLE_MIN_HEIGHT = 60;
 
 /** Default light blue theme for shape nodes */
 const defaultColor: ColorStyle = {
-  background: '#EFF6FF', // blue-50
-  border: '#93C5FD', // blue-300
-  text: '#1E293B', // slate-900
+  background: "#EFF6FF", // blue-50
+  border: "#93C5FD", // blue-300
+  text: "#1E293B", // slate-900
 };
 
 /**
@@ -49,14 +49,14 @@ const defaultColor: ColorStyle = {
 export const shapeDrawable: DrawableNode<ShapeNode> = {
   onPaneMouseDown: (id, position) => ({
     id,
-    type: 'shape-node',
+    type: "shape-node",
     position,
     data: {
-      label: '',
-      shapeType: 'circle',
+      label: "",
+      shapeType: "circle",
       isTyping: false,
       color: defaultColor,
-      fontSize: 'auto',
+      fontSize: "auto",
     },
     width: CIRCLE_MIN_SIZE,
     height: CIRCLE_MIN_SIZE,
@@ -90,7 +90,10 @@ export const shapeDrawable: DrawableNode<ShapeNode> = {
   },
 
   onPaneMouseUp: (node) => {
-    const size = Math.max(Number(node.style?.width ?? node.width ?? 0), CIRCLE_MIN_SIZE);
+    const size = Math.max(
+      Number(node.style?.width ?? node.width ?? 0),
+      CIRCLE_MIN_SIZE,
+    );
 
     return {
       ...node,
@@ -116,163 +119,173 @@ export const shapeDrawable: DrawableNode<ShapeNode> = {
  * - Circle shapes center-align text, rectangles use left-align for readability
  * - Toggles between edit mode (TipTap editor) and display mode (rendered HTML)
  */
-const ShapeNodeComponent = memo(({ id, data, selected }: NodeProps<ShapeNode>) => {
-  const {
-    editor,
-    isTyping,
-    handleDoubleClick,
-    handleBlur,
-    updateNodeData,
-    fontSizeSetting,
-    resolvedFontSize,
-  } = useNodeAsEditor({ id, data });
-  const { label = '', shapeType } = data;
-  const color = data.color ?? defaultColor;
-  const containerRef = useRef<HTMLDivElement>(null);
-  
-  // Hidden measurement element for calculating optimal font size
-  const measurementRef = useRef<HTMLDivElement>(null);
-  
-  const displayHtml = useMemo(
-    () => label || '<p>Click to add text</p>',
-    [label],
-  );
+const ShapeNodeComponent = memo(
+  ({ id, data, selected }: NodeProps<ShapeNode>) => {
+    const {
+      editor,
+      isTyping,
+      handleDoubleClick,
+      handleBlur,
+      updateNodeData,
+      fontSizeSetting,
+      resolvedFontSize,
+    } = useNodeAsEditor({ id, data });
+    const { label = "", shapeType } = data;
+    const color = data.color ?? defaultColor;
+    const containerRef = useRef<HTMLDivElement>(null);
 
-  // Dynamically adjust font size when in auto mode based on shape dimensions
-  useAutoFontSizeObserver({
-    editor,
-    fontSize: fontSizeSetting,
-    html: displayHtml,
-    containerRef,
-    measurementRef,
-  });
+    // Hidden measurement element for calculating optimal font size
+    const measurementRef = useRef<HTMLDivElement>(null);
 
-  const handleColorChange = useCallback(
-    (value: ColorStyle) => {
-      updateNodeData({ color: value });
-    },
-    [updateNodeData],
-  );
+    const displayHtml = useMemo(
+      () => label || "<p>Click to add text</p>",
+      [label],
+    );
 
-  // Add color picker to the standard toolbar for per-node color customization
-  const toolbarItems = useMemo<ToolbarItem[]>(
-    () => [
-      ...defaultToolbarItems,
-      { type: 'separator', id: 'shape-node-color-separator' },
-      {
-        type: 'custom',
-        id: 'shape-node-color-picker',
-        render: () => (
-          <SimpleColorPicker color={color} setColor={handleColorChange} />
-        ),
+    // Dynamically adjust font size when in auto mode based on shape dimensions
+    useAutoFontSizeObserver({
+      editor,
+      fontSize: fontSizeSetting,
+      html: displayHtml,
+      containerRef,
+      measurementRef,
+    });
+
+    const handleColorChange = useCallback(
+      (value: ColorStyle) => {
+        updateNodeData({ color: value });
       },
-    ],
-    [color, handleColorChange],
-  );
+      [updateNodeData],
+    );
 
-  // Use shape-specific minimum dimensions and text alignment
-  const minWidth = shapeType === 'circle' ? CIRCLE_MIN_SIZE : RECTANGLE_MIN_WIDTH;
-  const minHeight = shapeType === 'circle' ? CIRCLE_MIN_SIZE : RECTANGLE_MIN_HEIGHT;
-  const textAlignClass = shapeType === 'circle' ? 'text-center' : 'text-left';
+    // Add color picker to the standard toolbar for per-node color customization
+    const toolbarItems = useMemo<ToolbarItem[]>(
+      () => [
+        ...defaultToolbarItems,
+        { type: "separator", id: "shape-node-color-separator" },
+        {
+          type: "custom",
+          id: "shape-node-color-picker",
+          render: () => (
+            <SimpleColorPicker color={color} setColor={handleColorChange} />
+          ),
+        },
+      ],
+      [color, handleColorChange],
+    );
 
-  return (
-    <NodeInteractionOverlay
-      nodeId={id}
-      isActive={selected}
-      isEditing={isTyping}
-      minWidth={minWidth}
-      minHeight={minHeight}
-      editor={editor}
-      toolbarItems={toolbarItems}
-      contextMenuItems={undefined}
-    >
-      <div
-        className={cn(
-          'relative flex h-full w-full overflow-hidden border text-slate-900 shadow-sm transition-colors',
-          shapeType === 'circle' ? 'rounded-full' : 'rounded-lg',
-        )}
-        style={{
-          backgroundColor: color.background,
-          borderColor: color.border,
-        }}
-        onDoubleClick={handleDoubleClick}
-        onBlur={handleBlur}
-        role="presentation"
+    // Use shape-specific minimum dimensions and text alignment
+    const minWidth =
+      shapeType === "circle" ? CIRCLE_MIN_SIZE : RECTANGLE_MIN_WIDTH;
+    const minHeight =
+      shapeType === "circle" ? CIRCLE_MIN_SIZE : RECTANGLE_MIN_HEIGHT;
+    const textAlignClass = shapeType === "circle" ? "text-center" : "text-left";
+
+    return (
+      <NodeInteractionOverlay
+        nodeId={id}
+        isActive={selected}
+        isEditing={isTyping}
+        minWidth={minWidth}
+        minHeight={minHeight}
+        editor={editor}
+        toolbarItems={toolbarItems}
+        contextMenuItems={undefined}
       >
-        <div className={cn('flex h-full w-full')} style={{ color: color.text }}>
-          <div ref={containerRef} className="relative h-full w-full">
-            {isTyping ? (
-              // Stop propagation to prevent node dragging while editing
-              <div
-                className="h-full w-full"
-                onMouseDown={(e) => e.stopPropagation()}
-              >
-                <MinimalTiptap
-                  editor={editor}
-                  theme="transparent"
-                  className={cn('h-full w-full', textAlignClass)}
-                  style={{ color: color.text, fontSize: `${resolvedFontSize}px` }}
+        <div
+          className={cn(
+            "relative flex h-full w-full overflow-hidden border text-slate-900 shadow-sm transition-colors",
+            shapeType === "circle" ? "rounded-full" : "rounded-lg",
+          )}
+          style={{
+            backgroundColor: color.background,
+            borderColor: color.border,
+          }}
+          onDoubleClick={handleDoubleClick}
+          onBlur={handleBlur}
+          role="presentation"
+        >
+          <div
+            className={cn("flex h-full w-full")}
+            style={{ color: color.text }}
+          >
+            <div ref={containerRef} className="relative h-full w-full">
+              {isTyping ? (
+                // Stop propagation to prevent node dragging while editing
+                <div
+                  className="h-full w-full"
+                  onMouseDown={(e) => e.stopPropagation()}
+                >
+                  <MinimalTiptap
+                    editor={editor}
+                    theme="transparent"
+                    className={cn("h-full w-full", textAlignClass)}
+                    style={{
+                      color: color.text,
+                      fontSize: `${resolvedFontSize}px`,
+                    }}
+                  />
+                </div>
+              ) : (
+                // Display mode with custom prose colors matching the shape's color scheme
+                <div
+                  className={cn(
+                    "prose prose-sm flex h-full w-full max-w-none items-center justify-center overflow-hidden p-4 break-words whitespace-pre-wrap",
+                    textAlignClass,
+                  )}
+                  style={{
+                    "--tw-prose-body": color.text,
+                    "--tw-prose-headings": color.text,
+                    "--tw-prose-links": color.text,
+                    "--tw-prose-bold": color.text,
+                    "--tw-prose-counters": color.text,
+                    "--tw-prose-bullets": color.text,
+                    "--tw-prose-hr": color.border,
+                    "--tw-prose-quotes": color.text,
+                    "--tw-prose-quote-borders": color.border,
+                    "--tw-prose-captions": color.text,
+                    color: color.text,
+                    fontSize: `${resolvedFontSize}px`,
+                  }}
+                  dangerouslySetInnerHTML={{
+                    __html: displayHtml,
+                  }}
                 />
-              </div>
-            ) : (
-              // Display mode with custom prose colors matching the shape's color scheme
+              )}
+
+              {/* Hidden measurement element with identical styling for font size calculation */}
               <div
+                ref={measurementRef}
+                aria-hidden
                 className={cn(
-                  'prose prose-sm flex h-full w-full max-w-none items-center justify-center overflow-hidden whitespace-pre-wrap break-words p-4',
+                  "pointer-events-none absolute inset-0 box-border overflow-hidden opacity-0",
+                  "prose prose-sm flex h-full w-full max-w-none items-center justify-center overflow-hidden p-4 break-words whitespace-pre-wrap",
                   textAlignClass,
                 )}
                 style={{
-                  '--tw-prose-body': color.text,
-                  '--tw-prose-headings': color.text,
-                  '--tw-prose-links': color.text,
-                  '--tw-prose-bold': color.text,
-                  '--tw-prose-counters': color.text,
-                  '--tw-prose-bullets': color.text,
-                  '--tw-prose-hr': color.border,
-                  '--tw-prose-quotes': color.text,
-                  '--tw-prose-quote-borders': color.border,
-                  '--tw-prose-captions': color.text,
-                  color: color.text,
-                  fontSize: `${resolvedFontSize}px`,
+                  "--tw-prose-body": color.text,
+                  "--tw-prose-headings": color.text,
+                  "--tw-prose-links": color.text,
+                  "--tw-prose-bold": color.text,
+                  "--tw-prose-counters": color.text,
+                  "--tw-prose-bullets": color.text,
+                  "--tw-prose-hr": color.border,
+                  "--tw-prose-quotes": color.text,
+                  "--tw-prose-quote-borders": color.border,
+                  "--tw-prose-captions": color.text,
                 }}
                 dangerouslySetInnerHTML={{
                   __html: displayHtml,
                 }}
               />
-            )}
-
-            {/* Hidden measurement element with identical styling for font size calculation */}
-            <div
-              ref={measurementRef}
-              aria-hidden
-              className={cn(
-                'pointer-events-none absolute inset-0 box-border overflow-hidden opacity-0',
-                'prose prose-sm flex h-full w-full max-w-none items-center justify-center overflow-hidden whitespace-pre-wrap break-words p-4',
-                textAlignClass,
-              )}
-              style={{
-                '--tw-prose-body': color.text,
-                '--tw-prose-headings': color.text,
-                '--tw-prose-links': color.text,
-                '--tw-prose-bold': color.text,
-                '--tw-prose-counters': color.text,
-                '--tw-prose-bullets': color.text,
-                '--tw-prose-hr': color.border,
-                '--tw-prose-quotes': color.text,
-                '--tw-prose-quote-borders': color.border,
-                '--tw-prose-captions': color.text,
-              }}
-              dangerouslySetInnerHTML={{
-                __html: displayHtml,
-              }}
-            />
+            </div>
           </div>
         </div>
-      </div>
-    </NodeInteractionOverlay>
-  );
-});
+      </NodeInteractionOverlay>
+    );
+  },
+);
 
-ShapeNodeComponent.displayName = 'ShapeNode';
+ShapeNodeComponent.displayName = "ShapeNode";
 
 export default ShapeNodeComponent;

@@ -1,8 +1,11 @@
-import { DATA_CHANNEL_MAX_BUFFER } from '../types';
+import { DATA_CHANNEL_MAX_BUFFER } from "../types";
 
 const MIN_CHUNK_SIZE = 16_384; // 16 KiB
 const TARGET_CHUNK_COUNT = 128;
-const MAX_CHUNK_SIZE = Math.max(MIN_CHUNK_SIZE, Math.floor(DATA_CHANNEL_MAX_BUFFER / 2));
+const MAX_CHUNK_SIZE = Math.max(
+  MIN_CHUNK_SIZE,
+  Math.floor(DATA_CHANNEL_MAX_BUFFER / 2),
+);
 
 export const clampChunkSize = (value: number) => {
   if (!Number.isFinite(value) || value <= 0) {

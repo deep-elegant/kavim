@@ -1,7 +1,7 @@
-import { useEffect, useMemo } from 'react';
-import * as Y from 'yjs';
-import type { Edge, Node } from '@xyflow/react';
-import type { EditableEdgeData } from '../edges/EditableEdge';
+import { useEffect, useMemo } from "react";
+import * as Y from "yjs";
+import type { Edge, Node } from "@xyflow/react";
+import type { EditableEdgeData } from "../edges/EditableEdge";
 
 /** Yjs shared types for collaborative canvas state */
 export type CanvasDocHandles = {
@@ -23,14 +23,17 @@ export const useCanvasDoc = (doc?: Y.Doc): CanvasDocHandles => {
   const ownsDoc = doc === undefined;
 
   // Lazily get or create shared Yjs types (memoized per doc instance)
-  const nodesMap = useMemo(() => canvasDoc.getMap<Node>('nodes'), [canvasDoc]);
-  const nodeOrder = useMemo(() => canvasDoc.getArray<string>('node-order'), [canvasDoc]);
+  const nodesMap = useMemo(() => canvasDoc.getMap<Node>("nodes"), [canvasDoc]);
+  const nodeOrder = useMemo(
+    () => canvasDoc.getArray<string>("node-order"),
+    [canvasDoc],
+  );
   const edgesMap = useMemo(
-    () => canvasDoc.getMap<Edge<EditableEdgeData>>('edges'),
+    () => canvasDoc.getMap<Edge<EditableEdgeData>>("edges"),
     [canvasDoc],
   );
   const edgeOrder = useMemo(
-    () => canvasDoc.getArray<string>('edge-order'),
+    () => canvasDoc.getArray<string>("edge-order"),
     [canvasDoc],
   );
 

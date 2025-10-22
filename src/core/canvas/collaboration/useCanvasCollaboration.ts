@@ -1,7 +1,7 @@
-import { useRef, useCallback, useMemo } from 'react';
-import type { XYPosition } from '@xyflow/react';
-import { useWebRTC } from './WebRTCContext';
-import type { CollaboratorInteraction } from './useWebRTCManual';
+import { useRef, useCallback, useMemo } from "react";
+import type { XYPosition } from "@xyflow/react";
+import { useWebRTC } from "./WebRTCContext";
+import type { CollaboratorInteraction } from "./useWebRTCManual";
 
 /**
  * Hook for canvas-level collaboration features.
@@ -11,7 +11,13 @@ import type { CollaboratorInteraction } from './useWebRTCManual';
  */
 
 // Color palette for collaborator cursors (cycles when >5 users)
-const COLLABORATOR_COLORS = ['#8b5cf6', '#f97316', '#10b981', '#ec4899', '#0ea5e9'];
+const COLLABORATOR_COLORS = [
+  "#8b5cf6",
+  "#f97316",
+  "#10b981",
+  "#ec4899",
+  "#0ea5e9",
+];
 
 export type RemoteCollaboratorPresence = {
   clientId: string;
@@ -28,15 +34,16 @@ export type RemoteNodeInteractionState = {
 };
 
 export const useCanvasCollaboration = () => {
-  const { updatePresence, remotePresenceByClient, dataChannelState } = useWebRTC();
+  const { updatePresence, remotePresenceByClient, dataChannelState } =
+    useWebRTC();
   const mouseThrottleRef = useRef<number>(0);
-  
+
   // Stable identity assignment: once a client gets a color/label, it persists
   const collaboratorIdentitiesRef = useRef(
     new Map<string, { color: string; label: string }>(),
   );
   const colorIndexRef = useRef<number>(0);
-  
+
   // Track last selected node to restore selection state after typing ends
   const lastSelectedNodeRef = useRef<string | null>(null);
 
@@ -51,7 +58,8 @@ export const useCanvasCollaboration = () => {
       return existing;
     }
 
-    const color = COLLABORATOR_COLORS[colorIndexRef.current % COLLABORATOR_COLORS.length];
+    const color =
+      COLLABORATOR_COLORS[colorIndexRef.current % COLLABORATOR_COLORS.length];
     colorIndexRef.current += 1;
     const label = `Collaborator ${collaboratorIdentitiesRef.current.size + 1}`;
     const identity = { color, label };
@@ -71,17 +79,18 @@ export const useCanvasCollaboration = () => {
         const identity = getIdentity(clientId);
         const hasPosition = Boolean(
           presence?.hasPosition &&
-            typeof presence.x === 'number' &&
-            typeof presence.y === 'number',
+            typeof presence.x === "number" &&
+            typeof presence.y === "number",
         );
-        const position = hasPosition && presence
-          ? {
-              x: presence.x,
-              y: presence.y,
-            }
-          : null;
+        const position =
+          hasPosition && presence
+            ? {
+                x: presence.x,
+                y: presence.y,
+              }
+            : null;
         const interaction: CollaboratorInteraction =
-          presence?.interaction ?? (presence?.nodeId ? 'selecting' : 'pointer');
+          presence?.interaction ?? (presence?.nodeId ? "selecting" : "pointer");
         const nodeId = presence?.nodeId ?? null;
 
         return {
@@ -101,7 +110,9 @@ export const useCanvasCollaboration = () => {
    * - Enables efficient per-node queries (used in node components)
    * - Splits by interaction type for different UI treatments
    */
-  const remoteNodeInteractions = useMemo<Map<string, RemoteNodeInteractionState>>(() => {
+  const remoteNodeInteractions = useMemo<
+    Map<string, RemoteNodeInteractionState>
+  >(() => {
     const map = new Map<string, RemoteNodeInteractionState>();
 
     remoteCollaborators.forEach((collaborator) => {
@@ -114,9 +125,9 @@ export const useCanvasCollaboration = () => {
         typing: [],
       };
 
-      if (collaborator.interaction === 'typing') {
+      if (collaborator.interaction === "typing") {
         entry.typing.push(collaborator);
-      } else if (collaborator.interaction === 'selecting') {
+      } else if (collaborator.interaction === "selecting") {
         entry.selecting.push(collaborator);
       }
 
@@ -159,7 +170,7 @@ export const useCanvasCollaboration = () => {
       lastSelectedNodeRef.current = nodeId;
       updatePresence({
         nodeId,
-        interaction: nodeId ? 'selecting' : 'pointer',
+        interaction: nodeId ? "selecting" : "pointer",
       });
     },
     [updatePresence],
@@ -177,10 +188,10 @@ export const useCanvasCollaboration = () => {
       }
 
       const interaction: CollaboratorInteraction = nodeId
-        ? 'typing'
+        ? "typing"
         : lastSelectedNodeRef.current
-          ? 'selecting'
-          : 'pointer';
+          ? "selecting"
+          : "pointer";
 
       updatePresence({
         nodeId: nodeId ?? lastSelectedNodeRef.current,

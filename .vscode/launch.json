@@ -1,10 +1,10 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
-    "version": "0.2.0",
-    "configurations": [
-   {
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "configurations": [
+    {
       "name": "Debug Electron Forge (Main Process)",
       "type": "node",
       "request": "launch",
@@ -14,14 +14,17 @@
       },
       "runtimeArgs": [
         "start",
-        "--inspect-electron"       // 👈 enables Node inspector on port 9229
+        "--inspect-electron" // 👈 enables Node inspector on port 9229
       ],
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal",
       "protocol": "inspector",
       "timeout": 20000,
       "outputCapture": "std",
-      "resolveSourceMapLocations": ["${workspaceFolder}/**", "!**/node_modules/**"]
+      "resolveSourceMapLocations": [
+        "${workspaceFolder}/**",
+        "!**/node_modules/**"
+      ]
     }
-    ]
+  ]
 }

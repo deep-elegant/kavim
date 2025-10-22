@@ -6,9 +6,9 @@ import React, {
   useMemo,
   useRef,
   useState,
-} from 'react';
+} from "react";
 
-const LOCAL_STORAGE_KEY = 'app.statsForNerds.enabled';
+const LOCAL_STORAGE_KEY = "app.statsForNerds.enabled";
 const HISTORY_LENGTH = 60;
 
 type MetricSeries = {
@@ -46,34 +46,39 @@ type StatsForNerdsContextValue = {
   metrics: StatsForNerdsMetrics;
 };
 
-const StatsForNerdsContext = createContext<StatsForNerdsContextValue | undefined>(
-  undefined,
-);
+const StatsForNerdsContext = createContext<
+  StatsForNerdsContextValue | undefined
+>(undefined);
 
 const readInitialEnabled = () => {
-  if (typeof window === 'undefined') {
+  if (typeof window === "undefined") {
     return false;
   }
 
   try {
     const stored = window.localStorage.getItem(LOCAL_STORAGE_KEY);
-    return stored === 'true';
+    return stored === "true";
   } catch (error) {
-    console.warn('Unable to read stats preference from storage', error);
+    console.warn("Unable to read stats preference from storage", error);
     return false;
   }
 };
 
 const pushManyCapped = (history: number[], samples: number[]) => {
   if (samples.length === 0) {
-    return history.length > HISTORY_LENGTH ? history.slice(-HISTORY_LENGTH) : history;
+    return history.length > HISTORY_LENGTH
+      ? history.slice(-HISTORY_LENGTH)
+      : history;
   }
 
   const combined = [...history, ...samples];
-  return combined.length > HISTORY_LENGTH ? combined.slice(-HISTORY_LENGTH) : combined;
+  return combined.length > HISTORY_LENGTH
+    ? combined.slice(-HISTORY_LENGTH)
+    : combined;
 };
 
-const pushCapped = (history: number[], value: number) => pushManyCapped(history, [value]);
+const pushCapped = (history: number[], value: number) =>
+  pushManyCapped(history, [value]);
 
 const createEmptyHistories = () => ({
   setNodes: [] as number[],
@@ -93,7 +98,9 @@ const createEmptyHistories = () => ({
 export const StatsForNerdsProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
-  const [enabled, setEnabledState] = useState<boolean>(() => readInitialEnabled());
+  const [enabled, setEnabledState] = useState<boolean>(() =>
+    readInitialEnabled(),
+  );
   const [histories, setHistories] = useState(createEmptyHistories);
   const countersRef = useRef({
     setNodes: 0,
@@ -109,11 +116,14 @@ export const StatsForNerdsProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const setEnabled = useCallback((value: boolean) => {
     setEnabledState(value);
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       try {
-        window.localStorage.setItem(LOCAL_STORAGE_KEY, value ? 'true' : 'false');
+        window.localStorage.setItem(
+          LOCAL_STORAGE_KEY,
+          value ? "true" : "false",
+        );
       } catch (error) {
-        console.warn('Unable to persist stats preference', error);
+        console.warn("Unable to persist stats preference", error);
       }
     }
   }, []);
@@ -155,7 +165,8 @@ export const StatsForNerdsProvider: React.FC<{ children: React.ReactNode }> = ({
       const lastSampleAt = lastSampleAtRef.current ?? now;
       const elapsedMs = now - lastSampleAt;
       const skippedSeconds = Math.max(0, Math.floor(elapsedMs / 1000) - 1);
-      const zeroSamples = skippedSeconds > 0 ? new Array(skippedSeconds).fill(0) : [];
+      const zeroSamples =
+        skippedSeconds > 0 ? new Array(skippedSeconds).fill(0) : [];
       lastSampleAtRef.current = now;
 
       countersRef.current = {
@@ -175,7 +186,10 @@ export const StatsForNerdsProvider: React.FC<{ children: React.ReactNode }> = ({
           ...zeroSamples,
           yjsOutboundBytes,
         ]),
-        yjsInboundBytes: pushManyCapped(previous.yjsInboundBytes, [...zeroSamples, yjsInboundBytes]),
+        yjsInboundBytes: pushManyCapped(previous.yjsInboundBytes, [
+          ...zeroSamples,
+          yjsInboundBytes,
+        ]),
         fileOutboundBytes: pushManyCapped(previous.fileOutboundBytes, [
           ...zeroSamples,
           fileOutboundBytes,
@@ -287,7 +301,10 @@ export const StatsForNerdsProvider: React.FC<{ children: React.ReactNode }> = ({
       }
       setHistories((previous) => ({
         ...previous,
-        dataChannelBufferedAmount: pushCapped(previous.dataChannelBufferedAmount, amount),
+        dataChannelBufferedAmount: pushCapped(
+          previous.dataChannelBufferedAmount,
+          amount,
+        ),
       }));
     },
     [enabled],
@@ -358,7 +375,9 @@ export const StatsForNerdsProvider: React.FC<{ children: React.ReactNode }> = ({
 export const useStatsForNerds = () => {
   const context = useContext(StatsForNerdsContext);
   if (!context) {
-    throw new Error('useStatsForNerds must be used within StatsForNerdsProvider');
+    throw new Error(
+      "useStatsForNerds must be used within StatsForNerdsProvider",
+    );
   }
   return context;
 };

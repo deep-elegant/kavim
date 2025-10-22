@@ -1,16 +1,19 @@
-import React, { useMemo } from 'react';
-import { useStatsForNerds } from '@/core/diagnostics/StatsForNerdsContext';
+import React, { useMemo } from "react";
+import { useStatsForNerds } from "@/core/diagnostics/StatsForNerdsContext";
 
 const GRAPH_WIDTH = 200;
 const GRAPH_HEIGHT = 80;
 
 const formatBytes = (bytes: number) => {
   if (!Number.isFinite(bytes) || bytes <= 0) {
-    return '0 B';
+    return "0 B";
   }
 
-  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const exponent = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const exponent = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1,
+  );
   const value = bytes / 1024 ** exponent;
 
   const precision = value >= 100 ? 0 : value >= 10 ? 1 : 2;
@@ -20,7 +23,7 @@ const formatBytes = (bytes: number) => {
 
 const createPolylinePoints = (history: number[], maxValue: number) => {
   if (history.length === 0) {
-    return '';
+    return "";
   }
 
   const xStep = history.length > 1 ? GRAPH_WIDTH / (history.length - 1) : 0;
@@ -32,7 +35,7 @@ const createPolylinePoints = (history: number[], maxValue: number) => {
       const y = Math.round(GRAPH_HEIGHT - normalized * GRAPH_HEIGHT);
       return `${x},${y}`;
     })
-    .join(' ');
+    .join(" ");
 };
 
 export const StatsForNerdsOverlay: React.FC = () => {
@@ -41,18 +44,21 @@ export const StatsForNerdsOverlay: React.FC = () => {
   const setNodesHistory = metrics.setNodesPerSecond.history;
   const setNodesGraph = useMemo(() => {
     if (setNodesHistory.length === 0) {
-      return { points: '', maxValue: 0 };
+      return { points: "", maxValue: 0 };
     }
 
     const max = Math.max(1, ...setNodesHistory);
-    return { points: createPolylinePoints(setNodesHistory, max), maxValue: max };
+    return {
+      points: createPolylinePoints(setNodesHistory, max),
+      maxValue: max,
+    };
   }, [setNodesHistory]);
 
   const outboundHistory = metrics.yjsOutboundBytesPerSecond.history;
   const inboundHistory = metrics.yjsInboundBytesPerSecond.history;
   const throughputGraph = useMemo(() => {
     if (outboundHistory.length === 0 && inboundHistory.length === 0) {
-      return { outbound: '', inbound: '', maxValue: 0 };
+      return { outbound: "", inbound: "", maxValue: 0 };
     }
 
     const max = Math.max(1, ...outboundHistory, ...inboundHistory);
@@ -67,7 +73,7 @@ export const StatsForNerdsOverlay: React.FC = () => {
   const fileInboundHistory = metrics.fileInboundBytesPerSecond.history;
   const fileThroughputGraph = useMemo(() => {
     if (fileOutboundHistory.length === 0 && fileInboundHistory.length === 0) {
-      return { outbound: '', inbound: '', maxValue: 0 };
+      return { outbound: "", inbound: "", maxValue: 0 };
     }
 
     const max = Math.max(1, ...fileOutboundHistory, ...fileInboundHistory);
@@ -83,19 +89,23 @@ export const StatsForNerdsOverlay: React.FC = () => {
   }
 
   return (
-    <div className="pointer-events-none absolute bottom-4 left-4 z-20 w-72 max-w-[18rem] text-xs text-foreground">
-      <div className="pointer-events-auto space-y-3 rounded-lg border border-border bg-background/90 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/70">
-        <div className="flex items-center justify-between text-[0.7rem] uppercase tracking-wide text-muted-foreground">
+    <div className="text-foreground pointer-events-none absolute bottom-4 left-4 z-20 w-72 max-w-[18rem] text-xs">
+      <div className="border-border bg-background/90 supports-[backdrop-filter]:bg-background/70 pointer-events-auto space-y-3 rounded-lg border p-3 shadow-lg backdrop-blur">
+        <div className="text-muted-foreground flex items-center justify-between text-[0.7rem] tracking-wide uppercase">
           <span>Stats for nerds</span>
           <span>setNodes/sec</span>
         </div>
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <div className="text-[0.65rem] uppercase text-muted-foreground">Last second</div>
-            <div className="text-sm font-semibold">{metrics.setNodesPerSecond.latest}</div>
+            <div className="text-muted-foreground text-[0.65rem] uppercase">
+              Last second
+            </div>
+            <div className="text-sm font-semibold">
+              {metrics.setNodesPerSecond.latest}
+            </div>
           </div>
           <div>
-            <div className="text-[0.65rem] uppercase text-muted-foreground">
+            <div className="text-muted-foreground text-[0.65rem] uppercase">
               Avg (last {metrics.setNodesPerSecond.history.length || 0}s)
             </div>
             <div className="text-sm font-semibold">
@@ -152,7 +162,7 @@ export const StatsForNerdsOverlay: React.FC = () => {
           ) : null}
         </svg>
 
-        <div className="flex items-center justify-between text-[0.7rem] uppercase tracking-wide text-muted-foreground">
+        <div className="text-muted-foreground flex items-center justify-between text-[0.7rem] tracking-wide uppercase">
           <span>Yjs throughput</span>
           <span>bytes/sec</span>
         </div>
@@ -216,45 +226,53 @@ export const StatsForNerdsOverlay: React.FC = () => {
             </text>
           )}
         </svg>
-        <div className="flex items-center gap-3 text-[0.65rem] uppercase text-muted-foreground">
+        <div className="text-muted-foreground flex items-center gap-3 text-[0.65rem] uppercase">
           <div className="flex items-center gap-1">
             <span
               className="inline-block h-2 w-2 rounded-full"
-              style={{ backgroundColor: 'hsl(var(--chart-1, 198 93% 60%))' }}
+              style={{ backgroundColor: "hsl(var(--chart-1, 198 93% 60%))" }}
             />
             <span>Outbound</span>
           </div>
           <div className="flex items-center gap-1">
             <span
               className="inline-block h-2 w-2 rounded-full"
-              style={{ backgroundColor: 'hsl(var(--chart-2, 142 71% 45%))' }}
+              style={{ backgroundColor: "hsl(var(--chart-2, 142 71% 45%))" }}
             />
             <span>Inbound</span>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 text-[0.7rem]">
           <div>
-            <div className="text-[0.6rem] uppercase text-muted-foreground">Outbound latest</div>
+            <div className="text-muted-foreground text-[0.6rem] uppercase">
+              Outbound latest
+            </div>
             <div className="font-semibold">
               {formatBytes(metrics.yjsOutboundBytesPerSecond.latest)}/s
             </div>
-            <div className="text-[0.6rem] uppercase text-muted-foreground">Avg</div>
+            <div className="text-muted-foreground text-[0.6rem] uppercase">
+              Avg
+            </div>
             <div className="font-semibold">
               {formatBytes(metrics.yjsOutboundBytesPerSecond.average)}/s
             </div>
           </div>
           <div>
-            <div className="text-[0.6rem] uppercase text-muted-foreground">Inbound latest</div>
+            <div className="text-muted-foreground text-[0.6rem] uppercase">
+              Inbound latest
+            </div>
             <div className="font-semibold">
               {formatBytes(metrics.yjsInboundBytesPerSecond.latest)}/s
             </div>
-            <div className="text-[0.6rem] uppercase text-muted-foreground">Avg</div>
+            <div className="text-muted-foreground text-[0.6rem] uppercase">
+              Avg
+            </div>
             <div className="font-semibold">
               {formatBytes(metrics.yjsInboundBytesPerSecond.average)}/s
             </div>
           </div>
         </div>
-        <div className="flex items-center justify-between text-[0.7rem] uppercase tracking-wide text-muted-foreground">
+        <div className="text-muted-foreground flex items-center justify-between text-[0.7rem] tracking-wide uppercase">
           <span>File transfer throughput</span>
           <span>bytes/sec</span>
         </div>
@@ -318,39 +336,47 @@ export const StatsForNerdsOverlay: React.FC = () => {
             </text>
           )}
         </svg>
-        <div className="flex items-center gap-3 text-[0.65rem] uppercase text-muted-foreground">
+        <div className="text-muted-foreground flex items-center gap-3 text-[0.65rem] uppercase">
           <div className="flex items-center gap-1">
             <span
               className="inline-block h-2 w-2 rounded-full"
-              style={{ backgroundColor: 'hsl(var(--chart-3, 27 96% 61%))' }}
+              style={{ backgroundColor: "hsl(var(--chart-3, 27 96% 61%))" }}
             />
             <span>Outbound</span>
           </div>
           <div className="flex items-center gap-1">
             <span
               className="inline-block h-2 w-2 rounded-full"
-              style={{ backgroundColor: 'hsl(var(--chart-4, 312 77% 76%))' }}
+              style={{ backgroundColor: "hsl(var(--chart-4, 312 77% 76%))" }}
             />
             <span>Inbound</span>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 text-[0.7rem]">
           <div>
-            <div className="text-[0.6rem] uppercase text-muted-foreground">Outbound latest</div>
+            <div className="text-muted-foreground text-[0.6rem] uppercase">
+              Outbound latest
+            </div>
             <div className="font-semibold">
               {formatBytes(metrics.fileOutboundBytesPerSecond.latest)}/s
             </div>
-            <div className="text-[0.6rem] uppercase text-muted-foreground">Avg</div>
+            <div className="text-muted-foreground text-[0.6rem] uppercase">
+              Avg
+            </div>
             <div className="font-semibold">
               {formatBytes(metrics.fileOutboundBytesPerSecond.average)}/s
             </div>
           </div>
           <div>
-            <div className="text-[0.6rem] uppercase text-muted-foreground">Inbound latest</div>
+            <div className="text-muted-foreground text-[0.6rem] uppercase">
+              Inbound latest
+            </div>
             <div className="font-semibold">
               {formatBytes(metrics.fileInboundBytesPerSecond.latest)}/s
             </div>
-            <div className="text-[0.6rem] uppercase text-muted-foreground">Avg</div>
+            <div className="text-muted-foreground text-[0.6rem] uppercase">
+              Avg
+            </div>
             <div className="font-semibold">
               {formatBytes(metrics.fileInboundBytesPerSecond.average)}/s
             </div>
@@ -358,23 +384,25 @@ export const StatsForNerdsOverlay: React.FC = () => {
         </div>
         <div className="space-y-1 text-[0.7rem]">
           <div className="flex items-center justify-between">
-            <span className="text-[0.6rem] uppercase text-muted-foreground">
+            <span className="text-muted-foreground text-[0.6rem] uppercase">
               Pending queue
             </span>
             <span className="font-semibold">
-              {metrics.yjsQueueLength.latest} msg · {formatBytes(metrics.yjsQueueBytes.latest)}
+              {metrics.yjsQueueLength.latest} msg ·{" "}
+              {formatBytes(metrics.yjsQueueBytes.latest)}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[0.6rem] uppercase text-muted-foreground">
+            <span className="text-muted-foreground text-[0.6rem] uppercase">
               File transfer queue
             </span>
             <span className="font-semibold">
-              {metrics.fileQueueLength.latest} chunks · {formatBytes(metrics.fileQueueBytes.latest)}
+              {metrics.fileQueueLength.latest} chunks ·{" "}
+              {formatBytes(metrics.fileQueueBytes.latest)}
             </span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="text-[0.6rem] uppercase text-muted-foreground">
+            <span className="text-muted-foreground text-[0.6rem] uppercase">
               RTC buffered amount
             </span>
             <span className="font-semibold">

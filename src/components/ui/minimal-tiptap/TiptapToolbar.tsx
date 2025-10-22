@@ -1,8 +1,8 @@
-import React, { type ReactNode } from 'react';
-import { type Editor } from '@tiptap/react';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
-import { Toggle } from '@/components/ui/toggle';
+import React, { type ReactNode } from "react";
+import { type Editor } from "@tiptap/react";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
+import { Toggle } from "@/components/ui/toggle";
 import {
   Bold,
   Italic,
@@ -17,9 +17,9 @@ import {
   Minus,
   Undo,
   Redo,
-} from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
-import { FontSizePicker } from './FontSizePicker';
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { FontSizePicker } from "./FontSizePicker";
 
 type ToolbarBaseItem = {
   id?: string;
@@ -27,7 +27,7 @@ type ToolbarBaseItem = {
 };
 
 export type ToolbarToggleItem = ToolbarBaseItem & {
-  type: 'toggle';
+  type: "toggle";
   icon: LucideIcon;
   isActive: (editor: Editor) => boolean;
   onToggle: (editor: Editor) => void;
@@ -35,18 +35,18 @@ export type ToolbarToggleItem = ToolbarBaseItem & {
 };
 
 export type ToolbarButtonItem = ToolbarBaseItem & {
-  type: 'button';
+  type: "button";
   icon: LucideIcon;
   onClick: (editor: Editor) => void;
   isDisabled?: (editor: Editor) => boolean;
 };
 
 export type ToolbarSeparatorItem = ToolbarBaseItem & {
-  type: 'separator';
+  type: "separator";
 };
 
 export type ToolbarCustomItem = ToolbarBaseItem & {
-  type: 'custom';
+  type: "custom";
   render: (editor: Editor | null) => ReactNode;
 };
 
@@ -63,132 +63,139 @@ export interface TiptapToolbarProps {
 
 const defaultToolbarItems: ToolbarItem[] = [
   {
-    type: 'custom',
-    id: 'font-size-picker',
+    type: "custom",
+    id: "font-size-picker",
     render: (editor) => <FontSizePicker editor={editor} />,
   },
-  { type: 'separator', id: 'separator-font-size' },
+  { type: "separator", id: "separator-font-size" },
   {
-    type: 'toggle',
-    id: 'bold',
+    type: "toggle",
+    id: "bold",
     icon: Bold,
-    ariaLabel: 'Toggle bold',
-    isActive: (editor) => editor.isActive('bold'),
+    ariaLabel: "Toggle bold",
+    isActive: (editor) => editor.isActive("bold"),
     onToggle: (editor) => editor.chain().focus().toggleBold().run(),
     isDisabled: (editor) => !editor.can().chain().focus().toggleBold().run(),
   },
   {
-    type: 'toggle',
-    id: 'italic',
+    type: "toggle",
+    id: "italic",
     icon: Italic,
-    ariaLabel: 'Toggle italic',
-    isActive: (editor) => editor.isActive('italic'),
+    ariaLabel: "Toggle italic",
+    isActive: (editor) => editor.isActive("italic"),
     onToggle: (editor) => editor.chain().focus().toggleItalic().run(),
     isDisabled: (editor) => !editor.can().chain().focus().toggleItalic().run(),
   },
   {
-    type: 'toggle',
-    id: 'strike',
+    type: "toggle",
+    id: "strike",
     icon: Strikethrough,
-    ariaLabel: 'Toggle strike-through',
-    isActive: (editor) => editor.isActive('strike'),
+    ariaLabel: "Toggle strike-through",
+    isActive: (editor) => editor.isActive("strike"),
     onToggle: (editor) => editor.chain().focus().toggleStrike().run(),
     isDisabled: (editor) => !editor.can().chain().focus().toggleStrike().run(),
   },
   {
-    type: 'toggle',
-    id: 'code',
+    type: "toggle",
+    id: "code",
     icon: Code,
-    ariaLabel: 'Toggle code',
-    isActive: (editor) => editor.isActive('code'),
+    ariaLabel: "Toggle code",
+    isActive: (editor) => editor.isActive("code"),
     onToggle: (editor) => editor.chain().focus().toggleCode().run(),
     isDisabled: (editor) => !editor.can().chain().focus().toggleCode().run(),
   },
-  { type: 'separator', id: 'separator-formatting' },
+  { type: "separator", id: "separator-formatting" },
   {
-    type: 'toggle',
-    id: 'heading-1',
+    type: "toggle",
+    id: "heading-1",
     icon: Heading1,
-    ariaLabel: 'Toggle heading level 1',
-    isActive: (editor) => editor.isActive('heading', { level: 1 }),
-    onToggle: (editor) => editor.chain().focus().toggleHeading({ level: 1 }).run(),
+    ariaLabel: "Toggle heading level 1",
+    isActive: (editor) => editor.isActive("heading", { level: 1 }),
+    onToggle: (editor) =>
+      editor.chain().focus().toggleHeading({ level: 1 }).run(),
   },
   {
-    type: 'toggle',
-    id: 'heading-2',
+    type: "toggle",
+    id: "heading-2",
     icon: Heading2,
-    ariaLabel: 'Toggle heading level 2',
-    isActive: (editor) => editor.isActive('heading', { level: 2 }),
-    onToggle: (editor) => editor.chain().focus().toggleHeading({ level: 2 }).run(),
+    ariaLabel: "Toggle heading level 2",
+    isActive: (editor) => editor.isActive("heading", { level: 2 }),
+    onToggle: (editor) =>
+      editor.chain().focus().toggleHeading({ level: 2 }).run(),
   },
   {
-    type: 'toggle',
-    id: 'heading-3',
+    type: "toggle",
+    id: "heading-3",
     icon: Heading3,
-    ariaLabel: 'Toggle heading level 3',
-    isActive: (editor) => editor.isActive('heading', { level: 3 }),
-    onToggle: (editor) => editor.chain().focus().toggleHeading({ level: 3 }).run(),
+    ariaLabel: "Toggle heading level 3",
+    isActive: (editor) => editor.isActive("heading", { level: 3 }),
+    onToggle: (editor) =>
+      editor.chain().focus().toggleHeading({ level: 3 }).run(),
   },
-  { type: 'separator', id: 'separator-headings' },
+  { type: "separator", id: "separator-headings" },
   {
-    type: 'toggle',
-    id: 'bullet-list',
+    type: "toggle",
+    id: "bullet-list",
     icon: List,
-    ariaLabel: 'Toggle bullet list',
-    isActive: (editor) => editor.isActive('bulletList'),
+    ariaLabel: "Toggle bullet list",
+    isActive: (editor) => editor.isActive("bulletList"),
     onToggle: (editor) => editor.chain().focus().toggleBulletList().run(),
   },
   {
-    type: 'toggle',
-    id: 'ordered-list',
+    type: "toggle",
+    id: "ordered-list",
     icon: ListOrdered,
-    ariaLabel: 'Toggle ordered list',
-    isActive: (editor) => editor.isActive('orderedList'),
+    ariaLabel: "Toggle ordered list",
+    isActive: (editor) => editor.isActive("orderedList"),
     onToggle: (editor) => editor.chain().focus().toggleOrderedList().run(),
   },
   {
-    type: 'toggle',
-    id: 'blockquote',
+    type: "toggle",
+    id: "blockquote",
     icon: Quote,
-    ariaLabel: 'Toggle blockquote',
-    isActive: (editor) => editor.isActive('blockquote'),
+    ariaLabel: "Toggle blockquote",
+    isActive: (editor) => editor.isActive("blockquote"),
     onToggle: (editor) => editor.chain().focus().toggleBlockquote().run(),
   },
-  { type: 'separator', id: 'separator-block' },
+  { type: "separator", id: "separator-block" },
   {
-    type: 'button',
-    id: 'horizontal-rule',
+    type: "button",
+    id: "horizontal-rule",
     icon: Minus,
-    ariaLabel: 'Insert horizontal rule',
+    ariaLabel: "Insert horizontal rule",
     onClick: (editor) => editor.chain().focus().setHorizontalRule().run(),
   },
-  { type: 'separator', id: 'separator-history' },
+  { type: "separator", id: "separator-history" },
   {
-    type: 'button',
-    id: 'undo',
+    type: "button",
+    id: "undo",
     icon: Undo,
-    ariaLabel: 'Undo',
+    ariaLabel: "Undo",
     onClick: (editor) => editor.chain().focus().undo().run(),
     isDisabled: (editor) => !editor.can().chain().focus().undo().run(),
   },
   {
-    type: 'button',
-    id: 'redo',
+    type: "button",
+    id: "redo",
     icon: Redo,
-    ariaLabel: 'Redo',
+    ariaLabel: "Redo",
     onClick: (editor) => editor.chain().focus().redo().run(),
     isDisabled: (editor) => !editor.can().chain().focus().redo().run(),
   },
 ];
 
-const renderToolbarItem = (editor: Editor | null, item: ToolbarItem, index: number) => {
+const renderToolbarItem = (
+  editor: Editor | null,
+  item: ToolbarItem,
+  index: number,
+) => {
   const key = item.id ?? index;
 
-  if (item.type === 'separator') {
+  if (item.type === "separator") {
     return <Separator key={key} orientation="vertical" className="h-6" />;
   }
 
-  if (item.type === 'custom') {
+  if (item.type === "custom") {
     return (
       <div key={key} className="flex items-center" data-toolbar-custom>
         {item.render(editor)}
@@ -200,7 +207,7 @@ const renderToolbarItem = (editor: Editor | null, item: ToolbarItem, index: numb
     return null;
   }
 
-  if (item.type === 'button') {
+  if (item.type === "button") {
     const Icon = item.icon;
     const disabled = item.isDisabled?.(editor) ?? false;
 
@@ -236,9 +243,12 @@ const renderToolbarItem = (editor: Editor | null, item: ToolbarItem, index: numb
   );
 };
 
-export function TiptapToolbar({ editor, items = defaultToolbarItems }: TiptapToolbarProps) {
+export function TiptapToolbar({
+  editor,
+  items = defaultToolbarItems,
+}: TiptapToolbarProps) {
   return (
-    <div className="flex items-center gap-1 rounded-md border bg-popover px-2 py-1 shadow-lg">
+    <div className="bg-popover flex items-center gap-1 rounded-md border px-2 py-1 shadow-lg">
       {items.map((item, index) => renderToolbarItem(editor, item, index))}
     </div>
   );

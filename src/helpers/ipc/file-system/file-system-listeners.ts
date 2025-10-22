@@ -1,13 +1,13 @@
-import { ipcMain, dialog, app } from 'electron';
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import { ipcMain, dialog, app } from "electron";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 import {
   OPEN_DIRECTORY_DIALOG_CHANNEL,
   OPEN_FILE_DIALOG_CHANNEL,
   READ_FILE_AS_DATA_URL_CHANNEL,
   SAVE_CLIPBOARD_IMAGE_CHANNEL,
-} from './file-system-channels';
+} from "./file-system-channels";
 
 const mimeTypes: Record<string, string> = {
   ".png": "image/png",
@@ -56,9 +56,9 @@ export const addFileSystemEventListeners = () => {
   ipcMain.handle(
     SAVE_CLIPBOARD_IMAGE_CHANNEL,
     async (_, base64Data: string, extension: string) => {
-      const buffer = Buffer.from(base64Data, 'base64');
-      const userDataPath = app.getPath('userData');
-      const imagesDir = path.join(userDataPath, 'pasted-images');
+      const buffer = Buffer.from(base64Data, "base64");
+      const userDataPath = app.getPath("userData");
+      const imagesDir = path.join(userDataPath, "pasted-images");
       await fs.mkdir(imagesDir, { recursive: true });
       const fileName = `${Date.now()}.${extension}`;
       const filePath = path.join(imagesDir, fileName);

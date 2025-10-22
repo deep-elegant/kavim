@@ -1,22 +1,21 @@
-import React, { memo, useCallback, useMemo, useRef } from 'react';
-import { type NodeProps, type Node } from '@xyflow/react';
+import React, { memo, useCallback, useMemo, useRef } from "react";
+import { type NodeProps, type Node } from "@xyflow/react";
 
-import NodeInteractionOverlay from './NodeInteractionOverlay';
-import { type DrawableNode } from './DrawableNode';
-import { MinimalTiptap } from '@/components/ui/minimal-tiptap';
+import NodeInteractionOverlay from "./NodeInteractionOverlay";
+import { type DrawableNode } from "./DrawableNode";
+import { MinimalTiptap } from "@/components/ui/minimal-tiptap";
 import {
   defaultToolbarItems,
   type ToolbarItem,
-} from '@/components/ui/minimal-tiptap/TiptapToolbar';
-import { cn } from '@/utils/tailwind';
-import { useNodeAsEditor } from '@/helpers/useNodeAsEditor';
+} from "@/components/ui/minimal-tiptap/TiptapToolbar";
+import { cn } from "@/utils/tailwind";
+import { useNodeAsEditor } from "@/helpers/useNodeAsEditor";
 import {
   SimpleColorPicker,
   type ColorStyle,
-} from '@/components/ui/simple-color-picker';
-import { type FontSizeSetting } from '@/components/ui/minimal-tiptap/FontSizePlugin';
-import { useAutoFontSizeObserver } from './useAutoFontSizeObserver';
-
+} from "@/components/ui/simple-color-picker";
+import { type FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
+import { useAutoFontSizeObserver } from "./useAutoFontSizeObserver";
 
 /** Data structure for sticky notes with color theming and font sizing */
 export type StickyNoteData = {
@@ -26,16 +25,16 @@ export type StickyNoteData = {
   fontSize?: FontSizeSetting;
 };
 
-export type StickyNoteNodeType = Node<StickyNoteData, 'sticky-note'>;
+export type StickyNoteNodeType = Node<StickyNoteData, "sticky-note">;
 
 const MIN_WIDTH = 100;
 const MIN_HEIGHT = 30;
 
 /** Classic sticky note yellow - provides familiar UX for quick notes */
 const defaultColor: ColorStyle = {
-  background: '#ffe83f',
-  border: '#E6D038',
-  text: '#000000',
+  background: "#ffe83f",
+  border: "#E6D038",
+  text: "#000000",
 };
 
 /**
@@ -45,13 +44,13 @@ const defaultColor: ColorStyle = {
 export const stickyNoteDrawable: DrawableNode<StickyNoteNodeType> = {
   onPaneMouseDown: (id, position) => ({
     id,
-    type: 'sticky-note',
+    type: "sticky-note",
     position,
     data: {
-      label: '',
+      label: "",
       isTyping: false,
       color: defaultColor,
-      fontSize: 'auto',
+      fontSize: "auto",
     },
     width: MIN_WIDTH,
     height: MIN_HEIGHT,
@@ -124,15 +123,15 @@ const StickyNoteNode = memo(
       fontSizeSetting,
       resolvedFontSize,
     } = useNodeAsEditor({ id, data });
-    const label = data.label ?? '';
+    const label = data.label ?? "";
     const color = data.color ?? defaultColor;
     const containerRef = useRef<HTMLDivElement>(null);
-    
+
     // Hidden element used to measure rendered text dimensions for auto-sizing
     const measurementRef = useRef<HTMLDivElement>(null);
-    
+
     const displayHtml = useMemo(
-      () => label || '<p>Click to add text</p>',
+      () => label || "<p>Click to add text</p>",
       [label],
     );
 
@@ -155,10 +154,10 @@ const StickyNoteNode = memo(
     const toolbarItems = useMemo<ToolbarItem[]>(
       () => [
         ...defaultToolbarItems,
-        { type: 'separator', id: 'sticky-note-color-separator' },
+        { type: "separator", id: "sticky-note-color-separator" },
         {
-          type: 'custom',
-          id: 'sticky-note-color-picker',
+          type: "custom",
+          id: "sticky-note-color-picker",
           render: () => (
             <SimpleColorPicker color={color} setColor={handleColorChange} />
           ),
@@ -180,7 +179,7 @@ const StickyNoteNode = memo(
       >
         <div
           className={cn(
-            'relative h-full w-full rounded-lg border shadow transition-colors',
+            "relative h-full w-full rounded-lg border shadow transition-colors",
           )}
           style={{
             backgroundColor: color.background,
@@ -190,7 +189,10 @@ const StickyNoteNode = memo(
           onBlur={handleBlur}
           role="presentation"
         >
-          <div className={cn('flex h-full w-full')} style={{ color: color.text }}>
+          <div
+            className={cn("flex h-full w-full")}
+            style={{ color: color.text }}
+          >
             <div ref={containerRef} className="relative h-full w-full">
               {isTyping ? (
                 <div
@@ -200,34 +202,37 @@ const StickyNoteNode = memo(
                   <MinimalTiptap
                     editor={editor}
                     theme="transparent"
-                    className={cn('h-full w-full')}
-                    style={{ color: color.text, fontSize: `${resolvedFontSize}px` }}
+                    className={cn("h-full w-full")}
+                    style={{
+                      color: color.text,
+                      fontSize: `${resolvedFontSize}px`,
+                    }}
                   />
                 </div>
               ) : (
                 <div
                   className={cn(
-                    'prose prose-sm w-full max-w-none',
-                    'prose-h1:text-xl prose-h1:leading-tight',
-                    'prose-h2:text-lg prose-h2:leading-snug',
-                    'prose-h3:text-base prose-h3:leading-snug',
-                    'prose-p:my-1 prose-p:leading-normal',
-                    'prose-ul:my-1 prose-ol:my-1',
-                    'prose-li:my-0',
-                    'min-h-[1.5rem] px-3 py-2',
-                    'break-words',
+                    "prose prose-sm w-full max-w-none",
+                    "prose-h1:text-xl prose-h1:leading-tight",
+                    "prose-h2:text-lg prose-h2:leading-snug",
+                    "prose-h3:text-base prose-h3:leading-snug",
+                    "prose-p:my-1 prose-p:leading-normal",
+                    "prose-ul:my-1 prose-ol:my-1",
+                    "prose-li:my-0",
+                    "min-h-[1.5rem] px-3 py-2",
+                    "break-words",
                   )}
                   style={{
-                    '--tw-prose-body': color.text,
-                    '--tw-prose-headings': color.text,
-                    '--tw-prose-links': color.text,
-                    '--tw-prose-bold': color.text,
-                    '--tw-prose-counters': color.text,
-                    '--tw-prose-bullets': color.text,
-                    '--tw-prose-hr': color.border,
-                    '--tw-prose-quotes': color.text,
-                    '--tw-prose-quote-borders': color.border,
-                    '--tw-prose-captions': color.text,
+                    "--tw-prose-body": color.text,
+                    "--tw-prose-headings": color.text,
+                    "--tw-prose-links": color.text,
+                    "--tw-prose-bold": color.text,
+                    "--tw-prose-counters": color.text,
+                    "--tw-prose-bullets": color.text,
+                    "--tw-prose-hr": color.border,
+                    "--tw-prose-quotes": color.text,
+                    "--tw-prose-quote-borders": color.border,
+                    "--tw-prose-captions": color.text,
                     color: color.text,
                     fontSize: `${resolvedFontSize}px`,
                   }}
@@ -242,28 +247,28 @@ const StickyNoteNode = memo(
                 ref={measurementRef}
                 aria-hidden
                 className={cn(
-                  'pointer-events-none absolute inset-0 box-border overflow-hidden opacity-0',
-                  'prose prose-sm w-full max-w-none',
-                  'prose-h1:text-xl prose-h1:leading-tight',
-                  'prose-h2:text-lg prose-h2:leading-snug',
-                  'prose-h3:text-base prose-h3:leading-snug',
-                  'prose-p:my-1 prose-p:leading-normal',
-                  'prose-ul:my-1 prose-ol:my-1',
-                  'prose-li:my-0',
-                  'min-h-[1.5rem] px-3 py-2',
-                  'break-words',
+                  "pointer-events-none absolute inset-0 box-border overflow-hidden opacity-0",
+                  "prose prose-sm w-full max-w-none",
+                  "prose-h1:text-xl prose-h1:leading-tight",
+                  "prose-h2:text-lg prose-h2:leading-snug",
+                  "prose-h3:text-base prose-h3:leading-snug",
+                  "prose-p:my-1 prose-p:leading-normal",
+                  "prose-ul:my-1 prose-ol:my-1",
+                  "prose-li:my-0",
+                  "min-h-[1.5rem] px-3 py-2",
+                  "break-words",
                 )}
                 style={{
-                  '--tw-prose-body': color.text,
-                  '--tw-prose-headings': color.text,
-                  '--tw-prose-links': color.text,
-                  '--tw-prose-bold': color.text,
-                  '--tw-prose-counters': color.text,
-                  '--tw-prose-bullets': color.text,
-                  '--tw-prose-hr': color.border,
-                  '--tw-prose-quotes': color.text,
-                  '--tw-prose-quote-borders': color.border,
-                  '--tw-prose-captions': color.text,
+                  "--tw-prose-body": color.text,
+                  "--tw-prose-headings": color.text,
+                  "--tw-prose-links": color.text,
+                  "--tw-prose-bold": color.text,
+                  "--tw-prose-counters": color.text,
+                  "--tw-prose-bullets": color.text,
+                  "--tw-prose-hr": color.border,
+                  "--tw-prose-quotes": color.text,
+                  "--tw-prose-quote-borders": color.border,
+                  "--tw-prose-captions": color.text,
                 }}
                 dangerouslySetInnerHTML={{
                   __html: displayHtml,
@@ -277,6 +282,6 @@ const StickyNoteNode = memo(
   },
 );
 
-StickyNoteNode.displayName = 'StickyNoteNode';
+StickyNoteNode.displayName = "StickyNoteNode";
 
 export default StickyNoteNode;

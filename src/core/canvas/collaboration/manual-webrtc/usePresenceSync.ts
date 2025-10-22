@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import * as Y from 'yjs';
+import { useCallback, useEffect, useMemo, useState } from "react";
+import * as Y from "yjs";
 
-import type { CursorPresence } from './types';
+import type { CursorPresence } from "./types";
 
 type RemotePresenceMap = Record<string, CursorPresence>;
 
@@ -13,35 +13,38 @@ type RemotePresenceMap = Record<string, CursorPresence>;
  */
 export function usePresenceSync(doc: Y.Doc) {
   const localClientKey = useMemo(() => String(doc.clientID), [doc]);
-  const presenceMap = useMemo(() => doc.getMap<CursorPresence>('presence'), [doc]);
+  const presenceMap = useMemo(
+    () => doc.getMap<CursorPresence>("presence"),
+    [doc],
+  );
 
   const [remotePresenceByClient, setRemotePresenceByClient] =
     useState<RemotePresenceMap>({});
 
   const updatePresence = useCallback(
-    (update: Partial<Omit<CursorPresence, 'updatedAt'>>) => {
+    (update: Partial<Omit<CursorPresence, "updatedAt">>) => {
       doc.transact(() => {
         const existing = presenceMap.get(localClientKey);
         const hasNewPosition =
-          typeof update.x === 'number' && typeof update.y === 'number';
+          typeof update.x === "number" && typeof update.y === "number";
         const nextHasPosition =
-          typeof update.hasPosition === 'boolean'
+          typeof update.hasPosition === "boolean"
             ? update.hasPosition
             : hasNewPosition
               ? true
-              : existing?.hasPosition ?? false;
+              : (existing?.hasPosition ?? false);
 
         const next: CursorPresence = {
-          x: hasNewPosition ? update.x! : existing?.x ?? 0,
-          y: hasNewPosition ? update.y! : existing?.y ?? 0,
+          x: hasNewPosition ? update.x! : (existing?.x ?? 0),
+          y: hasNewPosition ? update.y! : (existing?.y ?? 0),
           nodeId: update.nodeId ?? existing?.nodeId ?? null,
-          interaction: update.interaction ?? existing?.interaction ?? 'pointer',
+          interaction: update.interaction ?? existing?.interaction ?? "pointer",
           hasPosition: nextHasPosition,
           updatedAt: Date.now(),
         };
 
         presenceMap.set(localClientKey, next);
-      }, 'presence');
+      }, "presence");
 
       return true;
     },
@@ -80,7 +83,7 @@ export function usePresenceSync(doc: Y.Doc) {
     () => () => {
       doc.transact(() => {
         presenceMap.delete(localClientKey);
-      }, 'presence');
+      }, "presence");
     },
     [doc, localClientKey, presenceMap],
   );
@@ -89,5 +92,9 @@ export function usePresenceSync(doc: Y.Doc) {
     setRemotePresenceByClient({});
   }, []);
 
-  return { updatePresence, remotePresenceByClient, clearRemotePresence } as const;
+  return {
+    updatePresence,
+    remotePresenceByClient,
+    clearRemotePresence,
+  } as const;
 }

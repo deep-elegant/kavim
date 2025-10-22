@@ -1,16 +1,16 @@
-import React from 'react';
+import React from "react";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { PeerConnectionPanel } from './PeerConnectionPanel';
+} from "@/components/ui/dialog";
+import { PeerConnectionPanel } from "./PeerConnectionPanel";
 
 interface PeerConnectionModalProps {
   isOpen: boolean;
   onClose: () => void;
-  role: 'initiator' | 'responder';
+  role: "initiator" | "responder";
 }
 
 /**
@@ -19,14 +19,18 @@ interface PeerConnectionModalProps {
  * - Used for peer-to-peer connection without a signaling server
  * - Users manually exchange SDP offers/answers and ICE candidates
  */
-export function PeerConnectionModal({ isOpen, onClose, role }: PeerConnectionModalProps) {
+export function PeerConnectionModal({
+  isOpen,
+  onClose,
+  role,
+}: PeerConnectionModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       {/* Large modal for displaying multiple text areas with connection data */}
-      <DialogContent className="max-w-4xl h-[80vh] p-0 overflow-hidden grid grid-rows-[auto,1fr] content-start">
+      <DialogContent className="grid h-[80vh] max-w-4xl grid-rows-[auto,1fr] content-start overflow-hidden p-0">
         <DialogHeader className="px-6 pt-6 pb-0">
           <DialogTitle>
-            Connection - {role === 'initiator' ? 'Initiator' : 'Responder'}
+            Connection - {role === "initiator" ? "Initiator" : "Responder"}
           </DialogTitle>
         </DialogHeader>
         <div className="flex h-full flex-col overflow-hidden">

@@ -17,7 +17,7 @@ export default function BaseLayout({
       <MenuBar />
       <DraftRecoveryManager />
       <AutoSaveManager />
-      <main className="flex-1 overflow-hidden ">{children}</main>
+      <main className="flex-1 overflow-hidden">{children}</main>
     </div>
   );
 }

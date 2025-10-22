@@ -1,5 +1,3 @@
- 
- 
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 /**
@@ -19,7 +17,8 @@ try {
     unpack: (buffer: Buffer) => unknown;
   };
   packer = new msgpackr.Packr();
-  packFn = (value: unknown) => (packer as { pack: (value: unknown) => Buffer }).pack(value);
+  packFn = (value: unknown) =>
+    (packer as { pack: (value: unknown) => Buffer }).pack(value);
   unpackFn = (buffer: Buffer) => msgpackr.unpack(buffer);
 } catch (error) {
   // Graceful degradation: JSON is less efficient but universally available
@@ -28,7 +27,8 @@ try {
     error,
   );
   packFn = (value: unknown) => Buffer.from(JSON.stringify(value), "utf-8");
-  unpackFn = (buffer: Buffer) => JSON.parse(buffer.toString("utf-8")) as unknown;
+  unpackFn = (buffer: Buffer) =>
+    JSON.parse(buffer.toString("utf-8")) as unknown;
 }
 
 export const pack = (value: unknown) => packFn(value);

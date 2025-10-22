@@ -84,7 +84,9 @@ export const registerPakProtocol = () => {
  * - Only one pak can be active at a time (matches opened file).
  * - Set to null to clear (no file open).
  */
-export const setActivePak = (pak: (PakReadResult & { filePath: string }) | null) => {
+export const setActivePak = (
+  pak: (PakReadResult & { filePath: string }) | null,
+) => {
   activePak = pak;
 };
 

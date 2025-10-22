@@ -1,4 +1,4 @@
-import { FileInitMessage } from './types';
+import { FileInitMessage } from "./types";
 
 export interface IncomingTransferState {
   id: string;
@@ -14,7 +14,9 @@ export interface IncomingTransferState {
   completed: boolean;
 }
 
-export const createIncomingTransferState = (message: FileInitMessage): IncomingTransferState => ({
+export const createIncomingTransferState = (
+  message: FileInitMessage,
+): IncomingTransferState => ({
   id: message.id,
   name: message.name,
   mimeType: message.mimeType,

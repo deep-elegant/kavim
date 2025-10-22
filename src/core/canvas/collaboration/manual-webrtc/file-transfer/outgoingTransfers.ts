@@ -1,5 +1,5 @@
-import { getChunkBounds } from './chunking';
-import { PendingChunkPacket } from './sendQueue';
+import { getChunkBounds } from "./chunking";
+import { PendingChunkPacket } from "./sendQueue";
 
 export const MAX_IN_FLIGHT_CHUNKS = 16;
 export const RETRY_INTERVAL_MS = 5_000;
@@ -41,7 +41,11 @@ export const createOutgoingTransferState = (
 export const queueMissingChunks = async (
   state: OutgoingTransferState,
   missing: number[],
-  encodeChunkFrame: (id: string, sequence: number, payload: ArrayBuffer) => ArrayBuffer,
+  encodeChunkFrame: (
+    id: string,
+    sequence: number,
+    payload: ArrayBuffer,
+  ) => ArrayBuffer,
   queuePacket: (packet: PendingChunkPacket) => void,
 ) => {
   if (missing.length === 0) {
@@ -59,7 +63,11 @@ export const queueMissingChunks = async (
 
     state.pendingReads.add(sequence);
     try {
-      const { start, end } = getChunkBounds(sequence, state.chunkSize, state.file.size);
+      const { start, end } = getChunkBounds(
+        sequence,
+        state.chunkSize,
+        state.file.size,
+      );
       const slice = state.file.slice(start, end);
       const buffer = await slice.arrayBuffer();
       const frame = encodeChunkFrame(state.id, sequence, buffer);
@@ -77,7 +85,11 @@ export const queueMissingChunks = async (
 
 export const pumpTransferWindow = async (
   state: OutgoingTransferState,
-  encodeChunkFrame: (id: string, sequence: number, payload: ArrayBuffer) => ArrayBuffer,
+  encodeChunkFrame: (
+    id: string,
+    sequence: number,
+    payload: ArrayBuffer,
+  ) => ArrayBuffer,
   queuePacket: (packet: PendingChunkPacket) => void,
 ) => {
   if (state.cancelled) {
@@ -99,7 +111,11 @@ export const pumpTransferWindow = async (
 
     state.pendingReads.add(sequence);
     try {
-      const { start, end } = getChunkBounds(sequence, state.chunkSize, state.file.size);
+      const { start, end } = getChunkBounds(
+        sequence,
+        state.chunkSize,
+        state.file.size,
+      );
       const slice = state.file.slice(start, end);
       const buffer = await slice.arrayBuffer();
       const frame = encodeChunkFrame(state.id, sequence, buffer);

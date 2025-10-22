@@ -5,16 +5,16 @@ import {
   type AiGateway,
   type AiModel,
   type AiProvider,
-} from '@/core/llm/aiModels';
-import type { ChatMessage } from '@/core/llm/chatTypes';
+} from "@/core/llm/aiModels";
+import type { ChatMessage } from "@/core/llm/chatTypes";
 import type {
   LlmChunkPayload,
   LlmCompletePayload,
   LlmErrorPayload,
   LlmStreamRequestPayload,
-} from '@/helpers/ipc/llm/llm-types';
+} from "@/helpers/ipc/llm/llm-types";
 
-export type { ChatMessage } from '@/core/llm/chatTypes';
+export type { ChatMessage } from "@/core/llm/chatTypes";
 
 type ProviderSettings = {
   // Retrieves API key from settings store at runtime (not hardcoded)
@@ -30,20 +30,21 @@ type ModelSettings = ProviderSettings & {
 };
 
 /** Build lookup map from provider value to its configuration */
-const PROVIDER_SETTINGS: Record<AiProvider, ProviderSettings> = AI_PROVIDER_METADATA.reduce(
-  (accumulator, provider) => {
-    const { value, apiKeyPlaceholder, baseURL } = provider;
+const PROVIDER_SETTINGS: Record<AiProvider, ProviderSettings> =
+  AI_PROVIDER_METADATA.reduce(
+    (accumulator, provider) => {
+      const { value, apiKeyPlaceholder, baseURL } = provider;
 
-    accumulator[value] = {
-      envKey: () => window.settingsStore.getProvider(value)?.apiKey ?? '',
-      placeholder: apiKeyPlaceholder,
-      baseURL,
-    };
+      accumulator[value] = {
+        envKey: () => window.settingsStore.getProvider(value)?.apiKey ?? "",
+        placeholder: apiKeyPlaceholder,
+        baseURL,
+      };
 
-    return accumulator;
-  },
-  {} as Record<AiProvider, ProviderSettings>,
-);
+      return accumulator;
+    },
+    {} as Record<AiProvider, ProviderSettings>,
+  );
 
 /** Build lookup map from model value to its full configuration (merges provider + model info) */
 const MODEL_SETTINGS: Record<AiModel, ModelSettings> = AI_MODELS.reduce(
@@ -109,19 +110,13 @@ const buildStreamPayload = ({
 const assertLlmBridgeAvailable = (): asserts window is Window & {
   llm: {
     stream: (payload: LlmStreamRequestPayload) => void;
-    onChunk: (
-      callback: (payload: LlmChunkPayload) => void,
-    ) => () => void;
-    onError: (
-      callback: (payload: LlmErrorPayload) => void,
-    ) => () => void;
-    onComplete: (
-      callback: (payload: LlmCompletePayload) => void,
-    ) => () => void;
+    onChunk: (callback: (payload: LlmChunkPayload) => void) => () => void;
+    onError: (callback: (payload: LlmErrorPayload) => void) => () => void;
+    onComplete: (callback: (payload: LlmCompletePayload) => void) => () => void;
   };
 } => {
   if (!window.llm) {
-    throw new Error('LLM bridge is not available');
+    throw new Error("LLM bridge is not available");
   }
 };
 
@@ -157,8 +152,8 @@ export const generateAiResult = async ({
     // Track event listeners to unsubscribe when stream completes/errors
     const cleanupCallbacks: Array<() => void> = [];
     let pendingTimeout: number | null = null;
-    let aggregatedResponse = '';
-    let lastEmittedValue = '';
+    let aggregatedResponse = "";
+    let lastEmittedValue = "";
     let lastEmitTime = 0;
 
     const clearPendingTimeout = () => {
@@ -260,11 +255,11 @@ export const generateAiResult = async ({
         const headerMap: Record<string, string> = {};
 
         if (stored.headers?.referer) {
-          headerMap['HTTP-Referer'] = stored.headers.referer;
+          headerMap["HTTP-Referer"] = stored.headers.referer;
         }
 
         if (stored.headers?.title) {
-          headerMap['X-Title'] = stored.headers.title;
+          headerMap["X-Title"] = stored.headers.title;
         }
 
         gatewayPreference = {
@@ -276,11 +271,14 @@ export const generateAiResult = async ({
       }
 
       // Use gateway if configured, otherwise direct provider
-      const effectiveProvider = gatewayPreference?.gateway.value ?? settings.provider;
+      const effectiveProvider =
+        gatewayPreference?.gateway.value ?? settings.provider;
       const effectiveModelName = gatewayPreference?.gateway.value
-        ? settings.gatewayModelOverrides?.[gatewayPreference.gateway.value] ?? settings.modelName
+        ? (settings.gatewayModelOverrides?.[gatewayPreference.gateway.value] ??
+          settings.modelName)
         : settings.modelName;
-      const effectiveBaseURL = gatewayPreference?.gateway.baseURL ?? settings.baseURL;
+      const effectiveBaseURL =
+        gatewayPreference?.gateway.baseURL ?? settings.baseURL;
       const effectiveApiKey = gatewayPreference?.stored.apiKey ?? apiKey;
       const headers = gatewayPreference?.headers;
 

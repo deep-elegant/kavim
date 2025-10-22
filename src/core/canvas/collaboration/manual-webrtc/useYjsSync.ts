@@ -1,5 +1,5 @@
-import { MutableRefObject, useCallback, useMemo, useRef } from 'react';
-import * as Y from 'yjs';
+import { MutableRefObject, useCallback, useMemo, useRef } from "react";
+import * as Y from "yjs";
 
 import {
   ChannelMessage,
@@ -7,9 +7,9 @@ import {
   MAX_MESSAGE_CHUNK_SIZE,
   SyncMessage,
   WebRTCChatMessage,
-} from './types';
-import { decodeFromBase64, encodeToBase64 } from './encoding';
-import { useStatsForNerds } from '../../../diagnostics/StatsForNerdsContext';
+} from "./types";
+import { decodeFromBase64, encodeToBase64 } from "./encoding";
+import { useStatsForNerds } from "../../../diagnostics/StatsForNerdsContext";
 
 interface UseYjsSyncParams {
   doc: Y.Doc;
@@ -39,7 +39,7 @@ type PendingChunk = {
 };
 
 const estimateDecodedSizeFromBase64 = (value: string) => {
-  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0;
+  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
   return Math.max(0, Math.ceil((value.length * 3) / 4) - padding);
 };
 
@@ -58,7 +58,10 @@ export const useYjsSync = ({
     useStatsForNerds();
 
   const updateQueueMetrics = useCallback(() => {
-    setYjsQueueSnapshot(pendingYUpdatesRef.current.length, pendingBytesRef.current);
+    setYjsQueueSnapshot(
+      pendingYUpdatesRef.current.length,
+      pendingBytesRef.current,
+    );
   }, [setYjsQueueSnapshot]);
 
   const enqueueYUpdate = useCallback(
@@ -76,7 +79,7 @@ export const useYjsSync = ({
       const channel = channelRef.current;
       const updateCopy = update.slice();
 
-      if (!channel || channel.readyState !== 'open') {
+      if (!channel || channel.readyState !== "open") {
         enqueueYUpdate(updateCopy);
         return false;
       }
@@ -95,8 +98,8 @@ export const useYjsSync = ({
 
       if (encoded.length <= MAX_MESSAGE_CHUNK_SIZE) {
         const sent = sendChunk(
-          { type: 'yjs-update', update: encoded },
-          'Failed to send Yjs update message',
+          { type: "yjs-update", update: encoded },
+          "Failed to send Yjs update message",
         );
         if (sent) {
           recordYjsOutbound(estimateDecodedSizeFromBase64(encoded));
@@ -105,7 +108,7 @@ export const useYjsSync = ({
       }
 
       const chunkId =
-        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
@@ -117,13 +120,13 @@ export const useYjsSync = ({
         const chunk = encoded.slice(start, end);
         const success = sendChunk(
           {
-            type: 'yjs-update-chunk',
+            type: "yjs-update-chunk",
             id: chunkId,
             index,
             total: totalChunks,
             chunk,
           },
-          'Failed to send Yjs update chunk',
+          "Failed to send Yjs update chunk",
         );
 
         if (!success) {
@@ -140,7 +143,7 @@ export const useYjsSync = ({
 
   const flushPendingYUpdates = useCallback(() => {
     const channel = channelRef.current;
-    if (!channel || channel.readyState !== 'open') {
+    if (!channel || channel.readyState !== "open") {
       return;
     }
 
@@ -155,7 +158,10 @@ export const useYjsSync = ({
         break;
       }
 
-      pendingBytesRef.current = Math.max(0, pendingBytesRef.current - nextUpdate.byteLength);
+      pendingBytesRef.current = Math.max(
+        0,
+        pendingBytesRef.current - nextUpdate.byteLength,
+      );
       updateQueueMetrics();
       const sent = sendYUpdate(nextUpdate);
       if (!sent) {
@@ -168,9 +174,9 @@ export const useYjsSync = ({
     (update: Uint8Array) => {
       recordYjsInbound(update.byteLength);
       try {
-        Y.applyUpdate(doc, update, 'webrtc');
+        Y.applyUpdate(doc, update, "webrtc");
       } catch (error) {
-        console.error('Failed to apply Yjs update:', error);
+        console.error("Failed to apply Yjs update:", error);
       }
     },
     [doc, recordYjsInbound],
@@ -178,14 +184,14 @@ export const useYjsSync = ({
 
   const sendStateVector = useCallback(() => {
     const channel = channelRef.current;
-    if (!channel || channel.readyState !== 'open') {
+    if (!channel || channel.readyState !== "open") {
       return;
     }
 
     const vector = encodeToBase64(Y.encodeStateVector(doc));
-    const message: SyncMessage = { type: 'yjs-sync', vector };
+    const message: SyncMessage = { type: "yjs-sync", vector };
 
-    void sendJSONMessage(message, { context: 'Failed to send state vector' });
+    void sendJSONMessage(message, { context: "Failed to send state vector" });
   }, [channelRef, doc, sendJSONMessage]);
 
   const handleStringMessage = useCallback(
@@ -194,16 +200,16 @@ export const useYjsSync = ({
       try {
         message = JSON.parse(raw) as ChannelMessage;
       } catch (error) {
-        console.error('Failed to parse message:', error);
+        console.error("Failed to parse message:", error);
         return;
       }
 
-      if (message.type === 'chat') {
+      if (message.type === "chat") {
         onReceiveChatMessage(message);
         return;
       }
 
-      if (message.type === 'yjs-sync') {
+      if (message.type === "yjs-sync") {
         const remoteVector = decodeFromBase64(message.vector);
         const diff = Y.encodeStateAsUpdate(doc, remoteVector);
         if (diff.byteLength > 0) {
@@ -213,17 +219,17 @@ export const useYjsSync = ({
         return;
       }
 
-      if (message.type === 'yjs-update') {
+      if (message.type === "yjs-update") {
         const decoded = decodeFromBase64(message.update);
         applyYUpdate(decoded);
         return;
       }
 
-      if (message.type === 'yjs-update-chunk') {
+      if (message.type === "yjs-update-chunk") {
         const { id, index, total, chunk } = message;
 
         if (index < 0 || index >= total) {
-          console.warn('Received Yjs chunk with invalid index', message);
+          console.warn("Received Yjs chunk with invalid index", message);
           return;
         }
 
@@ -249,7 +255,7 @@ export const useYjsSync = ({
 
         if (entry.received === entry.total) {
           incomingChunksRef.current.delete(id);
-          const combined = entry.parts.join('');
+          const combined = entry.parts.join("");
           const decoded = decodeFromBase64(combined);
           applyYUpdate(decoded);
         }
