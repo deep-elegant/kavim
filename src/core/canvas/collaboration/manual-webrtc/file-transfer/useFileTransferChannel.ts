@@ -26,6 +26,15 @@ import {
   FileTransferControlMessage,
   FileTransferStatus,
 } from './types';
+import { useStatsForNerds } from '../../../../diagnostics/StatsForNerdsContext';
+import type { PendingChunkPacket } from './sendQueue';
+
+const LOGGABLE_CONTROL_TYPES: FileTransferControlMessage['type'][] = [
+  'file-request',
+  'file-init',
+  'file-complete',
+  'file-error',
+];
 
 interface UseFileTransferChannelParams {
   channelRef: MutableRefObject<RTCDataChannel | null>;
@@ -78,13 +87,16 @@ export const useFileTransferChannel = ({
   const channelCleanupRef = useRef<(() => void) | null>(null);
 
   const { queuePacket, clearPacketsForTransfer, resetQueue } = useSendQueue(channelRef);
+  const { recordFileTransferOutbound, recordFileTransferInbound } = useStatsForNerds();
+  const textEncoder = useMemo(() => new TextEncoder(), []);
 
-  const loggableControlTypes: FileTransferControlMessage['type'][] = [
-    'file-request',
-    'file-init',
-    'file-complete',
-    'file-error',
-  ];
+  const queueFilePacket = useCallback(
+    (packet: PendingChunkPacket) => {
+      recordFileTransferOutbound(packet.frame.byteLength);
+      queuePacket(packet);
+    },
+    [queuePacket, recordFileTransferOutbound],
+  );
 
   const sendControlMessage = useCallback(
     (message: FileTransferControlMessage) => {
@@ -94,7 +106,7 @@ export const useFileTransferChannel = ({
       }
 
       try {
-        if (loggableControlTypes.includes(message.type)) {
+        if (LOGGABLE_CONTROL_TYPES.includes(message.type)) {
           console.info('[FileTransfer] sending control message', {
             direction: 'outgoing',
             type: message.type,
@@ -103,14 +115,16 @@ export const useFileTransferChannel = ({
             reason: 'reason' in message ? message.reason : undefined,
           });
         }
-        channel.send(JSON.stringify(message));
+        const payload = JSON.stringify(message);
+        channel.send(payload);
+        recordFileTransferOutbound(textEncoder.encode(payload).byteLength);
         return true;
       } catch (error) {
         console.error('Failed to send control message', message, error);
         return false;
       }
     },
-    [channelRef],
+    [channelRef, recordFileTransferOutbound, textEncoder],
   );
 
   const finalizeOutgoingTransfer = useCallback(
@@ -183,16 +197,16 @@ export const useFileTransferChannel = ({
 
   const requestMissingChunks = useCallback(
     (state: OutgoingTransferState, missing: number[]) => {
-      void queueMissingChunks(state, missing, encodeChunkFrame, queuePacket);
+      void queueMissingChunks(state, missing, encodeChunkFrame, queueFilePacket);
     },
-    [queuePacket],
+    [queueFilePacket],
   );
 
   const pumpWindow = useCallback(
     (state: OutgoingTransferState) => {
-      void pumpTransferWindow(state, encodeChunkFrame, queuePacket);
+      void pumpTransferWindow(state, encodeChunkFrame, queueFilePacket);
     },
-    [queuePacket],
+    [queueFilePacket],
   );
 
   const handleAckMessage = useCallback(
@@ -444,7 +458,7 @@ export const useFileTransferChannel = ({
 
   const handleControlMessage = useCallback(
     (message: FileTransferControlMessage) => {
-      if (loggableControlTypes.includes(message.type)) {
+      if (LOGGABLE_CONTROL_TYPES.includes(message.type)) {
         console.info('[FileTransfer] received control message', {
           direction: 'incoming',
           type: message.type,
@@ -492,6 +506,7 @@ export const useFileTransferChannel = ({
     async (event: MessageEvent) => {
       const { data } = event;
       if (typeof data === 'string') {
+        recordFileTransferInbound(textEncoder.encode(data).byteLength);
         try {
           const parsed = JSON.parse(data) as FileTransferControlMessage;
           handleControlMessage(parsed);
@@ -501,6 +516,12 @@ export const useFileTransferChannel = ({
         return;
       }
 
+      if (data instanceof ArrayBuffer) {
+        recordFileTransferInbound(data.byteLength);
+      } else if (typeof Blob !== 'undefined' && data instanceof Blob) {
+        recordFileTransferInbound(data.size);
+      }
+
       const frame = await decodeChunkFrame(data);
       if (!frame) {
         return;
@@ -508,7 +529,7 @@ export const useFileTransferChannel = ({
 
       await handleChunkFrame(frame);
     },
-    [handleChunkFrame, handleControlMessage],
+    [handleChunkFrame, handleControlMessage, recordFileTransferInbound, textEncoder],
   );
 
   const resetStateOnClose = useCallback(() => {

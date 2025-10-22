@@ -21,6 +21,8 @@ export type StatsForNerdsMetrics = {
   setNodesPerSecond: MetricSeries;
   yjsOutboundBytesPerSecond: MetricSeries;
   yjsInboundBytesPerSecond: MetricSeries;
+  fileOutboundBytesPerSecond: MetricSeries;
+  fileInboundBytesPerSecond: MetricSeries;
   yjsOutboundUpdatesPerSecond: MetricSeries;
   yjsInboundUpdatesPerSecond: MetricSeries;
   yjsQueueLength: MetricSeries;
@@ -34,6 +36,8 @@ type StatsForNerdsContextValue = {
   recordSetNodesInvocation: () => void;
   recordYjsOutbound: (bytes: number) => void;
   recordYjsInbound: (bytes: number) => void;
+  recordFileTransferOutbound: (bytes: number) => void;
+  recordFileTransferInbound: (bytes: number) => void;
   setYjsQueueSnapshot: (length: number, totalBytes: number) => void;
   setDataChannelBufferedAmount: (amount: number) => void;
   metrics: StatsForNerdsMetrics;
@@ -57,16 +61,23 @@ const readInitialEnabled = () => {
   }
 };
 
-const pushCapped = (history: number[], value: number) => {
-  const next = history.length >= HISTORY_LENGTH ? history.slice(-HISTORY_LENGTH + 1) : [...history];
-  next.push(value);
-  return next;
+const pushManyCapped = (history: number[], samples: number[]) => {
+  if (samples.length === 0) {
+    return history.length > HISTORY_LENGTH ? history.slice(-HISTORY_LENGTH) : history;
+  }
+
+  const combined = [...history, ...samples];
+  return combined.length > HISTORY_LENGTH ? combined.slice(-HISTORY_LENGTH) : combined;
 };
+
+const pushCapped = (history: number[], value: number) => pushManyCapped(history, [value]);
 
 const createEmptyHistories = () => ({
   setNodes: [] as number[],
   yjsOutboundBytes: [] as number[],
   yjsInboundBytes: [] as number[],
+  fileOutboundBytes: [] as number[],
+  fileInboundBytes: [] as number[],
   yjsOutboundUpdates: [] as number[],
   yjsInboundUpdates: [] as number[],
   yjsQueueLength: [] as number[],
@@ -83,10 +94,13 @@ export const StatsForNerdsProvider: React.FC<{ children: React.ReactNode }> = ({
     setNodes: 0,
     yjsOutboundBytes: 0,
     yjsInboundBytes: 0,
+    fileOutboundBytes: 0,
+    fileInboundBytes: 0,
     yjsOutboundUpdates: 0,
     yjsInboundUpdates: 0,
   });
   const intervalRef = useRef<number | null>(null);
+  const lastSampleAtRef = useRef<number | null>(null);
 
   const setEnabled = useCallback((value: boolean) => {
     setEnabledState(value);
@@ -105,10 +119,13 @@ export const StatsForNerdsProvider: React.FC<{ children: React.ReactNode }> = ({
         window.clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
+      lastSampleAtRef.current = null;
       countersRef.current = {
         setNodes: 0,
         yjsOutboundBytes: 0,
         yjsInboundBytes: 0,
+        fileOutboundBytes: 0,
+        fileInboundBytes: 0,
         yjsOutboundUpdates: 0,
         yjsInboundUpdates: 0,
       };
@@ -116,30 +133,60 @@ export const StatsForNerdsProvider: React.FC<{ children: React.ReactNode }> = ({
       return;
     }
 
+    lastSampleAtRef.current = Date.now();
+
     const id = window.setInterval(() => {
       const {
         setNodes,
         yjsOutboundBytes,
         yjsInboundBytes,
+        fileOutboundBytes,
+        fileInboundBytes,
         yjsOutboundUpdates,
         yjsInboundUpdates,
       } = countersRef.current;
+
+      const now = Date.now();
+      const lastSampleAt = lastSampleAtRef.current ?? now;
+      const elapsedMs = now - lastSampleAt;
+      const skippedSeconds = Math.max(0, Math.floor(elapsedMs / 1000) - 1);
+      const zeroSamples = skippedSeconds > 0 ? new Array(skippedSeconds).fill(0) : [];
+      lastSampleAtRef.current = now;
 
       countersRef.current = {
         setNodes: 0,
         yjsOutboundBytes: 0,
         yjsInboundBytes: 0,
+        fileOutboundBytes: 0,
+        fileInboundBytes: 0,
         yjsOutboundUpdates: 0,
         yjsInboundUpdates: 0,
       };
 
       setHistories((previous) => ({
         ...previous,
-        setNodes: pushCapped(previous.setNodes, setNodes),
-        yjsOutboundBytes: pushCapped(previous.yjsOutboundBytes, yjsOutboundBytes),
-        yjsInboundBytes: pushCapped(previous.yjsInboundBytes, yjsInboundBytes),
-        yjsOutboundUpdates: pushCapped(previous.yjsOutboundUpdates, yjsOutboundUpdates),
-        yjsInboundUpdates: pushCapped(previous.yjsInboundUpdates, yjsInboundUpdates),
+        setNodes: pushManyCapped(previous.setNodes, [...zeroSamples, setNodes]),
+        yjsOutboundBytes: pushManyCapped(previous.yjsOutboundBytes, [
+          ...zeroSamples,
+          yjsOutboundBytes,
+        ]),
+        yjsInboundBytes: pushManyCapped(previous.yjsInboundBytes, [...zeroSamples, yjsInboundBytes]),
+        fileOutboundBytes: pushManyCapped(previous.fileOutboundBytes, [
+          ...zeroSamples,
+          fileOutboundBytes,
+        ]),
+        fileInboundBytes: pushManyCapped(previous.fileInboundBytes, [
+          ...zeroSamples,
+          fileInboundBytes,
+        ]),
+        yjsOutboundUpdates: pushManyCapped(previous.yjsOutboundUpdates, [
+          ...zeroSamples,
+          yjsOutboundUpdates,
+        ]),
+        yjsInboundUpdates: pushManyCapped(previous.yjsInboundUpdates, [
+          ...zeroSamples,
+          yjsInboundUpdates,
+        ]),
       }));
     }, 1000);
 
@@ -176,6 +223,26 @@ export const StatsForNerdsProvider: React.FC<{ children: React.ReactNode }> = ({
       }
       countersRef.current.yjsInboundBytes += bytes;
       countersRef.current.yjsInboundUpdates += 1;
+    },
+    [enabled],
+  );
+
+  const recordFileTransferOutbound = useCallback(
+    (bytes: number) => {
+      if (!enabled) {
+        return;
+      }
+      countersRef.current.fileOutboundBytes += bytes;
+    },
+    [enabled],
+  );
+
+  const recordFileTransferInbound = useCallback(
+    (bytes: number) => {
+      if (!enabled) {
+        return;
+      }
+      countersRef.current.fileInboundBytes += bytes;
     },
     [enabled],
   );
@@ -221,6 +288,8 @@ export const StatsForNerdsProvider: React.FC<{ children: React.ReactNode }> = ({
       setNodesPerSecond: toSeries(histories.setNodes),
       yjsOutboundBytesPerSecond: toSeries(histories.yjsOutboundBytes),
       yjsInboundBytesPerSecond: toSeries(histories.yjsInboundBytes),
+      fileOutboundBytesPerSecond: toSeries(histories.fileOutboundBytes),
+      fileInboundBytesPerSecond: toSeries(histories.fileInboundBytes),
       yjsOutboundUpdatesPerSecond: toSeries(histories.yjsOutboundUpdates),
       yjsInboundUpdatesPerSecond: toSeries(histories.yjsInboundUpdates),
       yjsQueueLength: toSeries(histories.yjsQueueLength),
@@ -236,6 +305,8 @@ export const StatsForNerdsProvider: React.FC<{ children: React.ReactNode }> = ({
       recordSetNodesInvocation,
       recordYjsOutbound,
       recordYjsInbound,
+      recordFileTransferOutbound,
+      recordFileTransferInbound,
       setYjsQueueSnapshot,
       setDataChannelBufferedAmount,
       metrics,
@@ -245,6 +316,8 @@ export const StatsForNerdsProvider: React.FC<{ children: React.ReactNode }> = ({
       metrics,
       recordSetNodesInvocation,
       recordYjsInbound,
+      recordFileTransferInbound,
+      recordFileTransferOutbound,
       recordYjsOutbound,
       setDataChannelBufferedAmount,
       setEnabled,

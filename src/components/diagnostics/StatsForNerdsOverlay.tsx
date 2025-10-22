@@ -63,6 +63,21 @@ export const StatsForNerdsOverlay: React.FC = () => {
     };
   }, [inboundHistory, outboundHistory]);
 
+  const fileOutboundHistory = metrics.fileOutboundBytesPerSecond.history;
+  const fileInboundHistory = metrics.fileInboundBytesPerSecond.history;
+  const fileThroughputGraph = useMemo(() => {
+    if (fileOutboundHistory.length === 0 && fileInboundHistory.length === 0) {
+      return { outbound: '', inbound: '', maxValue: 0 };
+    }
+
+    const max = Math.max(1, ...fileOutboundHistory, ...fileInboundHistory);
+    return {
+      outbound: createPolylinePoints(fileOutboundHistory, max),
+      inbound: createPolylinePoints(fileInboundHistory, max),
+      maxValue: max,
+    };
+  }, [fileInboundHistory, fileOutboundHistory]);
+
   if (!enabled) {
     return null;
   }
@@ -163,7 +178,7 @@ export const StatsForNerdsOverlay: React.FC = () => {
                 <polyline
                   points={throughputGraph.outbound}
                   fill="none"
-                  stroke="hsl(var(--chart-1, 198_93%_60%))"
+                  stroke="hsl(var(--chart-1, 198 93% 60%))"
                   strokeWidth={1.5}
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -173,7 +188,7 @@ export const StatsForNerdsOverlay: React.FC = () => {
                 <polyline
                   points={throughputGraph.inbound}
                   fill="none"
-                  stroke="hsl(var(--chart-2, 142_71%_45%))"
+                  stroke="hsl(var(--chart-2, 142 71% 45%))"
                   strokeWidth={1.5}
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -205,14 +220,14 @@ export const StatsForNerdsOverlay: React.FC = () => {
           <div className="flex items-center gap-1">
             <span
               className="inline-block h-2 w-2 rounded-full"
-              style={{ backgroundColor: 'hsl(var(--chart-1, 198_93%_60%))' }}
+              style={{ backgroundColor: 'hsl(var(--chart-1, 198 93% 60%))' }}
             />
             <span>Outbound</span>
           </div>
           <div className="flex items-center gap-1">
             <span
               className="inline-block h-2 w-2 rounded-full"
-              style={{ backgroundColor: 'hsl(var(--chart-2, 142_71%_45%))' }}
+              style={{ backgroundColor: 'hsl(var(--chart-2, 142 71% 45%))' }}
             />
             <span>Inbound</span>
           </div>
@@ -236,6 +251,108 @@ export const StatsForNerdsOverlay: React.FC = () => {
             <div className="text-[0.6rem] uppercase text-muted-foreground">Avg</div>
             <div className="font-semibold">
               {formatBytes(metrics.yjsInboundBytesPerSecond.average)}/s
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-between text-[0.7rem] uppercase tracking-wide text-muted-foreground">
+          <span>File transfer throughput</span>
+          <span>bytes/sec</span>
+        </div>
+        <svg
+          width={GRAPH_WIDTH}
+          height={GRAPH_HEIGHT}
+          viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
+          className="w-full"
+        >
+          <rect
+            x="0"
+            y="0"
+            width={GRAPH_WIDTH}
+            height={GRAPH_HEIGHT}
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="0.5"
+            opacity={0.2}
+          />
+          {fileThroughputGraph.maxValue > 0 ? (
+            <>
+              {fileThroughputGraph.outbound && (
+                <polyline
+                  points={fileThroughputGraph.outbound}
+                  fill="none"
+                  stroke="hsl(var(--chart-3, 27 96% 61%))"
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
+              {fileThroughputGraph.inbound && (
+                <polyline
+                  points={fileThroughputGraph.inbound}
+                  fill="none"
+                  stroke="hsl(var(--chart-4, 312 77% 76%))"
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
+              <text
+                x={GRAPH_WIDTH - 4}
+                y={12}
+                textAnchor="end"
+                className="fill-current text-[0.6rem]"
+              >
+                max {formatBytes(fileThroughputGraph.maxValue)}/s
+              </text>
+            </>
+          ) : (
+            <text
+              x={GRAPH_WIDTH / 2}
+              y={GRAPH_HEIGHT / 2}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="currentColor"
+              opacity={0.4}
+            >
+              Waiting for samples…
+            </text>
+          )}
+        </svg>
+        <div className="flex items-center gap-3 text-[0.65rem] uppercase text-muted-foreground">
+          <div className="flex items-center gap-1">
+            <span
+              className="inline-block h-2 w-2 rounded-full"
+              style={{ backgroundColor: 'hsl(var(--chart-3, 27 96% 61%))' }}
+            />
+            <span>Outbound</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span
+              className="inline-block h-2 w-2 rounded-full"
+              style={{ backgroundColor: 'hsl(var(--chart-4, 312 77% 76%))' }}
+            />
+            <span>Inbound</span>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-[0.7rem]">
+          <div>
+            <div className="text-[0.6rem] uppercase text-muted-foreground">Outbound latest</div>
+            <div className="font-semibold">
+              {formatBytes(metrics.fileOutboundBytesPerSecond.latest)}/s
+            </div>
+            <div className="text-[0.6rem] uppercase text-muted-foreground">Avg</div>
+            <div className="font-semibold">
+              {formatBytes(metrics.fileOutboundBytesPerSecond.average)}/s
+            </div>
+          </div>
+          <div>
+            <div className="text-[0.6rem] uppercase text-muted-foreground">Inbound latest</div>
+            <div className="font-semibold">
+              {formatBytes(metrics.fileInboundBytesPerSecond.latest)}/s
+            </div>
+            <div className="text-[0.6rem] uppercase text-muted-foreground">Avg</div>
+            <div className="font-semibold">
+              {formatBytes(metrics.fileInboundBytesPerSecond.average)}/s
             </div>
           </div>
         </div>

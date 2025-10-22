@@ -117,6 +117,8 @@ vi.mock('../../core/diagnostics/StatsForNerdsContext', () => ({
     setDataChannelBufferedAmount: vi.fn(),
     recordYjsOutbound: vi.fn(),
     recordYjsInbound: vi.fn(),
+    recordFileTransferOutbound: vi.fn(),
+    recordFileTransferInbound: vi.fn(),
     setYjsQueueSnapshot: vi.fn(),
   }),
 }));
