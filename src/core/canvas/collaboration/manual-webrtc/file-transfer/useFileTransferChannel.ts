@@ -86,8 +86,15 @@ export const useFileTransferChannel = ({
   const configuredChannelRef = useRef<RTCDataChannel | null>(null);
   const channelCleanupRef = useRef<(() => void) | null>(null);
 
-  const { queuePacket, clearPacketsForTransfer, resetQueue } = useSendQueue(channelRef);
-  const { recordFileTransferOutbound, recordFileTransferInbound } = useStatsForNerds();
+  const {
+    recordFileTransferOutbound,
+    recordFileTransferInbound,
+    setFileTransferQueueSnapshot,
+  } = useStatsForNerds();
+  const { queuePacket, clearPacketsForTransfer, resetQueue } = useSendQueue(
+    channelRef,
+    setFileTransferQueueSnapshot,
+  );
   const textEncoder = useMemo(() => new TextEncoder(), []);
 
   const queueFilePacket = useCallback(
@@ -106,15 +113,6 @@ export const useFileTransferChannel = ({
       }
 
       try {
-        if (LOGGABLE_CONTROL_TYPES.includes(message.type)) {
-          console.info('[FileTransfer] sending control message', {
-            direction: 'outgoing',
-            type: message.type,
-            id: 'id' in message ? message.id : undefined,
-            assetPath: 'assetPath' in message ? message.assetPath : undefined,
-            reason: 'reason' in message ? message.reason : undefined,
-          });
-        }
         const payload = JSON.stringify(message);
         channel.send(payload);
         recordFileTransferOutbound(textEncoder.encode(payload).byteLength);
@@ -143,12 +141,6 @@ export const useFileTransferChannel = ({
         }
 
         const completedAt = now();
-        console.info('[FileTransfer] outgoing transfer completed', {
-          id,
-          assetPath: previous.assetPath,
-          name: previous.name,
-          totalBytes: previous.totalBytes,
-        });
         return {
           ...previous,
           status: 'completed',
@@ -329,12 +321,6 @@ export const useFileTransferChannel = ({
         }
 
         const completedAt = now();
-        console.info('[FileTransfer] incoming transfer completed', {
-          id: state.id,
-          assetPath: previous.assetPath,
-          name: previous.name,
-          totalBytes: previous.totalBytes,
-        });
         return {
           ...previous,
           status: 'completed',
@@ -595,12 +581,10 @@ export const useFileTransferChannel = ({
     };
 
     const handleOpen = () => {
-      console.info('[FileTransfer] data channel open');
       pumpWindowForAll();
     };
 
     const handleClose = () => {
-      console.info('[FileTransfer] data channel closed');
       resetStateOnClose();
     };
 
@@ -687,14 +671,6 @@ export const useFileTransferChannel = ({
       const startedAt = now();
       const displayName = options.displayName ?? file.name;
 
-      console.info('[FileTransfer] starting outgoing transfer', {
-        id,
-        assetPath: options.assetPath,
-        name: displayName,
-        size: file.size,
-        mimeType: file.type,
-      });
-
       const metadata: FileInitMessage = {
         type: 'file-init',
         id,
@@ -741,12 +717,6 @@ export const useFileTransferChannel = ({
 
       pumpWindow(transferState);
 
-      console.info('[FileTransfer] metadata sent, transfer queued', {
-        id,
-        assetPath: options.assetPath,
-        totalChunks,
-      });
-
       return id;
     },
     [
@@ -766,11 +736,6 @@ export const useFileTransferChannel = ({
       if (!assetPath) {
         return false;
       }
-
-      console.info('[FileTransfer] queueing file request', {
-        assetPath,
-        displayName,
-      });
 
       return sendControlMessage({
         type: 'file-request',

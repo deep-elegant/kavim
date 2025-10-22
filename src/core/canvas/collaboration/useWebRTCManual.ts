@@ -357,18 +357,10 @@ export function useWebRTCManual(doc: Y.Doc) {
       }
 
       if (servingAssetRequestsRef.current.has(assetPath)) {
-        console.info('[WebRTCManual] already serving asset request', {
-          assetPath,
-        });
         return;
       }
 
       servingAssetRequestsRef.current.add(assetPath);
-
-      console.info('[WebRTCManual] serving remote asset request', {
-        assetPath,
-        displayName: message.displayName,
-      });
 
       try {
         if (!window?.projectPak?.getAssetData) {
@@ -383,11 +375,6 @@ export function useWebRTCManual(doc: Y.Doc) {
         const fileBytes = assetData.data;
         const mimeType = assetData.mimeType || guessMimeType(assetPath);
 
-        console.info('[WebRTCManual] loaded asset bytes for transfer', {
-          assetPath,
-          mimeType,
-          size: (fileBytes as ArrayBuffer).byteLength,
-        });
         const fileName =
           message.displayName ?? assetPath.split('/').pop() ?? 'shared-asset';
 
@@ -456,17 +443,9 @@ export function useWebRTCManual(doc: Y.Doc) {
       });
 
       if (sent) {
-        console.info('[WebRTCManual] sent asset request', {
-          assetPath,
-          displayName: payload.displayName,
-        });
         pendingAssetRequestsRef.current.delete(assetPath);
         inflightAssetRequestsRef.current.add(assetPath);
       } else {
-        console.warn('[WebRTCManual] failed to send asset request', {
-          assetPath,
-          displayName: payload.displayName,
-        });
         // Keep the request around and retry when the channel opens again
       }
     });
@@ -481,12 +460,7 @@ export function useWebRTCManual(doc: Y.Doc) {
       fileTransferChannelRef.current = channel;
       setFileTransferChannel(channel);
 
-      console.info('[WebRTCManual] file transfer channel received', {
-        readyState: channel.readyState,
-      });
-
       const handleOpen = () => {
-        console.info('[WebRTCManual] file transfer channel open');
         flushPendingAssetRequests();
       };
 
@@ -532,18 +506,10 @@ export function useWebRTCManual(doc: Y.Doc) {
           pendingAssetRequestsRef.current.set(normalized, { displayName });
         }
         flushPendingAssetRequests();
-        console.info('[WebRTCManual] asset request already pending', {
-          assetPath: normalized,
-          displayName,
-        });
         return true;
       }
 
       if (inflightAssetRequestsRef.current.has(normalized)) {
-        console.info('[WebRTCManual] asset request already in flight', {
-          assetPath: normalized,
-          displayName,
-        });
         return true;
       }
 
