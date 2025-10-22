@@ -20,6 +20,7 @@ import {
   FileCompleteMessage,
   FileErrorMessage,
   FileInitMessage,
+  FileRequestMessage,
   FileResendMessage,
   FileTransfer,
   FileTransferControlMessage,
@@ -28,7 +29,14 @@ import {
 
 interface UseFileTransferChannelParams {
   channelRef: MutableRefObject<RTCDataChannel | null>;
+  channel?: RTCDataChannel | null;
+  onFileRequest?: (message: FileRequestMessage) => void;
 }
+
+type SendFileOptions = {
+  assetPath?: string;
+  displayName?: string;
+};
 
 const createTransferId = () => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -42,16 +50,24 @@ const now = () => Date.now();
 
 const INITIAL_BYTES = 0;
 
+const configureDataChannel = (channel: RTCDataChannel) => {
+  channel.binaryType = 'arraybuffer';
+  channel.bufferedAmountLowThreshold = DATA_CHANNEL_RESUME_THRESHOLD;
+};
+
 export interface UseFileTransferChannelResult {
   activeTransfers: FileTransfer[];
   completedTransfers: FileTransfer[];
   failedTransfers: FileTransfer[];
-  sendFile: (file: File) => Promise<string | null>;
+  sendFile: (file: File, options?: SendFileOptions) => Promise<string | null>;
+  requestFile: (payload: Omit<FileRequestMessage, 'type'>) => boolean;
   cancelTransfer: (id: string) => void;
 }
 
 export const useFileTransferChannel = ({
   channelRef,
+  channel,
+  onFileRequest,
 }: UseFileTransferChannelParams): UseFileTransferChannelResult => {
   const { activeTransfers, completedTransfers, failedTransfers, setTransfer, updateTransfer } =
     useTransferStore();
@@ -59,8 +75,16 @@ export const useFileTransferChannel = ({
   const outgoingTransfersRef = useRef<Map<string, OutgoingTransferState>>(new Map());
   const incomingTransfersRef = useRef<Map<string, IncomingTransferState>>(new Map());
   const configuredChannelRef = useRef<RTCDataChannel | null>(null);
+  const channelCleanupRef = useRef<(() => void) | null>(null);
 
   const { queuePacket, clearPacketsForTransfer, resetQueue } = useSendQueue(channelRef);
+
+  const loggableControlTypes: FileTransferControlMessage['type'][] = [
+    'file-request',
+    'file-init',
+    'file-complete',
+    'file-error',
+  ];
 
   const sendControlMessage = useCallback(
     (message: FileTransferControlMessage) => {
@@ -70,6 +94,15 @@ export const useFileTransferChannel = ({
       }
 
       try {
+        if (loggableControlTypes.includes(message.type)) {
+          console.info('[FileTransfer] sending control message', {
+            direction: 'outgoing',
+            type: message.type,
+            id: 'id' in message ? message.id : undefined,
+            assetPath: 'assetPath' in message ? message.assetPath : undefined,
+            reason: 'reason' in message ? message.reason : undefined,
+          });
+        }
         channel.send(JSON.stringify(message));
         return true;
       } catch (error) {
@@ -96,6 +129,12 @@ export const useFileTransferChannel = ({
         }
 
         const completedAt = now();
+        console.info('[FileTransfer] outgoing transfer completed', {
+          id,
+          assetPath: previous.assetPath,
+          name: previous.name,
+          totalBytes: previous.totalBytes,
+        });
         return {
           ...previous,
           status: 'completed',
@@ -125,6 +164,12 @@ export const useFileTransferChannel = ({
         }
 
         const updatedAt = now();
+        console.error('[FileTransfer] transfer failed', {
+          id,
+          assetPath: previous.assetPath,
+          name: previous.name,
+          reason,
+        });
         return {
           ...previous,
           status: 'failed',
@@ -270,6 +315,12 @@ export const useFileTransferChannel = ({
         }
 
         const completedAt = now();
+        console.info('[FileTransfer] incoming transfer completed', {
+          id: state.id,
+          assetPath: previous.assetPath,
+          name: previous.name,
+          totalBytes: previous.totalBytes,
+        });
         return {
           ...previous,
           status: 'completed',
@@ -385,6 +436,7 @@ export const useFileTransferChannel = ({
         progress: 0,
         startedAt,
         updatedAt: startedAt,
+        assetPath: message.assetPath,
       });
     },
     [setTransfer],
@@ -392,6 +444,15 @@ export const useFileTransferChannel = ({
 
   const handleControlMessage = useCallback(
     (message: FileTransferControlMessage) => {
+      if (loggableControlTypes.includes(message.type)) {
+        console.info('[FileTransfer] received control message', {
+          direction: 'incoming',
+          type: message.type,
+          id: 'id' in message ? message.id : undefined,
+          assetPath: 'assetPath' in message ? message.assetPath : undefined,
+          reason: 'reason' in message ? message.reason : undefined,
+        });
+      }
       switch (message.type) {
         case 'file-init':
           handleInitMessage(message);
@@ -408,6 +469,9 @@ export const useFileTransferChannel = ({
         case 'file-resend':
           handleResendMessage(message);
           break;
+        case 'file-request':
+          onFileRequest?.(message);
+          break;
         default: {
           const neverType: never = message;
           void neverType;
@@ -420,6 +484,7 @@ export const useFileTransferChannel = ({
       handleErrorMessage,
       handleInitMessage,
       handleResendMessage,
+      onFileRequest,
     ],
   );
 
@@ -473,14 +538,30 @@ export const useFileTransferChannel = ({
   }, [resetQueue, updateTransfer]);
 
   useEffect(() => {
-    const channel = channelRef.current;
-    if (!channel || channel === configuredChannelRef.current) {
-      return;
+    const nextChannel = channelRef.current;
+
+    if (configuredChannelRef.current === nextChannel) {
+      return channelCleanupRef.current ?? undefined;
     }
 
-    configuredChannelRef.current = channel;
-    channel.binaryType = 'arraybuffer';
-    channel.bufferedAmountLowThreshold = DATA_CHANNEL_RESUME_THRESHOLD;
+    if (channelCleanupRef.current) {
+      channelCleanupRef.current();
+      channelCleanupRef.current = null;
+    }
+
+    if (!nextChannel) {
+      configuredChannelRef.current = null;
+      return undefined;
+    }
+
+    configuredChannelRef.current = nextChannel;
+    configureDataChannel(nextChannel);
+
+    const pumpWindowForAll = () => {
+      outgoingTransfersRef.current.forEach((state) => {
+        pumpWindow(state);
+      });
+    };
 
     const handleBufferedAmountLow = () => {
       outgoingTransfersRef.current.forEach((state) => {
@@ -493,41 +574,51 @@ export const useFileTransferChannel = ({
     };
 
     const handleOpen = () => {
+      console.info('[FileTransfer] data channel open');
       pumpWindowForAll();
     };
 
     const handleClose = () => {
+      console.info('[FileTransfer] data channel closed');
       resetStateOnClose();
     };
 
-    const handleError = () => {
+    const handleError = (event: Event) => {
+      console.error('[FileTransfer] data channel error', event);
       resetStateOnClose();
     };
 
-    const pumpWindowForAll = () => {
-      outgoingTransfersRef.current.forEach((state) => {
-        pumpWindow(state);
-      });
-    };
+    nextChannel.addEventListener('message', handleMessage);
+    nextChannel.addEventListener('open', handleOpen);
+    nextChannel.addEventListener('close', handleClose);
+    nextChannel.addEventListener('error', handleError);
+    nextChannel.addEventListener('bufferedamountlow', handleBufferedAmountLow);
 
-    channel.addEventListener('message', handleMessage);
-    channel.addEventListener('open', handleOpen);
-    channel.addEventListener('close', handleClose);
-    channel.addEventListener('error', handleError);
-    channel.addEventListener('bufferedamountlow', handleBufferedAmountLow);
-
-    if (channel.readyState === 'open') {
+    if (nextChannel.readyState === 'open') {
       pumpWindowForAll();
     }
 
-    return () => {
-      channel.removeEventListener('message', handleMessage);
-      channel.removeEventListener('open', handleOpen);
-      channel.removeEventListener('close', handleClose);
-      channel.removeEventListener('error', handleError);
-      channel.removeEventListener('bufferedamountlow', handleBufferedAmountLow);
+    const cleanup = () => {
+      nextChannel.removeEventListener('message', handleMessage);
+      nextChannel.removeEventListener('open', handleOpen);
+      nextChannel.removeEventListener('close', handleClose);
+      nextChannel.removeEventListener('error', handleError);
+      nextChannel.removeEventListener('bufferedamountlow', handleBufferedAmountLow);
+
+      if (configuredChannelRef.current === nextChannel) {
+        configuredChannelRef.current = null;
+      }
     };
-  }, [channelRef, handleMessage, pumpWindow, resetStateOnClose]);
+
+    channelCleanupRef.current = cleanup;
+
+    return () => {
+      cleanup();
+      if (channelCleanupRef.current === cleanup) {
+        channelCleanupRef.current = null;
+      }
+    };
+  }, [channelRef, channel, handleMessage, pumpWindow, resetStateOnClose]);
 
   const cancelTransfer = useCallback(
     (id: string) => {
@@ -562,7 +653,7 @@ export const useFileTransferChannel = ({
   );
 
   const sendFile = useCallback(
-    async (file: File): Promise<string | null> => {
+    async (file: File, options: SendFileOptions = {}): Promise<string | null> => {
       const channel = channelRef.current;
       if (!channel || channel.readyState !== 'open') {
         console.warn('File transfer channel is not open');
@@ -573,20 +664,30 @@ export const useFileTransferChannel = ({
       const chunkSize = calculateChunkSize(file.size);
       const totalChunks = calculateTotalChunks(file.size, chunkSize);
       const startedAt = now();
+      const displayName = options.displayName ?? file.name;
+
+      console.info('[FileTransfer] starting outgoing transfer', {
+        id,
+        assetPath: options.assetPath,
+        name: displayName,
+        size: file.size,
+        mimeType: file.type,
+      });
 
       const metadata: FileInitMessage = {
         type: 'file-init',
         id,
-        name: file.name,
+        name: displayName,
         mimeType: file.type,
         size: file.size,
         chunkSize,
         totalChunks,
+        assetPath: options.assetPath,
       };
 
       const initialTransfer: FileTransfer = {
         id,
-        name: file.name,
+        name: displayName,
         mimeType: file.type,
         size: file.size,
         chunkSize,
@@ -599,6 +700,7 @@ export const useFileTransferChannel = ({
         startedAt,
         updatedAt: startedAt,
         originalFile: file,
+        assetPath: options.assetPath,
       };
 
       setTransfer(initialTransfer);
@@ -618,6 +720,12 @@ export const useFileTransferChannel = ({
 
       pumpWindow(transferState);
 
+      console.info('[FileTransfer] metadata sent, transfer queued', {
+        id,
+        assetPath: options.assetPath,
+        totalChunks,
+      });
+
       return id;
     },
     [
@@ -630,6 +738,26 @@ export const useFileTransferChannel = ({
       sendControlMessage,
       setTransfer,
     ],
+  );
+
+  const requestFile = useCallback(
+    ({ assetPath, displayName }: Omit<FileRequestMessage, 'type'>) => {
+      if (!assetPath) {
+        return false;
+      }
+
+      console.info('[FileTransfer] queueing file request', {
+        assetPath,
+        displayName,
+      });
+
+      return sendControlMessage({
+        type: 'file-request',
+        assetPath,
+        displayName,
+      });
+    },
+    [sendControlMessage],
   );
 
   useEffect(() => {
@@ -646,8 +774,16 @@ export const useFileTransferChannel = ({
       completedTransfers,
       failedTransfers,
       sendFile,
+      requestFile,
       cancelTransfer,
     }),
-    [activeTransfers, cancelTransfer, completedTransfers, failedTransfers, sendFile],
+    [
+      activeTransfers,
+      cancelTransfer,
+      completedTransfers,
+      failedTransfers,
+      requestFile,
+      sendFile,
+    ],
   );
 };

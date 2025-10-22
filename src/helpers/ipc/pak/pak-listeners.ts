@@ -13,12 +13,14 @@ import {
   toBuffer,
   upsertPakAsset,
 } from "@/core/pak/pak-manager";
+import { guessMimeType } from "@/core/pak/mimeTypes";
 import {
   PAK_ADD_ASSET_CHANNEL,
   PAK_LIST_ASSETS_CHANNEL,
   PAK_LOAD_CHANNEL,
   PAK_REMOVE_ASSET_CHANNEL,
   PAK_SAVE_CHANNEL,
+  PAK_GET_ASSET_CHANNEL,
 } from "./pak-channels";
 import {
   buildManifest,
@@ -128,5 +130,26 @@ export const addPakEventListeners = () => {
       const buffer = Buffer.isBuffer(asset.data) ? asset.data : toBuffer(asset.data);
       return { path: asset.path, size: buffer.length };
     });
+  });
+
+  ipcMain.handle(PAK_GET_ASSET_CHANNEL, async (_event, assetPath: string) => {
+    const pak = ensureActivePak();
+    const normalizedPath = assetPath.startsWith("pak://")
+      ? assetPath.slice("pak://".length)
+      : assetPath;
+    const file = pak.files[normalizedPath];
+
+    if (!file) {
+      return null;
+    }
+
+    const buffer = toBuffer(file);
+    const arrayBuffer = buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength);
+
+    return {
+      path: normalizedPath,
+      data: arrayBuffer,
+      mimeType: guessMimeType(normalizedPath),
+    };
   });
 };

@@ -7,6 +7,7 @@ export interface IncomingTransferState {
   size: number;
   chunkSize: number;
   totalChunks: number;
+  assetPath?: string;
   receivedBytes: number;
   expectedSequence: number;
   chunks: Map<number, ArrayBuffer>;
@@ -20,6 +21,7 @@ export const createIncomingTransferState = (message: FileInitMessage): IncomingT
   size: message.size,
   chunkSize: message.chunkSize,
   totalChunks: message.totalChunks,
+  assetPath: message.assetPath,
   receivedBytes: 0,
   expectedSequence: 0,
   chunks: new Map(),

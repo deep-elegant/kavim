@@ -14,6 +14,7 @@ export interface FileTransferMetadata {
   mimeType?: string;
   chunkSize: number;
   totalChunks: number;
+  assetPath?: string;
 }
 
 export interface FileTransferProgressSnapshot {
@@ -42,6 +43,7 @@ export interface FileInitMessage {
   mimeType?: string;
   chunkSize: number;
   totalChunks: number;
+  assetPath?: string;
 }
 
 export interface FileAckMessage {
@@ -70,12 +72,19 @@ export interface FileResendMessage {
   missing: number[];
 }
 
+export interface FileRequestMessage {
+  type: 'file-request';
+  assetPath: string;
+  displayName?: string;
+}
+
 export type FileTransferControlMessage =
   | FileInitMessage
   | FileAckMessage
   | FileCompleteMessage
   | FileErrorMessage
-  | FileResendMessage;
+  | FileResendMessage
+  | FileRequestMessage;
 
 export const FILE_CHUNK_FRAME_TYPE = 0x1;
 export const FILE_CHUNK_HEADER_SIZE = 2 + 4; // frame type + id length + sequence

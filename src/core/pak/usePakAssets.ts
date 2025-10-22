@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Buffer } from 'buffer';
 
 export type PakAssetRegistration = {
@@ -13,6 +13,7 @@ export type PakAssetRegistration = {
 type RegisterBytesOptions = {
   fileName?: string;
   extension?: string;
+  mimeType?: string;
 };
 
 const DEFAULT_FILE_NAME = 'image';
@@ -62,6 +63,7 @@ export const usePakAssets = () => {
   const usedPathsRef = useRef<Set<string>>(new Set());
   const initializedRef = useRef(false);
   const initializePromiseRef = useRef<Promise<void> | null>(null);
+  const [isReady, setIsReady] = useState(initializedRef.current);
 
   const refreshFromActivePak = useCallback(async () => {
     if (!window?.projectPak?.listAssets) {
@@ -97,7 +99,19 @@ export const usePakAssets = () => {
   }, [refreshFromActivePak]);
 
   useEffect(() => {
-    void ensureInitialized();
+    let cancelled = false;
+
+    void ensureInitialized()
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) {
+          setIsReady(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [ensureInitialized]);
 
   const reserveAssetPath = useCallback((assetFileName: string) => {
@@ -126,7 +140,11 @@ export const usePakAssets = () => {
       await ensureInitialized();
 
       const bytes = toUint8Array(input);
-      const { assetFileName, displayFileName } = ensureFileMetadata(options?.fileName, options?.extension);
+      const extensionHint = options?.extension ?? options?.mimeType?.split('/')?.[1];
+      const { assetFileName, displayFileName } = ensureFileMetadata(
+        options?.fileName,
+        extensionHint,
+      );
       const reservedPath = reserveAssetPath(assetFileName);
 
       try {
@@ -167,15 +185,43 @@ export const usePakAssets = () => {
       return registerAssetFromBytes(arrayBuffer, {
         fileName: file.name,
         extension: extensionHint,
+        mimeType: file.type,
       });
     },
     [registerAssetFromBytes],
   );
 
+  const registerAssetAtPath = useCallback(
+    async (path: string, input: ArrayBuffer | Uint8Array, options?: RegisterBytesOptions) => {
+      await ensureInitialized();
+
+      const bytes = toUint8Array(input);
+      const extensionHint = options?.extension ?? options?.mimeType?.split('/')?.[1];
+      const { displayFileName } = ensureFileMetadata(options?.fileName, extensionHint);
+
+      await window.projectPak.addAsset({ path, data: bytes });
+      usedPathsRef.current.add(path);
+
+      const registration: PakAssetRegistration = {
+        path,
+        fileName: displayFileName,
+        uri: buildPakUri(path),
+      };
+
+      return registration;
+    },
+    [ensureInitialized],
+  );
+
+  const hasAsset = useCallback((path: string) => usedPathsRef.current.has(path), []);
+
   return {
     registerAssetFromBytes,
     registerAssetFromFile,
     registerAssetFromFilePath,
+    registerAssetAtPath,
+    hasAsset,
+    isReady,
     refreshAssets: refreshFromActivePak,
   };
 };

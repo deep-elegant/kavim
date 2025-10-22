@@ -15,7 +15,13 @@ const asNodeDataRecord = (value: Node['data']): NodeDataRecord | undefined => {
  * with the shared Yjs document. Stripping them keeps the collaborative state
  * focused on the persisted node shape.
  */
-export const TRANSIENT_NODE_DATA_KEYS = new Set(['isTyping', 'isEditing', 'isActive']);
+export const TRANSIENT_NODE_DATA_KEYS = new Set([
+  'isTyping',
+  'isEditing',
+  'isActive',
+  'assetStatus',
+  'assetError',
+]);
 
 /**
  * Determines if a key should be excluded from Yjs sync.

@@ -1,6 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import * as Y from 'yjs';
 
+import { guessMimeType } from '@/core/pak/mimeTypes';
+
 import type {
   ChannelMessage,
   DataChannelState,
@@ -19,13 +21,20 @@ import {
 import { usePresenceSync } from './manual-webrtc/usePresenceSync';
 import { useYjsSync } from './manual-webrtc/useYjsSync';
 import { useStatsForNerds } from '../../diagnostics/StatsForNerdsContext';
-import { useFileTransferChannel } from './manual-webrtc/file-transfer/useFileTransferChannel';
+import type { FileRequestMessage } from './manual-webrtc/file-transfer/types';
+import {
+  useFileTransferChannel,
+  type UseFileTransferChannelResult,
+} from './manual-webrtc/file-transfer/useFileTransferChannel';
 
 export type {
   CollaboratorInteraction,
   CursorPresence,
   WebRTCChatMessage,
 } from './manual-webrtc/types';
+
+const stripPakProtocol = (value: string) =>
+  value.startsWith('pak://') ? value.slice('pak://'.length) : value;
 
 /**
  * Manual WebRTC hook for peer-to-peer collaboration.
@@ -70,6 +79,11 @@ export function useWebRTCManual(doc: Y.Doc) {
   const docGuidRef = useRef(doc.guid);
   const resyncNeededRef = useRef(true);
   const localFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingAssetRequestsRef = useRef<Map<string, { displayName?: string }>>(new Map());
+  const inflightAssetRequestsRef = useRef<Set<string>>(new Set());
+  const servingAssetRequestsRef = useRef<Set<string>>(new Set());
+  const sendFileRef = useRef<UseFileTransferChannelResult['sendFile']>(async () => null);
+  const [fileTransferChannel, setFileTransferChannel] = useState<RTCDataChannel | null>(null);
 
   const scheduleBufferDrain = useCallback(() => {
     const channel = syncChannelRef.current;
@@ -334,14 +348,83 @@ export function useWebRTCManual(doc: Y.Doc) {
     setupDataChannel,
   );
 
-  const handleFileTransferChannel = useCallback((channel: RTCDataChannel) => {
-    fileTransferChannelRef.current = channel;
-  }, []);
+  const handleRemoteFileRequest = useCallback(
+    async (message: FileRequestMessage) => {
+      const assetPath = stripPakProtocol(message.assetPath);
+      if (!assetPath) {
+        console.warn('[WebRTCManual] received invalid asset request', message.assetPath);
+        return;
+      }
 
-  usePeerConnectionDataChannel(
-    FILE_TRANSFER_CHANNEL_LABEL,
-    setDataChannelHandler,
-    handleFileTransferChannel,
+      if (servingAssetRequestsRef.current.has(assetPath)) {
+        console.info('[WebRTCManual] already serving asset request', {
+          assetPath,
+        });
+        return;
+      }
+
+      servingAssetRequestsRef.current.add(assetPath);
+
+      console.info('[WebRTCManual] serving remote asset request', {
+        assetPath,
+        displayName: message.displayName,
+      });
+
+      try {
+        if (!window?.projectPak?.getAssetData) {
+          throw new Error('Project pak bridge is not available');
+        }
+
+        const assetData = await window.projectPak.getAssetData(assetPath);
+        if (!assetData) {
+          throw new Error(`Asset not found in active pak: ${assetPath}`);
+        }
+
+        const fileBytes = assetData.data;
+        const mimeType = assetData.mimeType || guessMimeType(assetPath);
+
+        console.info('[WebRTCManual] loaded asset bytes for transfer', {
+          assetPath,
+          mimeType,
+          size: (fileBytes as ArrayBuffer).byteLength,
+        });
+        const fileName =
+          message.displayName ?? assetPath.split('/').pop() ?? 'shared-asset';
+
+        let fileToSend: File;
+
+        if (typeof File !== 'undefined') {
+          fileToSend = new File([fileBytes], fileName, {
+            type: mimeType || 'application/octet-stream',
+          });
+        } else {
+          const fallback = new Blob([fileBytes], {
+            type: mimeType || 'application/octet-stream',
+          }) as Blob & { name?: string };
+          fallback.name = fileName;
+          fileToSend = fallback as unknown as File;
+        }
+
+        await sendFileRef.current(fileToSend, {
+          assetPath,
+          displayName: fileName,
+        });
+
+        console.info('[WebRTCManual] asset upload complete', {
+          assetPath,
+          name: fileName,
+          size: fileToSend.size,
+        });
+      } catch (error) {
+        console.error('Failed to serve requested asset', error);
+      } finally {
+        servingAssetRequestsRef.current.delete(assetPath);
+        console.info('[WebRTCManual] finished serving asset request', {
+          assetPath,
+        });
+      }
+    },
+    [],
   );
 
   const {
@@ -350,7 +433,163 @@ export function useWebRTCManual(doc: Y.Doc) {
     failedTransfers,
     sendFile,
     cancelTransfer,
-  } = useFileTransferChannel({ channelRef: fileTransferChannelRef });
+    requestFile,
+  } = useFileTransferChannel({
+    channelRef: fileTransferChannelRef,
+    channel: fileTransferChannel,
+    onFileRequest: handleRemoteFileRequest,
+  });
+
+  useEffect(() => {
+    sendFileRef.current = sendFile;
+  }, [sendFile]);
+
+  const flushPendingAssetRequests = useCallback(() => {
+    if (pendingAssetRequestsRef.current.size === 0) {
+      return;
+    }
+
+    pendingAssetRequestsRef.current.forEach((payload, assetPath) => {
+      const sent = requestFile({
+        assetPath,
+        displayName: payload.displayName,
+      });
+
+      if (sent) {
+        console.info('[WebRTCManual] sent asset request', {
+          assetPath,
+          displayName: payload.displayName,
+        });
+        pendingAssetRequestsRef.current.delete(assetPath);
+        inflightAssetRequestsRef.current.add(assetPath);
+      } else {
+        console.warn('[WebRTCManual] failed to send asset request', {
+          assetPath,
+          displayName: payload.displayName,
+        });
+        // Keep the request around and retry when the channel opens again
+      }
+    });
+  }, [requestFile]);
+
+  useEffect(() => {
+    flushPendingAssetRequests();
+  }, [flushPendingAssetRequests]);
+
+  const handleFileTransferChannel = useCallback(
+    (channel: RTCDataChannel) => {
+      fileTransferChannelRef.current = channel;
+      setFileTransferChannel(channel);
+
+      console.info('[WebRTCManual] file transfer channel received', {
+        readyState: channel.readyState,
+      });
+
+      const handleOpen = () => {
+        console.info('[WebRTCManual] file transfer channel open');
+        flushPendingAssetRequests();
+      };
+
+      const handleClose = () => {
+        console.info('[WebRTCManual] file transfer channel closed');
+        setFileTransferChannel((current) => (current === channel ? null : current));
+        if (fileTransferChannelRef.current === channel) {
+          fileTransferChannelRef.current = null;
+        }
+        channel.removeEventListener('open', handleOpen);
+        channel.removeEventListener('close', handleClose);
+      };
+
+      channel.addEventListener('open', handleOpen);
+      channel.addEventListener('close', handleClose);
+
+      if (channel.readyState === 'open') {
+        flushPendingAssetRequests();
+      }
+    },
+    [fileTransferChannelRef, flushPendingAssetRequests],
+  );
+
+  usePeerConnectionDataChannel(
+    FILE_TRANSFER_CHANNEL_LABEL,
+    setDataChannelHandler,
+    handleFileTransferChannel,
+  );
+
+  const requestAsset = useCallback(
+    (assetPath: string, displayName?: string) => {
+      const trimmed = assetPath.trim();
+      if (!trimmed) {
+        console.warn('[WebRTCManual] refusing to request empty asset path');
+        return false;
+      }
+
+      const normalized = stripPakProtocol(trimmed) || trimmed;
+
+      if (pendingAssetRequestsRef.current.has(normalized)) {
+        const existing = pendingAssetRequestsRef.current.get(normalized);
+        if (displayName && existing && !existing.displayName) {
+          pendingAssetRequestsRef.current.set(normalized, { displayName });
+        }
+        flushPendingAssetRequests();
+        console.info('[WebRTCManual] asset request already pending', {
+          assetPath: normalized,
+          displayName,
+        });
+        return true;
+      }
+
+      if (inflightAssetRequestsRef.current.has(normalized)) {
+        console.info('[WebRTCManual] asset request already in flight', {
+          assetPath: normalized,
+          displayName,
+        });
+        return true;
+      }
+
+      pendingAssetRequestsRef.current.set(
+        normalized,
+        displayName ? { displayName } : {},
+      );
+      flushPendingAssetRequests();
+      console.info('[WebRTCManual] queued asset request', {
+        assetPath: normalized,
+        displayName,
+      });
+      return true;
+    },
+    [flushPendingAssetRequests],
+  );
+
+  const releaseAssetRequest = useCallback((assetPath: string) => {
+    const trimmed = assetPath.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    const normalized = stripPakProtocol(trimmed) || trimmed;
+    pendingAssetRequestsRef.current.delete(normalized);
+    inflightAssetRequestsRef.current.delete(normalized);
+    console.info('[WebRTCManual] released asset request', {
+      assetPath: normalized,
+    });
+  }, []);
+
+  useEffect(() => {
+    completedTransfers.forEach((transfer) => {
+      if (transfer.direction === 'incoming' && transfer.assetPath) {
+        inflightAssetRequestsRef.current.delete(transfer.assetPath);
+      }
+    });
+  }, [completedTransfers]);
+
+  useEffect(() => {
+    failedTransfers.forEach((transfer) => {
+      if (transfer.direction === 'incoming' && transfer.assetPath) {
+        inflightAssetRequestsRef.current.delete(transfer.assetPath);
+      }
+    });
+  }, [failedTransfers]);
 
   /**
    * Listen for local Yjs document changes and queue for sync.
@@ -471,5 +710,7 @@ export function useWebRTCManual(doc: Y.Doc) {
     failedTransfers,
     sendFile,
     cancelTransfer,
+    requestAsset,
+    releaseAssetRequest,
   };
 }

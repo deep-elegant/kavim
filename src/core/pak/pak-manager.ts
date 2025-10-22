@@ -1,6 +1,6 @@
 import { protocol } from "electron";
-import path from "node:path";
 import type { PakAssetInput, PakReadResult } from "./types";
+import { guessMimeType } from "./mimeTypes";
 
 /**
  * Manages custom pak:// protocol for loading assets from .pak archives.
@@ -22,22 +22,6 @@ const createEmptyPak = (): PakReadResult & { filePath: string } => ({
   fileCount: 0,
   filePath: "",
 });
-
-// Map file extensions to MIME types for proper browser rendering
-const mimeTypes: Record<string, string> = {
-  ".png": "image/png",
-  ".jpg": "image/jpeg",
-  ".jpeg": "image/jpeg",
-  ".gif": "image/gif",
-  ".webp": "image/webp",
-  ".svg": "image/svg+xml",
-  ".bmp": "image/bmp",
-};
-
-const guessMimeType = (assetPath: string) => {
-  const extension = path.extname(assetPath).toLowerCase();
-  return mimeTypes[extension] ?? "application/octet-stream";
-};
 
 export const toBuffer = (data: PakAssetInput["data"]): Buffer => {
   if (Buffer.isBuffer(data)) {

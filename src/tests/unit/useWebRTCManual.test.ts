@@ -105,6 +105,7 @@ vi.mock(
         completedTransfers: [],
         failedTransfers: [],
         sendFile: vi.fn().mockResolvedValue(null),
+        requestFile: vi.fn().mockReturnValue(true),
         cancelTransfer: vi.fn(),
       }),
     };
