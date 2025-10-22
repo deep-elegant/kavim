@@ -112,7 +112,10 @@ export const useCanvasNodes = ({
   const listenersRef = useRef(new Set<() => void>());
   const shouldSyncFromDocRef = useRef(true);
 
-  const compareArrays = useCallback(arraysShallowEqual, []);
+  const compareArrays = useCallback(
+    <T,>(a: readonly T[], b: readonly T[]) => arraysShallowEqual(a, b),
+    [],
+  );
 
   /**
    * Reconstructs local node array from Yjs document.

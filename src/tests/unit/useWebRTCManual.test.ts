@@ -1,19 +1,39 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { vi, describe, expect, it, beforeEach, afterEach } from 'vitest';
 
+type FakeRTCDataChannel = {
+  readyState: RTCDataChannelState;
+  bufferedAmount: number;
+  bufferedAmountLowThreshold: number;
+  binaryType: BinaryType;
+  send: (data: string) => void;
+  close: () => void;
+  onopen: (() => void) | null;
+  onclose: (() => void) | null;
+  onerror: ((event: Event) => void) | null;
+  onmessage: ((event: MessageEvent) => void) | null;
+  addEventListener: (type: string, listener: EventListener) => void;
+  removeEventListener: (type: string, listener: EventListener) => void;
+  dispatchEvent: (type: string) => void;
+};
+
+declare global {
+  var __TEST_DATA_CHANNEL__: FakeRTCDataChannel | null;
+}
+
 vi.mock('../../core/canvas/collaboration/manual-webrtc/usePeerConnection', () => {
-  const React = require('react');
-  const { useCallback, useEffect, useRef, useState } = React;
 
   type DataChannelHandler = ((channel: RTCDataChannel) => void) | null;
+
+  const getTestDataChannel = () =>
+    (globalThis.__TEST_DATA_CHANNEL__ as unknown as RTCDataChannel | null) ?? null;
 
   return {
     SYNC_CHANNEL_LABEL: 'collab-sync',
     FILE_TRANSFER_CHANNEL_LABEL: 'collab-file-transfer',
     usePeerConnection() {
       const pcRef = useRef<RTCPeerConnection | null>(null);
-      const syncChannelRef = useRef<RTCDataChannel | null>(
-        (globalThis as any).__TEST_DATA_CHANNEL__ ?? null,
-      );
+      const syncChannelRef = useRef<RTCDataChannel | null>(getTestDataChannel());
       const fileTransferChannelRef = useRef<RTCDataChannel | null>(null);
       const [dataChannelState, setDataChannelState] = useState<'not-initiated' | 'open'>('not-initiated');
       const handlerRef = useRef<Map<string, DataChannelHandler>>(new Map());
@@ -27,7 +47,7 @@ vi.mock('../../core/canvas/collaboration/manual-webrtc/usePeerConnection', () =>
           }
 
           if (label === 'collab-sync' && handler) {
-            const channel = (globalThis as any).__TEST_DATA_CHANNEL__ ?? null;
+            const channel = getTestDataChannel();
             syncChannelRef.current = channel;
             if (channel) {
               handler(channel);
@@ -78,13 +98,11 @@ vi.mock('../../core/canvas/collaboration/manual-webrtc/usePeerConnection', () =>
       setHandler: (label: string, handler: ((channel: RTCDataChannel) => void) | null) => void,
       setup: (channel: RTCDataChannel) => void,
     ) {
-      const React = require('react');
-      const { useEffect } = React;
       useEffect(() => {
         setHandler(label, setup);
 
         if (label === 'collab-sync') {
-          const channel = (globalThis as any).__TEST_DATA_CHANNEL__ ?? null;
+          const channel = getTestDataChannel();
           if (channel) {
             setup(channel);
           }
@@ -130,27 +148,6 @@ import * as Y from 'yjs';
 import type { ChannelMessage } from '../../core/canvas/collaboration/manual-webrtc/types';
 import { useWebRTCManual } from '../../core/canvas/collaboration/useWebRTCManual';
 import * as useYjsSyncModule from '../../core/canvas/collaboration/manual-webrtc/useYjsSync';
-
-type FakeRTCDataChannel = {
-  readyState: RTCDataChannelState;
-  bufferedAmount: number;
-  bufferedAmountLowThreshold: number;
-  binaryType: BinaryType;
-  send: (data: string) => void;
-  close: () => void;
-  onopen: (() => void) | null;
-  onclose: (() => void) | null;
-  onerror: ((event: Event) => void) | null;
-  onmessage: ((event: MessageEvent) => void) | null;
-  addEventListener: (type: string, listener: EventListener) => void;
-  removeEventListener: (type: string, listener: EventListener) => void;
-  dispatchEvent: (type: string) => void;
-};
-
-declare global {
-   
-  var __TEST_DATA_CHANNEL__: FakeRTCDataChannel | null;
-}
 
 const createMockDataChannel = (): FakeRTCDataChannel => {
   const listeners = new Map<string, Set<EventListener>>();

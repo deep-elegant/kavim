@@ -54,7 +54,10 @@ export const useCanvasEdges = ({
   const listenersRef = useRef(new Set<() => void>());
   const shouldSyncFromDocRef = useRef(true);
 
-  const compareArrays = useCallback(arraysShallowEqual, []);
+  const compareArrays = useCallback(
+    <T,>(a: readonly T[], b: readonly T[]) => arraysShallowEqual(a, b),
+    [],
+  );
 
   /**
    * Rebuilds edge array from Yjs structures and updates lookup cache.

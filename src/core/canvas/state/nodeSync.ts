@@ -71,11 +71,16 @@ export const sanitizeNodeForSync = (node: Node): Node => {
     return node; // No changes needed, return original
   }
 
-  const { selected: _selected, ...rest } = node;
-  return {
-    ...rest,
+  const sanitizedNode = {
+    ...node,
     data: sanitizedData,
   } as Node;
+
+  if ('selected' in sanitizedNode) {
+    delete (sanitizedNode as { selected?: Node['selected'] }).selected;
+  }
+
+  return sanitizedNode;
 };
 
 /**

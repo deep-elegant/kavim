@@ -9,8 +9,18 @@ import type { CanvasNode, ToolId } from '../types';
 // Sentinel value to detect when clipboard contains our custom node data
 const COPIED_NODES_MARKER = '__COL_AI_NODES_COPY__';
 
-// Persistent ref to store copied nodes across renders (avoids stale closures)
-const copiedNodesRef: { current: Node<CanvasNode>[] } = { current: [] };
+// Persistent store to track copied nodes across hook invocations without
+// mutating module scoped objects directly inside React logic.
+const copiedNodesStore = (() => {
+  let nodes: Node<CanvasNode>[] = [];
+
+  return {
+    get: () => nodes,
+    set: (next: Node<CanvasNode>[]) => {
+      nodes = next;
+    },
+  };
+})();
 
 /** Deep clones a node using structuredClone or JSON fallback */
 const cloneNode = <T,>(node: T): T => {
@@ -35,7 +45,7 @@ export const copyNodesToClipboard = async (
     return;
   }
 
-  copiedNodesRef.current = cloneNodes(selectedNodes);
+  copiedNodesStore.set(cloneNodes(selectedNodes));
 
   if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
     return;
@@ -116,14 +126,16 @@ export const useCanvasCopyPaste = ({
       const clipboardText = event.clipboardData.getData('text/plain');
 
       // Check if we're pasting our own copied nodes
-      if (clipboardText === COPIED_NODES_MARKER && copiedNodesRef.current.length > 0) {
+      const copiedNodes = copiedNodesStore.get();
+
+      if (clipboardText === COPIED_NODES_MARKER && copiedNodes.length > 0) {
         event.preventDefault();
         setSelectedTool(null);
 
         const newNodes: Node<CanvasNode>[] = [];
         const updatedCopiedNodes: Node<CanvasNode>[] = [];
 
-        copiedNodesRef.current.forEach((nodeToCopy) => {
+        copiedNodes.forEach((nodeToCopy) => {
           const offset = 20;
           const newPosition = {
             x: nodeToCopy.position.x + offset,
@@ -146,7 +158,7 @@ export const useCanvasCopyPaste = ({
           updatedCopiedNodes.push(updatedNode);
         });
 
-        copiedNodesRef.current = updatedCopiedNodes;
+        copiedNodesStore.set(updatedCopiedNodes);
 
         setNodes((currentNodes) => {
           const deselected = currentNodes.map((node) =>

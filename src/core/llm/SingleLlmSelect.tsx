@@ -25,12 +25,15 @@ export const SingleLlmSelect = ({
     onChange: (value: string) => void;
 }) => {
     // Split models by access level (general availability vs. org-verified beta)
-    const unrestrictedModels = useMemo(() => AI_MODELS.filter(
-        (model) => !(model as any).requiresOrganizationVerification,
-    ), []);
-    const restrictedModels = useMemo(() => AI_MODELS.filter(
-        (model) => (model as any).requiresOrganizationVerification,
-    ), []);
+    const unrestrictedModels = useMemo(
+        () => AI_MODELS.filter((model) => !model.requiresOrganizationVerification),
+        [],
+    );
+    const restrictedModels = useMemo(
+        () =>
+            AI_MODELS.filter((model) => model.requiresOrganizationVerification === true),
+        [],
+    );
 
     return (
         <Select
