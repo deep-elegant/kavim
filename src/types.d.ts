@@ -16,9 +16,6 @@ import type {
   SaveDraftRequest,
 } from "./core/drafts/types";
 
-declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
-declare const MAIN_WINDOW_VITE_NAME: string;
-
 // Preload types
 interface ElectronWindow {
   minimize: () => Promise<void>;
@@ -99,29 +96,34 @@ interface DraftContext {
   cleanup: (payload?: CleanupDraftsRequest) => Promise<void>;
 }
 
-declare interface Window {
-  electronWindow: ElectronWindow;
-  settingsStore: {
-    getProvider: (key: AiProvider) => { apiKey: string } | undefined;
-    setProvider: (key: AiProvider, value: { apiKey: string }) => void;
-    getGateway: (key: AiGateway) =>
-      | {
-          apiKey: string;
-          useForAllModels: boolean;
-          headers?: { referer?: string; title?: string };
-        }
-      | undefined;
-    setGateway: (
-      key: AiGateway,
-      value: {
-        apiKey: string;
-        useForAllModels: boolean;
-        headers?: { referer?: string; title?: string };
-      },
-    ) => void;
-  };
-  projectPak: PakContext;
-  fileSystem: FileSystemContext;
-  llm: LlmContext;
-  drafts: DraftContext;
+declare global {
+    const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
+    const MAIN_WINDOW_VITE_NAME: string;
+    interface Window {
+        electronWindow: ElectronWindow;
+        settingsStore: {
+            getProvider: (key: AiProvider) => { apiKey: string } | undefined;
+            setProvider: (key: AiProvider, value: { apiKey: string }) => void;
+            getGateway: (key: AiGateway) =>
+            | {
+                apiKey: string;
+                useForAllModels: boolean;
+                headers?: { referer?: string; title?: string };
+                }
+            | undefined;
+            setGateway: (
+            key: AiGateway,
+            value: {
+                apiKey: string;
+                useForAllModels: boolean;
+                headers?: { referer?: string; title?: string };
+            },
+            ) => void;
+        };
+        projectPak: PakContext;
+        fileSystem: FileSystemContext;
+        llm: LlmContext;
+        drafts: DraftContext;
+    }
 }
+export {}

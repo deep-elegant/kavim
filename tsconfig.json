@@ -27,6 +27,7 @@
     "./package.json",
     "./forge.config.ts",
     "*.mts",
-    "vite.renderer.config.mts"
+    "vite.renderer.config.mts",
+    "./src/types.d.ts"
   ]
 }
