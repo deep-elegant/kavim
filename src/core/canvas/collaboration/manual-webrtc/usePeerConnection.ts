@@ -1,8 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  MutableRefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import type { ConnectionState, DataChannelState } from './types';
 
 type DataChannelSetup = (channel: RTCDataChannel) => void;
+
+export const SYNC_CHANNEL_LABEL = 'collab-sync';
+export const FILE_TRANSFER_CHANNEL_LABEL = 'collab-file-transfer';
+export type DataChannelLabel =
+  | typeof SYNC_CHANNEL_LABEL
+  | typeof FILE_TRANSFER_CHANNEL_LABEL;
 
 /**
  * Handles RTCPeerConnection lifecycle for manual WebRTC setup.
@@ -20,22 +33,45 @@ export function usePeerConnection() {
     useState<DataChannelState>('not-initiated');
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
-  const dataChannelRef = useRef<RTCDataChannel | null>(null);
+  const syncChannelRef = useRef<RTCDataChannel | null>(null);
+  const fileTransferChannelRef = useRef<RTCDataChannel | null>(null);
   const candidatesBufferRef = useRef<RTCIceCandidate[]>([]);
-  const dataChannelSetupRef = useRef<DataChannelSetup | null>(null);
+  const dataChannelHandlersRef = useRef<Map<DataChannelLabel, DataChannelSetup | null>>(
+    new Map(),
+  );
 
-  const applyChannelSetup = useCallback((channel: RTCDataChannel) => {
-    dataChannelRef.current = channel;
-    setDataChannelState(channel.readyState as DataChannelState);
-    dataChannelSetupRef.current?.(channel);
-  }, []);
+  const channelRefs = useMemo(
+    () =>
+      new Map<DataChannelLabel, MutableRefObject<RTCDataChannel | null>>([
+        [SYNC_CHANNEL_LABEL, syncChannelRef],
+        [FILE_TRANSFER_CHANNEL_LABEL, fileTransferChannelRef],
+      ]),
+    [fileTransferChannelRef, syncChannelRef],
+  );
+
+  const applyChannelSetup = useCallback(
+    (label: DataChannelLabel, channel: RTCDataChannel) => {
+      const ref = channelRefs.get(label);
+      if (ref) {
+        ref.current = channel;
+      }
+
+      if (label === SYNC_CHANNEL_LABEL) {
+        setDataChannelState(channel.readyState as DataChannelState);
+      }
+
+      dataChannelHandlersRef.current.get(label)?.(channel);
+    },
+    [channelRefs],
+  );
 
   const initializePeerConnection = useCallback(() => {
     if (pcRef.current) {
       pcRef.current.close();
     }
 
-    dataChannelRef.current = null;
+    syncChannelRef.current = null;
+    fileTransferChannelRef.current = null;
     candidatesBufferRef.current = [];
     setLocalOffer('');
     setLocalAnswer('');
@@ -65,8 +101,11 @@ export function usePeerConnection() {
   const createOffer = useCallback(async () => {
     const pc = initializePeerConnection();
 
-    const channel = pc.createDataChannel('chat');
-    applyChannelSetup(channel);
+    const syncChannel = pc.createDataChannel(SYNC_CHANNEL_LABEL);
+    applyChannelSetup(SYNC_CHANNEL_LABEL, syncChannel);
+
+    const fileTransferChannel = pc.createDataChannel(FILE_TRANSFER_CHANNEL_LABEL);
+    applyChannelSetup(FILE_TRANSFER_CHANNEL_LABEL, fileTransferChannel);
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -83,7 +122,15 @@ export function usePeerConnection() {
       const pc = initializePeerConnection();
 
       pc.ondatachannel = (event) => {
-        applyChannelSetup(event.channel);
+        const { label } = event.channel;
+        if (label === SYNC_CHANNEL_LABEL) {
+          applyChannelSetup(SYNC_CHANNEL_LABEL, event.channel);
+          return;
+        }
+
+        if (label === FILE_TRANSFER_CHANNEL_LABEL) {
+          applyChannelSetup(FILE_TRANSFER_CHANNEL_LABEL, event.channel);
+        }
       };
 
       const offer = JSON.parse(offerJson);
@@ -146,23 +193,36 @@ export function usePeerConnection() {
   }, []);
 
   const setDataChannelHandler = useCallback(
-    (handler: DataChannelSetup | null) => {
-      dataChannelSetupRef.current = handler;
+    (label: DataChannelLabel, handler: DataChannelSetup | null) => {
+      if (handler) {
+        dataChannelHandlersRef.current.set(label, handler);
+      } else {
+        dataChannelHandlersRef.current.delete(label);
+      }
 
-      if (handler && dataChannelRef.current) {
-        handler(dataChannelRef.current);
+      const ref = channelRefs.get(label);
+      const channel = ref?.current ?? null;
+      if (handler && channel) {
+        handler(channel);
       }
     },
-    [dataChannelRef],
+    [channelRefs],
   );
 
-  const clearDataChannel = useCallback(() => {
-    dataChannelRef.current = null;
-  }, []);
+  const clearDataChannel = useCallback(
+    (label: DataChannelLabel) => {
+      const ref = channelRefs.get(label);
+      if (ref) {
+        ref.current = null;
+      }
+    },
+    [channelRefs],
+  );
 
   return {
     pcRef,
-    dataChannelRef,
+    syncChannelRef,
+    fileTransferChannelRef,
     localOffer,
     localAnswer,
     localCandidates,
@@ -180,13 +240,14 @@ export function usePeerConnection() {
 }
 
 export function usePeerConnectionDataChannel(
-  setHandler: (handler: DataChannelSetup | null) => void,
+  label: DataChannelLabel,
+  setHandler: (label: DataChannelLabel, handler: DataChannelSetup | null) => void,
   setup: DataChannelSetup,
 ) {
   useEffect(() => {
-    setHandler(setup);
+    setHandler(label, setup);
     return () => {
-      setHandler(null);
+      setHandler(label, null);
     };
-  }, [setHandler, setup]);
+  }, [label, setHandler, setup]);
 }

@@ -7,33 +7,48 @@ vi.mock('../../core/canvas/collaboration/manual-webrtc/usePeerConnection', () =>
   type DataChannelHandler = ((channel: RTCDataChannel) => void) | null;
 
   return {
+    SYNC_CHANNEL_LABEL: 'collab-sync',
+    FILE_TRANSFER_CHANNEL_LABEL: 'collab-file-transfer',
     usePeerConnection() {
       const pcRef = useRef<RTCPeerConnection | null>(null);
-      const dataChannelRef = useRef<RTCDataChannel | null>(
+      const syncChannelRef = useRef<RTCDataChannel | null>(
         (globalThis as any).__TEST_DATA_CHANNEL__ ?? null,
       );
+      const fileTransferChannelRef = useRef<RTCDataChannel | null>(null);
       const [dataChannelState, setDataChannelState] = useState<'not-initiated' | 'open'>('not-initiated');
-      const handlerRef = useRef<DataChannelHandler>(null);
+      const handlerRef = useRef<Map<string, DataChannelHandler>>(new Map());
 
-      useEffect(() => {
-        const channel = (globalThis as any).__TEST_DATA_CHANNEL__ ?? null;
-        if (channel) {
-          dataChannelRef.current = channel;
-          if (handlerRef.current) {
-            handlerRef.current(channel);
+      const setDataChannelHandler = useCallback(
+        (label: string, handler: DataChannelHandler) => {
+          if (handler) {
+            handlerRef.current.set(label, handler);
+          } else {
+            handlerRef.current.delete(label);
           }
-        }
-      }, []);
 
-      const setDataChannelHandler = useCallback((handler: DataChannelHandler) => {
-        handlerRef.current = handler;
-        if (handler && dataChannelRef.current) {
-          handler(dataChannelRef.current);
-        }
-      }, []);
+          if (label === 'collab-sync' && handler) {
+            const channel = (globalThis as any).__TEST_DATA_CHANNEL__ ?? null;
+            syncChannelRef.current = channel;
+            if (channel) {
+              handler(channel);
+            }
+          }
 
-      const clearDataChannel = useCallback(() => {
-        dataChannelRef.current = null;
+          if (label === 'collab-file-transfer' && handler && fileTransferChannelRef.current) {
+            handler(fileTransferChannelRef.current);
+          }
+        },
+        [],
+      );
+
+      const clearDataChannel = useCallback((label: string) => {
+        if (label === 'collab-sync') {
+          syncChannelRef.current = null;
+        }
+
+        if (label === 'collab-file-transfer') {
+          fileTransferChannelRef.current = null;
+        }
       }, []);
 
       const noopAsync = async () => '';
@@ -41,7 +56,8 @@ vi.mock('../../core/canvas/collaboration/manual-webrtc/usePeerConnection', () =>
 
       return {
         pcRef,
-        dataChannelRef,
+        syncChannelRef,
+        fileTransferChannelRef,
         localOffer: '',
         localAnswer: '',
         localCandidates: [] as string[],
@@ -58,18 +74,51 @@ vi.mock('../../core/canvas/collaboration/manual-webrtc/usePeerConnection', () =>
       } as const;
     },
     usePeerConnectionDataChannel(
-      setHandler: (handler: ((channel: RTCDataChannel) => void) | null) => void,
+      label: string,
+      setHandler: (label: string, handler: ((channel: RTCDataChannel) => void) | null) => void,
       setup: (channel: RTCDataChannel) => void,
     ) {
       const React = require('react');
       const { useEffect } = React;
       useEffect(() => {
-        setHandler(setup);
-        return () => setHandler(null);
-      }, [setHandler, setup]);
+        setHandler(label, setup);
+
+        if (label === 'collab-sync') {
+          const channel = (globalThis as any).__TEST_DATA_CHANNEL__ ?? null;
+          if (channel) {
+            setup(channel);
+          }
+        }
+
+        return () => setHandler(label, null);
+      }, [label, setHandler, setup]);
     },
   };
 });
+
+vi.mock(
+  '../../core/canvas/collaboration/manual-webrtc/file-transfer/useFileTransferChannel',
+  () => {
+    return {
+      useFileTransferChannel: () => ({
+        activeTransfers: [],
+        completedTransfers: [],
+        failedTransfers: [],
+        sendFile: vi.fn().mockResolvedValue(null),
+        cancelTransfer: vi.fn(),
+      }),
+    };
+  },
+);
+
+vi.mock('../../core/diagnostics/StatsForNerdsContext', () => ({
+  useStatsForNerds: () => ({
+    setDataChannelBufferedAmount: vi.fn(),
+    recordYjsOutbound: vi.fn(),
+    recordYjsInbound: vi.fn(),
+    setYjsQueueSnapshot: vi.fn(),
+  }),
+}));
 
 import { act, renderHook } from '@testing-library/react';
 import * as Y from 'yjs';

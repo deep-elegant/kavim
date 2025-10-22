@@ -11,12 +11,15 @@ import {
   DATA_CHANNEL_RESUME_THRESHOLD,
 } from './manual-webrtc/types';
 import {
+  FILE_TRANSFER_CHANNEL_LABEL,
+  SYNC_CHANNEL_LABEL,
   usePeerConnection,
   usePeerConnectionDataChannel,
 } from './manual-webrtc/usePeerConnection';
 import { usePresenceSync } from './manual-webrtc/usePresenceSync';
 import { useYjsSync } from './manual-webrtc/useYjsSync';
 import { useStatsForNerds } from '../../diagnostics/StatsForNerdsContext';
+import { useFileTransferChannel } from './manual-webrtc/file-transfer/useFileTransferChannel';
 
 export type {
   CollaboratorInteraction,
@@ -38,7 +41,8 @@ export function useWebRTCManual(doc: Y.Doc) {
 
   const {
     pcRef,
-    dataChannelRef,
+    syncChannelRef,
+    fileTransferChannelRef,
     localOffer,
     localAnswer,
     localCandidates,
@@ -68,7 +72,7 @@ export function useWebRTCManual(doc: Y.Doc) {
   const localFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scheduleBufferDrain = useCallback(() => {
-    const channel = dataChannelRef.current;
+    const channel = syncChannelRef.current;
     if (!channel || channel.readyState !== 'open') {
       return;
     }
@@ -91,14 +95,14 @@ export function useWebRTCManual(doc: Y.Doc) {
     }
 
     isBufferDrainingRef.current = true;
-  }, []);
+  }, [syncChannelRef]);
 
   const sendJSONMessage = useCallback(
     (
       message: ChannelMessage,
       options: { onBackpressure?: () => void; context?: string } = {},
     ): boolean => {
-      const channel = dataChannelRef.current;
+      const channel = syncChannelRef.current;
       if (!channel || channel.readyState !== 'open') {
         return false;
       }
@@ -156,7 +160,7 @@ export function useWebRTCManual(doc: Y.Doc) {
     sendYUpdate,
   } = useYjsSync({
     doc,
-    dataChannelRef,
+    channelRef: syncChannelRef,
     onReceiveChatMessage: handleRemoteChatMessage,
     scheduleBufferDrain,
     sendJSONMessage,
@@ -179,12 +183,12 @@ export function useWebRTCManual(doc: Y.Doc) {
     resetPendingQueue();
     resyncNeededRef.current = true;
 
-    const channel = dataChannelRef.current;
+    const channel = syncChannelRef.current;
     if (channel?.readyState === 'open') {
       sendStateVector();
       resyncNeededRef.current = false;
     }
-  }, [dataChannelRef, doc, resetPendingQueue, sendStateVector]);
+  }, [doc, resetPendingQueue, sendStateVector, syncChannelRef]);
 
   useEffect(() => {
     if (dataChannelState !== 'open') {
@@ -194,7 +198,7 @@ export function useWebRTCManual(doc: Y.Doc) {
 
   const handleBufferedAmountLow = useCallback(() => {
     isBufferDrainingRef.current = false;
-    const channel = dataChannelRef.current;
+    const channel = syncChannelRef.current;
     if (channel) {
       setDataChannelBufferedAmount(channel.bufferedAmount);
     }
@@ -265,7 +269,7 @@ export function useWebRTCManual(doc: Y.Doc) {
         isBufferDrainingRef.current = false;
         setDataChannelBufferedAmount(0);
         clearRemotePresence();
-        clearDataChannel();
+        clearDataChannel(SYNC_CHANNEL_LABEL);
         resetChunkAssembly();
       };
 
@@ -313,6 +317,7 @@ export function useWebRTCManual(doc: Y.Doc) {
     [
       applyYUpdate,
       clearRemotePresence,
+      clearDataChannel,
       flushLocalUpdates,
       flushPendingYUpdates,
       handleBufferedAmountLow,
@@ -323,7 +328,29 @@ export function useWebRTCManual(doc: Y.Doc) {
     ],
   );
 
-  usePeerConnectionDataChannel(setDataChannelHandler, setupDataChannel);
+  usePeerConnectionDataChannel(
+    SYNC_CHANNEL_LABEL,
+    setDataChannelHandler,
+    setupDataChannel,
+  );
+
+  const handleFileTransferChannel = useCallback((channel: RTCDataChannel) => {
+    fileTransferChannelRef.current = channel;
+  }, []);
+
+  usePeerConnectionDataChannel(
+    FILE_TRANSFER_CHANNEL_LABEL,
+    setDataChannelHandler,
+    handleFileTransferChannel,
+  );
+
+  const {
+    activeTransfers,
+    completedTransfers,
+    failedTransfers,
+    sendFile,
+    cancelTransfer,
+  } = useFileTransferChannel({ channelRef: fileTransferChannelRef });
 
   /**
    * Listen for local Yjs document changes and queue for sync.
@@ -353,7 +380,7 @@ export function useWebRTCManual(doc: Y.Doc) {
    */
   const sendMessage = useCallback(
     (message: WebRTCChatMessage) => {
-      const channel = dataChannelRef.current;
+      const channel = syncChannelRef.current;
       if (!channel || channel.readyState !== 'open') {
         console.warn('Data channel not open');
         return false;
@@ -376,12 +403,12 @@ export function useWebRTCManual(doc: Y.Doc) {
 
   const requestSync = useCallback(() => {
     resyncNeededRef.current = true;
-    const channel = dataChannelRef.current;
+    const channel = syncChannelRef.current;
     if (channel?.readyState === 'open') {
       sendStateVector();
       resyncNeededRef.current = false;
     }
-  }, [dataChannelRef, sendStateVector]);
+  }, [sendStateVector, syncChannelRef]);
 
   /**
    * Cleanup on unmount.
@@ -396,11 +423,16 @@ export function useWebRTCManual(doc: Y.Doc) {
       }
 
       flushLocalUpdates();
-      const channel = dataChannelRef.current;
-      if (channel) {
-        channel.close();
+      const syncChannel = syncChannelRef.current;
+      if (syncChannel) {
+        syncChannel.close();
       }
-      clearDataChannel();
+      clearDataChannel(SYNC_CHANNEL_LABEL);
+      const fileTransferChannel = fileTransferChannelRef.current;
+      if (fileTransferChannel) {
+        fileTransferChannel.close();
+      }
+      clearDataChannel(FILE_TRANSFER_CHANNEL_LABEL);
       const pc = pcRef.current;
       if (pc) {
         pc.close();
@@ -410,8 +442,9 @@ export function useWebRTCManual(doc: Y.Doc) {
     };
   }, [
     clearDataChannel,
-    dataChannelRef,
+    fileTransferChannelRef,
     flushLocalUpdates,
+    syncChannelRef,
     pcRef,
     resetChunkAssembly,
     resetPendingQueue,
@@ -433,5 +466,10 @@ export function useWebRTCManual(doc: Y.Doc) {
     messages,
     remotePresenceByClient,
     requestSync,
+    activeTransfers,
+    completedTransfers,
+    failedTransfers,
+    sendFile,
+    cancelTransfer,
   };
 }

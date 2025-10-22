@@ -13,7 +13,7 @@ import { useStatsForNerds } from '../../../diagnostics/StatsForNerdsContext';
 
 interface UseYjsSyncParams {
   doc: Y.Doc;
-  dataChannelRef: MutableRefObject<RTCDataChannel | null>;
+  channelRef: MutableRefObject<RTCDataChannel | null>;
   scheduleBufferDrain: () => void;
   sendJSONMessage: (
     message: ChannelMessage,
@@ -45,7 +45,7 @@ const estimateDecodedSizeFromBase64 = (value: string) => {
 
 export const useYjsSync = ({
   doc,
-  dataChannelRef,
+  channelRef,
   onReceiveChatMessage,
   scheduleBufferDrain,
   sendJSONMessage,
@@ -73,7 +73,7 @@ export const useYjsSync = ({
 
   const sendYUpdate = useCallback(
     (update: Uint8Array): boolean => {
-      const channel = dataChannelRef.current;
+      const channel = channelRef.current;
       const updateCopy = update.slice();
 
       if (!channel || channel.readyState !== 'open') {
@@ -135,11 +135,11 @@ export const useYjsSync = ({
 
       return true;
     },
-    [dataChannelRef, enqueueYUpdate, recordYjsOutbound, sendJSONMessage],
+    [channelRef, enqueueYUpdate, recordYjsOutbound, sendJSONMessage],
   );
 
   const flushPendingYUpdates = useCallback(() => {
-    const channel = dataChannelRef.current;
+    const channel = channelRef.current;
     if (!channel || channel.readyState !== 'open') {
       return;
     }
@@ -162,7 +162,7 @@ export const useYjsSync = ({
         return;
       }
     }
-  }, [dataChannelRef, scheduleBufferDrain, sendYUpdate, updateQueueMetrics]);
+  }, [channelRef, scheduleBufferDrain, sendYUpdate, updateQueueMetrics]);
 
   const applyYUpdate = useCallback(
     (update: Uint8Array) => {
@@ -177,7 +177,7 @@ export const useYjsSync = ({
   );
 
   const sendStateVector = useCallback(() => {
-    const channel = dataChannelRef.current;
+    const channel = channelRef.current;
     if (!channel || channel.readyState !== 'open') {
       return;
     }
@@ -186,7 +186,7 @@ export const useYjsSync = ({
     const message: SyncMessage = { type: 'yjs-sync', vector };
 
     void sendJSONMessage(message, { context: 'Failed to send state vector' });
-  }, [dataChannelRef, doc, sendJSONMessage]);
+  }, [channelRef, doc, sendJSONMessage]);
 
   const handleStringMessage = useCallback(
     (raw: string) => {
