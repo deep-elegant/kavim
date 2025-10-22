@@ -48,7 +48,7 @@ export const SaveModal: React.FC<SaveModalProps> = ({
             <input
               value={saveFileName}
               onChange={(event) => setSaveFileName(event.target.value)}
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              className="border-input bg-background focus:ring-ring w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:ring-2 focus:outline-none"
               placeholder="Enter a file name"
             />
           </label>
@@ -58,19 +58,26 @@ export const SaveModal: React.FC<SaveModalProps> = ({
               <input
                 value={saveFolder}
                 onChange={(event) => setSaveFolder(event.target.value)}
-                className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="border-input bg-background focus:ring-ring flex-1 rounded-md border px-3 py-2 text-sm shadow-sm focus:ring-2 focus:outline-none"
                 placeholder="Choose where to save"
               />
-              <Button type="button" variant="outline" onClick={handleFolderBrowse}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleFolderBrowse}
+              >
                 Browse
               </Button>
             </div>
           </label>
           {folderPickerMessage ? (
-            <p className="text-sm text-muted-foreground">{folderPickerMessage}</p>
+            <p className="text-muted-foreground text-sm">
+              {folderPickerMessage}
+            </p>
           ) : null}
-          <p className="text-xs text-muted-foreground">
-            Projects are saved as <code>.pak</code> archives inside your Documents folder unless an absolute path is provided.
+          <p className="text-muted-foreground text-xs">
+            Projects are saved as <code>.pak</code> archives inside your
+            Documents folder unless an absolute path is provided.
           </p>
         </div>
         <DialogFooter>

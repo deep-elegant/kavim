@@ -1,4 +1,3 @@
-
 /**
  * Type definitions for .pak archive format.
  * - Pak files store canvas state + binary assets in a custom binary format.

@@ -5,14 +5,14 @@ import {
   useMemo,
   useRef,
   useState,
-} from 'react';
+} from "react";
 
-import type { ConnectionState, DataChannelState } from './types';
+import type { ConnectionState, DataChannelState } from "./types";
 
 type DataChannelSetup = (channel: RTCDataChannel) => void;
 
-export const SYNC_CHANNEL_LABEL = 'collab-sync';
-export const FILE_TRANSFER_CHANNEL_LABEL = 'collab-file-transfer';
+export const SYNC_CHANNEL_LABEL = "collab-sync";
+export const FILE_TRANSFER_CHANNEL_LABEL = "collab-file-transfer";
 export type DataChannelLabel =
   | typeof SYNC_CHANNEL_LABEL
   | typeof FILE_TRANSFER_CHANNEL_LABEL;
@@ -25,20 +25,21 @@ export type DataChannelLabel =
  * - Provides hook to hand configured data channel back to caller
  */
 export function usePeerConnection() {
-  const [localOffer, setLocalOffer] = useState<string>('');
-  const [localAnswer, setLocalAnswer] = useState<string>('');
+  const [localOffer, setLocalOffer] = useState<string>("");
+  const [localAnswer, setLocalAnswer] = useState<string>("");
   const [localCandidates, setLocalCandidates] = useState<string[]>([]);
-  const [connectionState, setConnectionState] = useState<ConnectionState>('new');
+  const [connectionState, setConnectionState] =
+    useState<ConnectionState>("new");
   const [dataChannelState, setDataChannelState] =
-    useState<DataChannelState>('not-initiated');
+    useState<DataChannelState>("not-initiated");
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const syncChannelRef = useRef<RTCDataChannel | null>(null);
   const fileTransferChannelRef = useRef<RTCDataChannel | null>(null);
   const candidatesBufferRef = useRef<RTCIceCandidate[]>([]);
-  const dataChannelHandlersRef = useRef<Map<DataChannelLabel, DataChannelSetup | null>>(
-    new Map(),
-  );
+  const dataChannelHandlersRef = useRef<
+    Map<DataChannelLabel, DataChannelSetup | null>
+  >(new Map());
 
   const channelRefs = useMemo(
     () =>
@@ -73,13 +74,13 @@ export function usePeerConnection() {
     syncChannelRef.current = null;
     fileTransferChannelRef.current = null;
     candidatesBufferRef.current = [];
-    setLocalOffer('');
-    setLocalAnswer('');
+    setLocalOffer("");
+    setLocalAnswer("");
     setLocalCandidates([]);
-    setDataChannelState('not-initiated');
+    setDataChannelState("not-initiated");
 
     const pc = new RTCPeerConnection({
-      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
     });
 
     pc.onicecandidate = (event) => {
@@ -104,7 +105,9 @@ export function usePeerConnection() {
     const syncChannel = pc.createDataChannel(SYNC_CHANNEL_LABEL);
     applyChannelSetup(SYNC_CHANNEL_LABEL, syncChannel);
 
-    const fileTransferChannel = pc.createDataChannel(FILE_TRANSFER_CHANNEL_LABEL);
+    const fileTransferChannel = pc.createDataChannel(
+      FILE_TRANSFER_CHANNEL_LABEL,
+    );
     applyChannelSetup(FILE_TRANSFER_CHANNEL_LABEL, fileTransferChannel);
 
     const offer = await pc.createOffer();
@@ -147,7 +150,7 @@ export function usePeerConnection() {
   const createAnswer = useCallback(async () => {
     const pc = pcRef.current;
     if (!pc) {
-      throw new Error('No peer connection. Set remote offer first.');
+      throw new Error("No peer connection. Set remote offer first.");
     }
 
     const answer = await pc.createAnswer();
@@ -163,7 +166,7 @@ export function usePeerConnection() {
   const setRemoteAnswer = useCallback(async (answerJson: string) => {
     const pc = pcRef.current;
     if (!pc) {
-      throw new Error('No peer connection. Create offer first.');
+      throw new Error("No peer connection. Create offer first.");
     }
 
     const answer = JSON.parse(answerJson);
@@ -178,7 +181,7 @@ export function usePeerConnection() {
   const addCandidate = useCallback(async (candidateJson: string) => {
     const pc = pcRef.current;
     if (!pc) {
-      throw new Error('No peer connection initialized.');
+      throw new Error("No peer connection initialized.");
     }
 
     const candidateObj = JSON.parse(candidateJson);
@@ -241,7 +244,10 @@ export function usePeerConnection() {
 
 export function usePeerConnectionDataChannel(
   label: DataChannelLabel,
-  setHandler: (label: DataChannelLabel, handler: DataChannelSetup | null) => void,
+  setHandler: (
+    label: DataChannelLabel,
+    handler: DataChannelSetup | null,
+  ) => void,
   setup: DataChannelSetup,
 ) {
   useEffect(() => {

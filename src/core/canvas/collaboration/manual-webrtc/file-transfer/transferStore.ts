@@ -1,6 +1,6 @@
-import { MutableRefObject, useCallback, useRef, useState } from 'react';
+import { MutableRefObject, useCallback, useRef, useState } from "react";
 
-import { FileTransfer } from './types';
+import { FileTransfer } from "./types";
 
 export interface TransferStore {
   transfersRef: MutableRefObject<Map<string, FileTransfer>>;
@@ -17,7 +17,9 @@ export interface TransferStore {
 
 export const useTransferStore = (): TransferStore => {
   const [activeTransfers, setActiveTransfers] = useState<FileTransfer[]>([]);
-  const [completedTransfers, setCompletedTransfers] = useState<FileTransfer[]>([]);
+  const [completedTransfers, setCompletedTransfers] = useState<FileTransfer[]>(
+    [],
+  );
   const [failedTransfers, setFailedTransfers] = useState<FileTransfer[]>([]);
 
   const transfersRef = useRef<Map<string, FileTransfer>>(new Map());
@@ -28,12 +30,12 @@ export const useTransferStore = (): TransferStore => {
     const nextFailed: FileTransfer[] = [];
 
     transfersRef.current.forEach((transfer) => {
-      if (transfer.status === 'completed') {
+      if (transfer.status === "completed") {
         nextCompleted.push(transfer);
         return;
       }
 
-      if (transfer.status === 'failed' || transfer.status === 'cancelled') {
+      if (transfer.status === "failed" || transfer.status === "cancelled") {
         nextFailed.push(transfer);
         return;
       }
@@ -63,7 +65,10 @@ export const useTransferStore = (): TransferStore => {
   );
 
   const updateTransfer = useCallback(
-    (id: string, updater: (previous: FileTransfer | null) => FileTransfer | null) => {
+    (
+      id: string,
+      updater: (previous: FileTransfer | null) => FileTransfer | null,
+    ) => {
       const previous = transfersRef.current.get(id) ?? null;
       const next = updater(previous);
 

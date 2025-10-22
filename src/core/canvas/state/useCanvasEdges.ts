@@ -6,11 +6,11 @@ import {
   useSyncExternalStore,
   type Dispatch,
   type SetStateAction,
-} from 'react';
-import type { Edge } from '@xyflow/react';
-import type * as Y from 'yjs';
-import type { EditableEdgeData } from '../edges/EditableEdge';
-import { arraysShallowEqual } from './arrayUtils';
+} from "react";
+import type { Edge } from "@xyflow/react";
+import type * as Y from "yjs";
+import type { EditableEdgeData } from "../edges/EditableEdge";
+import { arraysShallowEqual } from "./arrayUtils";
 
 /**
  * Handles for managing canvas edges synchronized with Yjs CRDT.
@@ -33,7 +33,7 @@ export type CanvasEdgeHandles = {
  * - Maintains ordered edge array and fast lookup map for incremental updates
  * - Prevents redundant re-renders by comparing arrays before updating state
  * - Distinguishes local changes from remote changes via transaction origin
- * 
+ *
  * @param canvasDoc - Yjs document for transactional updates
  * @param edgeOrder - Yjs array maintaining edge display order
  * @param edgesMap - Yjs map storing edge data by ID
@@ -54,7 +54,10 @@ export const useCanvasEdges = ({
   const listenersRef = useRef(new Set<() => void>());
   const shouldSyncFromDocRef = useRef(true);
 
-  const compareArrays = useCallback(arraysShallowEqual, []);
+  const compareArrays = useCallback(
+    <T>(a: readonly T[], b: readonly T[]) => arraysShallowEqual(a, b),
+    [],
+  );
 
   /**
    * Rebuilds edge array from Yjs structures and updates lookup cache.
@@ -128,7 +131,7 @@ export const useCanvasEdges = ({
   useEffect(() => {
     const handleEdgeOrderChange = (event: Y.YArrayEvent<string>) => {
       // Skip our own changes - local state is already updated before we write to Yjs
-      if (event.transaction?.origin === 'canvas') {
+      if (event.transaction?.origin === "canvas") {
         return;
       }
 
@@ -140,9 +143,11 @@ export const useCanvasEdges = ({
       }
     };
 
-    const handleEdgesMapChange = (event: Y.YMapEvent<Edge<EditableEdgeData>>) => {
+    const handleEdgesMapChange = (
+      event: Y.YMapEvent<Edge<EditableEdgeData>>,
+    ) => {
       // Skip our own changes - local state is already updated before we write to Yjs
-      if (event.transaction?.origin === 'canvas') {
+      if (event.transaction?.origin === "canvas") {
         return;
       }
 
@@ -184,14 +189,18 @@ export const useCanvasEdges = ({
    * - Computes minimal changes to avoid unnecessary network traffic
    * - Deletes removed edges, updates modified ones, preserves unchanged ones
    */
-  const setEdges = useCallback<Dispatch<SetStateAction<Edge<EditableEdgeData>[]>>>(
+  const setEdges = useCallback<
+    Dispatch<SetStateAction<Edge<EditableEdgeData>[]>>
+  >(
     (updater) => {
       const current = edgesRef.current;
       const next =
-        typeof updater === 'function'
-          ? (updater as (prevState: Edge<EditableEdgeData>[]) => Edge<EditableEdgeData>[])(
-              current,
-            )
+        typeof updater === "function"
+          ? (
+              updater as (
+                prevState: Edge<EditableEdgeData>[],
+              ) => Edge<EditableEdgeData>[]
+            )(current)
           : updater;
 
       if (!Array.isArray(next)) {
@@ -231,7 +240,7 @@ export const useCanvasEdges = ({
             edgesMap.set(edge.id, edge);
           }
         });
-      }, 'canvas');
+      }, "canvas");
     },
     [canvasDoc, edgeOrder, edgesMap, updateLocalEdgesState],
   );

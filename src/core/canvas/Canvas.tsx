@@ -6,7 +6,7 @@ import React, {
   useState,
   type ComponentType,
   type MouseEvent as ReactMouseEvent,
-} from 'react';
+} from "react";
 import {
   ReactFlow,
   MiniMap,
@@ -24,7 +24,7 @@ import {
   type NodeChange,
   type Node,
   type OnSelectionChangeParams,
-} from '@xyflow/react';
+} from "@xyflow/react";
 import {
   StickyNote,
   Type,
@@ -34,62 +34,68 @@ import {
   Image as ImageIcon,
   WandSparklesIcon,
   Circle,
-} from 'lucide-react';
+} from "lucide-react";
 
-import '@xyflow/react/dist/style.css';
+import "@xyflow/react/dist/style.css";
 
-import StickyNoteNode, { stickyNoteDrawable } from './nodes/StickyNoteNode';
-import AiNode, { aiNodeDrawable } from './nodes/AINode';
-import ShapeNodeComponent, { shapeDrawable } from './nodes/ShapeNode';
-import TextNodeComponent, { textDrawable } from './nodes/TextNode';
-import ImageNode from './nodes/ImageNode';
-import { type DrawableNode } from './nodes/DrawableNode';
-import { Button } from '@/components/ui/button';
+import StickyNoteNode, { stickyNoteDrawable } from "./nodes/StickyNoteNode";
+import AiNode, { aiNodeDrawable } from "./nodes/AINode";
+import ShapeNodeComponent, { shapeDrawable } from "./nodes/ShapeNode";
+import TextNodeComponent, { textDrawable } from "./nodes/TextNode";
+import ImageNode from "./nodes/ImageNode";
+import { type DrawableNode } from "./nodes/DrawableNode";
+import { Button } from "@/components/ui/button";
 import EditableEdge, {
   createDefaultEditableEdgeData,
   type EditableEdgeData,
-} from './edges/EditableEdge';
-import { useCanvasData } from './CanvasDataContext';
-import { RemoteCursor } from './collaboration/RemoteCursor';
-import { RemoteNodePresenceProvider } from './collaboration/RemoteNodePresenceContext';
-import { useCanvasCollaboration } from './collaboration/useCanvasCollaboration';
-import { useCanvasCopyPaste } from './hooks/useCanvasCopyPaste';
-import useCanvasImageNodes, { getFileName, isImageFile } from './hooks/useCanvasImageNodes';
-import useImageAssetTransfers from './hooks/useImageAssetTransfers';
-import type { CanvasNode, ToolId } from './types';
-import { StatsForNerdsOverlay } from '@/components/diagnostics/StatsForNerdsOverlay';
-import { usePakAssets } from '@/core/pak/usePakAssets';
-import { useWebRTC } from './collaboration/WebRTCContext';
-
+} from "./edges/EditableEdge";
+import { useCanvasData } from "./CanvasDataContext";
+import { RemoteCursor } from "./collaboration/RemoteCursor";
+import { RemoteNodePresenceProvider } from "./collaboration/RemoteNodePresenceContext";
+import { useCanvasCollaboration } from "./collaboration/useCanvasCollaboration";
+import { useCanvasCopyPaste } from "./hooks/useCanvasCopyPaste";
+import useCanvasImageNodes, {
+  getFileName,
+  isImageFile,
+} from "./hooks/useCanvasImageNodes";
+import useImageAssetTransfers from "./hooks/useImageAssetTransfers";
+import type { CanvasNode, ToolId } from "./types";
+import { StatsForNerdsOverlay } from "@/components/diagnostics/StatsForNerdsOverlay";
+import { usePakAssets } from "@/core/pak/usePakAssets";
+import { useWebRTC } from "./collaboration/WebRTCContext";
 
 // Available drawing tools in the toolbar
-const tools: { id: ToolId; label: string; icon: ComponentType<{ className?: string }> }[] = [
-  { id: 'sticky-note', label: 'Sticky Note', icon: StickyNote },
-  { id: 'shape', label: 'Shape', icon: Circle },
-  { id: 'prompt-node', label: 'Prompt Node', icon: WandSparklesIcon },
-  { id: 'text', label: 'Text', icon: Type },
-  { id: 'image', label: 'Image', icon: ImageIcon },
+const tools: {
+  id: ToolId;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+}[] = [
+  { id: "sticky-note", label: "Sticky Note", icon: StickyNote },
+  { id: "shape", label: "Shape", icon: Circle },
+  { id: "prompt-node", label: "Prompt Node", icon: WandSparklesIcon },
+  { id: "text", label: "Text", icon: Type },
+  { id: "image", label: "Image", icon: ImageIcon },
 ];
 
 // ReactFlow node type mapping
 const nodeTypes = {
-  'sticky-note': StickyNoteNode,
-  'shape-node': ShapeNodeComponent,
-  'text-node': TextNodeComponent,
-  'ai-node': AiNode,
-  'image-node': ImageNode,
+  "sticky-note": StickyNoteNode,
+  "shape-node": ShapeNodeComponent,
+  "text-node": TextNodeComponent,
+  "ai-node": AiNode,
+  "image-node": ImageNode,
 };
 
 // Drawable tools implement mouse-based drawing (drag to create)
 const drawableNodeTools: Partial<Record<ToolId, DrawableNode>> = {
-  'sticky-note': stickyNoteDrawable,
+  "sticky-note": stickyNoteDrawable,
   shape: shapeDrawable,
   text: textDrawable,
-  'prompt-node': aiNodeDrawable,
+  "prompt-node": aiNodeDrawable,
 };
 
 // Tools that support click-and-drag creation
-const drawingTools: ToolId[] = ['sticky-note', 'shape', 'text', 'prompt-node'];
+const drawingTools: ToolId[] = ["sticky-note", "shape", "text", "prompt-node"];
 
 /**
  * Main canvas component for the infinite collaborative whiteboard.
@@ -170,7 +176,7 @@ const CanvasInner = () => {
         addEdge<EditableEdgeData>(
           {
             ...params,
-            type: 'editable', // This should be a custom edge type
+            type: "editable", // This should be a custom edge type
             data: createDefaultEditableEdgeData(),
             deletable: true,
             reconnectable: true,
@@ -265,7 +271,7 @@ const CanvasInner = () => {
   // Image tool opens file picker, other tools toggle active state
   const handleToolSelect = useCallback(
     (id: ToolId) => {
-      if (id === 'image') {
+      if (id === "image") {
         setSelectedTool(null);
         void handleAddImageFromDialog();
         return;
@@ -279,13 +285,18 @@ const CanvasInner = () => {
   // Starts drawing operation when mouse pressed with drawing tool active
   const handlePaneMouseDown = useCallback(
     (event: ReactMouseEvent) => {
-      const toolImpl = selectedTool ? drawableNodeTools[selectedTool] : undefined;
+      const toolImpl = selectedTool
+        ? drawableNodeTools[selectedTool]
+        : undefined;
       if (!toolImpl || event.button !== 0) {
         return;
       }
 
       event.preventDefault();
-      const flowPosition = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const flowPosition = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
       const nodeId = crypto.randomUUID();
 
       const newNode = toolImpl.onPaneMouseDown(nodeId, flowPosition);
@@ -302,7 +313,10 @@ const CanvasInner = () => {
   // Updates node dimensions as user drags during creation
   const handlePaneMouseMove = useCallback(
     (event: ReactMouseEvent) => {
-      const current = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const current = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
       // Broadcast cursor position to remote collaborators
       collaborationPaneMouseMove(current);
 
@@ -331,7 +345,10 @@ const CanvasInner = () => {
   // Tracks cursor for remote collaborators (even when not drawing)
   const handleWrapperMouseMove = useCallback(
     (event: ReactMouseEvent) => {
-      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+      const position = screenToFlowPosition({
+        x: event.clientX,
+        y: event.clientY,
+      });
       collaborationPaneMouseMove(position);
     },
     [collaborationPaneMouseMove, screenToFlowPosition],
@@ -367,7 +384,8 @@ const CanvasInner = () => {
     setSelectedTool(null);
   }, [selectedTool, setNodes]);
 
-  const isDrawingToolSelected = selectedTool != null && drawingTools.includes(selectedTool);
+  const isDrawingToolSelected =
+    selectedTool != null && drawingTools.includes(selectedTool);
 
   // Broadcasts which node user has selected to remote collaborators
   const handleSelectionChange = useCallback(
@@ -385,7 +403,9 @@ const CanvasInner = () => {
 
   // Broadcasts typing state so remote users see who's editing what
   useEffect(() => {
-    const typingNode = nodes.find((node) => node.data && (node.data as { isTyping?: boolean }).isTyping);
+    const typingNode = nodes.find(
+      (node) => node.data && (node.data as { isTyping?: boolean }).isTyping,
+    );
     const typingNodeId = typingNode?.id ?? null;
 
     if (lastTypingNodeRef.current === typingNodeId) {
@@ -416,7 +436,7 @@ const CanvasInner = () => {
   return (
     <div
       className="relative"
-      style={{ height: '100%', width: '100%' }}
+      style={{ height: "100%", width: "100%" }}
       ref={reactFlowWrapperRef}
       onPaste={handlePaste}
       onMouseMove={handleWrapperMouseMove}
@@ -442,11 +462,17 @@ const CanvasInner = () => {
           selectionOnDrag={!isDrawingToolSelected}
           nodeTypes={nodeTypes}
           edgesReconnectable
-          defaultEdgeOptions={{ type: 'editable', deletable: true, reconnectable: true }}
-          deleteKeyCode={['Delete', 'Backspace']}
+          defaultEdgeOptions={{
+            type: "editable",
+            deletable: true,
+            reconnectable: true,
+          }}
+          deleteKeyCode={["Delete", "Backspace"]}
           connectionRadius={50}
-          className={isDrawingToolSelected ? 'cursor-crosshair' : undefined}
-          style={{ cursor: isDrawingToolSelected ? 'cursor-crosshair' : undefined }}
+          className={isDrawingToolSelected ? "cursor-crosshair" : undefined}
+          style={{
+            cursor: isDrawingToolSelected ? "cursor-crosshair" : undefined,
+          }}
           onSelectionChange={handleSelectionChange}
         >
           <MiniMap />
@@ -457,7 +483,7 @@ const CanvasInner = () => {
             showFitView={false}
             orientation="horizontal"
           >
-            <div className="flex flex-row items-center gap-2 rounded-lg bg-background/95 p-2 shadow-lg">
+            <div className="bg-background/95 flex flex-row items-center gap-2 rounded-lg p-2 shadow-lg">
               <Button
                 onClick={() => zoomIn()}
                 aria-label="zoom in"
@@ -483,7 +509,7 @@ const CanvasInner = () => {
               >
                 <Maximize className="h-5 w-5" />
               </Button>
-              <div className="mx-1 h-6 border-r border-border" />
+              <div className="border-border mx-1 h-6 border-r" />
               {tools.map(({ id, label, icon: Icon }) => (
                 <Button
                   key={id}
@@ -503,7 +529,7 @@ const CanvasInner = () => {
       </RemoteNodePresenceProvider>
 
       {/* Remote cursor overlay - positioned relative to the canvas wrapper */}
-      {dataChannelState === 'open' &&
+      {dataChannelState === "open" &&
         remoteCollaborators.map((collaborator) =>
           collaborator.position ? (
             <RemoteCursor

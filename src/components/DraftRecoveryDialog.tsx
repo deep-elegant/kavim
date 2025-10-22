@@ -56,21 +56,22 @@ export const DraftRecoveryDialog: React.FC<DraftRecoveryDialogProps> = ({
         <DialogHeader>
           <DialogTitle>Restore unsaved work</DialogTitle>
           <DialogDescription>
-            We found unfinished projects saved as drafts. Choose a draft to resume or discard it.
+            We found unfinished projects saved as drafts. Choose a draft to
+            resume or discard it.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           {drafts.map((draft) => (
             <div
               key={draft.id}
-              className="flex flex-col gap-2 rounded-md border border-border bg-muted/30 p-3"
+              className="border-border bg-muted/30 flex flex-col gap-2 rounded-md border p-3"
             >
               <div className="flex items-center justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">
                     {draft.projectName ?? "Untitled draft"}
                   </p>
-                  <p className="truncate text-xs text-muted-foreground">
+                  <p className="text-muted-foreground truncate text-xs">
                     Updated {formatTimestamp(draft.updatedAt)}
                   </p>
                 </div>
@@ -93,14 +94,16 @@ export const DraftRecoveryDialog: React.FC<DraftRecoveryDialogProps> = ({
                 </div>
               </div>
               {draft.filePath ? (
-                <p className="truncate text-xs text-muted-foreground">
+                <p className="text-muted-foreground truncate text-xs">
                   Last saved to {draft.filePath}
                 </p>
               ) : null}
             </div>
           ))}
           {drafts.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No drafts available.</p>
+            <p className="text-muted-foreground text-sm">
+              No drafts available.
+            </p>
           ) : null}
         </div>
         <DialogFooter>

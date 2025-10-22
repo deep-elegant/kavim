@@ -11,7 +11,7 @@ const mimeTypes: Record<string, string> = {
 const extractExtension = (assetPath: string) => {
   const lastDotIndex = assetPath.lastIndexOf(".");
   if (lastDotIndex < 0) {
-    return '';
+    return "";
   }
 
   return assetPath.slice(lastDotIndex).toLowerCase();
@@ -19,7 +19,7 @@ const extractExtension = (assetPath: string) => {
 
 export const guessMimeType = (assetPath: string) => {
   const extension = extractExtension(assetPath);
-  return mimeTypes[extension] ?? 'application/octet-stream';
+  return mimeTypes[extension] ?? "application/octet-stream";
 };
 
 export default guessMimeType;

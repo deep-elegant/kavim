@@ -96,10 +96,12 @@ export const createPak = async (
     const indexEntries: PakIndexEntry[] = [];
     let currentOffset = headerSize; // Start after header
 
-    const normalizedFiles: PakFileDescriptor[] = files.map(({ path: filePath, data }) => ({
-      path: sanitizeAssetPath(filePath),
-      data: toBuffer(data),
-    }));
+    const normalizedFiles: PakFileDescriptor[] = files.map(
+      ({ path: filePath, data }) => ({
+        path: sanitizeAssetPath(filePath),
+        data: toBuffer(data),
+      }),
+    );
 
     // Write all files sequentially, tracking their offsets
     for (const file of normalizedFiles) {

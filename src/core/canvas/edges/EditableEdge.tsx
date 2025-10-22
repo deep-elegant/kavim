@@ -4,7 +4,7 @@ import React, {
   useMemo,
   type PointerEvent as ReactPointerEvent,
   type MouseEvent as ReactMouseEvent,
-} from 'react';
+} from "react";
 import {
   useReactFlow,
   useStoreApi,
@@ -12,24 +12,24 @@ import {
   type EdgeProps,
   type XYPosition,
   EdgeLabelRenderer,
-} from '@xyflow/react';
-import { ArrowLeft, ArrowRight, Minus } from 'lucide-react';
+} from "@xyflow/react";
+import { ArrowLeft, ArrowRight, Minus } from "lucide-react";
 
 import {
   TiptapToolbar,
   type ToolbarItem,
-} from '@/components/ui/minimal-tiptap/TiptapToolbar';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+} from "@/components/ui/minimal-tiptap/TiptapToolbar";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   SimpleColorPicker,
   type ColorStyle,
-} from '@/components/ui/simple-color-picker';
+} from "@/components/ui/simple-color-picker";
 
 /** Determines what to show at edge endpoints */
-export type EdgeMarkerType = 'none' | 'arrow';
+export type EdgeMarkerType = "none" | "arrow";
 
 /** Visual style of the edge line */
-export type EdgeLineStyle = 'regular' | 'dashed' | 'bolder';
+export type EdgeLineStyle = "regular" | "dashed" | "bolder";
 
 /** Data stored per edge for customization and spline control */
 export type EditableEdgeData = {
@@ -44,9 +44,9 @@ type EditableEdgeProps = EdgeProps<EditableEdgeData>;
 
 type Point = XYPosition;
 
-const DEFAULT_STROKE = '#000000';
-const DEFAULT_MARKER: EdgeMarkerType = 'none';
-const DEFAULT_STYLE_TYPE: EdgeLineStyle = 'regular';
+const DEFAULT_STROKE = "#000000";
+const DEFAULT_MARKER: EdgeMarkerType = "none";
+const DEFAULT_STYLE_TYPE: EdgeLineStyle = "regular";
 const CONTROL_POINT_RADIUS = 6;
 // Larger hit area makes control points easier to grab
 const CONTROL_POINT_HIT_RADIUS = 14;
@@ -55,8 +55,8 @@ const SPLINE_TENSION = 1;
 const EDGE_TOOLBAR_VERTICAL_OFFSET = 32;
 
 // SVG paths for arrow markers pointing left and right
-const ARROW_HEAD_LEFT = 'M12,0 L12,12 L0,6 z';
-const ARROW_HEAD_RIGHT = 'M0,0 L0,12 L12,6 z';
+const ARROW_HEAD_LEFT = "M12,0 L12,12 L0,6 z";
+const ARROW_HEAD_RIGHT = "M0,0 L0,12 L12,6 z";
 
 /** Factory for initial edge data with sensible defaults */
 export const createDefaultEditableEdgeData = (): EditableEdgeData => ({
@@ -107,7 +107,7 @@ const distancePointToSegment = (p: Point, a: Point, b: Point) => {
  */
 const buildSmoothPath = (points: Point[]) => {
   if (points.length === 0) {
-    return '';
+    return "";
   }
 
   if (points.length === 1) {
@@ -137,7 +137,7 @@ const buildSmoothPath = (points: Point[]) => {
     pathCommands.push(`C${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`);
   }
 
-  return pathCommands.join(' ');
+  return pathCommands.join(" ");
 };
 
 /**
@@ -166,7 +166,10 @@ const EditableEdge = memo(
 
     // Determine arrow icon orientation based on connection direction
     const isSourceLeft = sourceX < targetX;
-    let [sourceMarkerPath, targetMarkerPath] = [ARROW_HEAD_LEFT, ARROW_HEAD_RIGHT];
+    const [sourceMarkerPath, targetMarkerPath] = [
+      ARROW_HEAD_LEFT,
+      ARROW_HEAD_RIGHT,
+    ];
 
     const controlPoints = data?.controlPoints ?? [];
     const sourceMarker = data?.sourceMarker ?? DEFAULT_MARKER;
@@ -186,14 +189,16 @@ const EditableEdge = memo(
 
     const path = useMemo(() => buildSmoothPath(points), [points]);
 
-    const showSourceArrow = sourceMarker === 'arrow';
-    const showTargetArrow = targetMarker === 'arrow';
-    const strokeDasharray = styleType === 'dashed' ? '8 6' : undefined;
-    const baseStrokeWidth = styleType === 'bolder' ? 4 : 2;
+    const showSourceArrow = sourceMarker === "arrow";
+    const showTargetArrow = targetMarker === "arrow";
+    const strokeDasharray = styleType === "dashed" ? "8 6" : undefined;
+    const baseStrokeWidth = styleType === "bolder" ? 4 : 2;
     const strokeWidth = selected ? baseStrokeWidth + 1 : baseStrokeWidth;
     const markerStartId = `${id}-marker-start`;
     const markerEndId = `${id}-marker-end`;
-    const markerStartUrl = showSourceArrow ? `url(#${markerStartId})` : undefined;
+    const markerStartUrl = showSourceArrow
+      ? `url(#${markerStartId})`
+      : undefined;
     const markerEndUrl = showTargetArrow ? `url(#${markerEndId})` : undefined;
 
     // Position toolbar above the highest point (or center if multiple at same height)
@@ -338,15 +343,19 @@ const EditableEdge = memo(
     );
 
     const edgeToolbarItems = useMemo<ToolbarItem[]>(() => {
-      const [SourceArrowIcon, TargetArrowIcon] = isSourceLeft ? [ArrowLeft, ArrowRight] : [ArrowRight, ArrowLeft];
+      const [SourceArrowIcon, TargetArrowIcon] = isSourceLeft
+        ? [ArrowLeft, ArrowRight]
+        : [ArrowRight, ArrowLeft];
 
       return [
         {
-          type: 'custom',
-          id: 'source-marker',
+          type: "custom",
+          id: "source-marker",
           render: () => (
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground">Source</span>
+              <span className="text-muted-foreground text-xs font-medium">
+                Source
+              </span>
               <ToggleGroup
                 type="single"
                 value={sourceMarker}
@@ -366,11 +375,13 @@ const EditableEdge = memo(
           ),
         },
         {
-          type: 'custom',
-          id: 'target-marker',
+          type: "custom",
+          id: "target-marker",
           render: () => (
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground">Target</span>
+              <span className="text-muted-foreground text-xs font-medium">
+                Target
+              </span>
               <ToggleGroup
                 type="single"
                 value={targetMarker}
@@ -389,13 +400,15 @@ const EditableEdge = memo(
             </div>
           ),
         },
-        { type: 'separator', id: 'edge-toolbar-separator-1' },
+        { type: "separator", id: "edge-toolbar-separator-1" },
         {
-          type: 'custom',
-          id: 'style-type',
+          type: "custom",
+          id: "style-type",
           render: () => (
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground">Style</span>
+              <span className="text-muted-foreground text-xs font-medium">
+                Style
+              </span>
               <ToggleGroup
                 type="single"
                 value={styleType}
@@ -411,15 +424,17 @@ const EditableEdge = memo(
             </div>
           ),
         },
-        { type: 'separator', id: 'edge-toolbar-separator-2' },
+        { type: "separator", id: "edge-toolbar-separator-2" },
         {
-          type: 'custom',
-          id: 'edge-color',
+          type: "custom",
+          id: "edge-color",
           render: () => (
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-muted-foreground">Color</span>
+              <span className="text-muted-foreground text-xs font-medium">
+                Color
+              </span>
               <SimpleColorPicker
-                color={{ background: edgeColor, border: '', text: '' }}
+                color={{ background: edgeColor, border: "", text: "" }}
                 setColor={handleColorChange}
               />
             </div>
@@ -475,14 +490,14 @@ const EditableEdge = memo(
           }
 
           element.releasePointerCapture(pointerId);
-          window.removeEventListener('pointermove', handlePointerMove);
-          window.removeEventListener('pointerup', handlePointerUp);
-          window.removeEventListener('pointercancel', handlePointerUp);
+          window.removeEventListener("pointermove", handlePointerMove);
+          window.removeEventListener("pointerup", handlePointerUp);
+          window.removeEventListener("pointercancel", handlePointerUp);
         };
 
-        window.addEventListener('pointermove', handlePointerMove);
-        window.addEventListener('pointerup', handlePointerUp);
-        window.addEventListener('pointercancel', handlePointerUp);
+        window.addEventListener("pointermove", handlePointerMove);
+        window.addEventListener("pointerup", handlePointerUp);
+        window.addEventListener("pointercancel", handlePointerUp);
       },
       [screenToFlowPosition, updateControlPoints],
     );
@@ -544,7 +559,14 @@ const EditableEdge = memo(
         const { addSelectedEdges } = store.getState();
         addSelectedEdges([id]);
       },
-      [controlPoints.length, id, points, screenToFlowPosition, store, updateControlPoints],
+      [
+        controlPoints.length,
+        id,
+        points,
+        screenToFlowPosition,
+        store,
+        updateControlPoints,
+      ],
     );
 
     return (
@@ -600,7 +622,7 @@ const EditableEdge = memo(
             stroke="transparent"
             strokeWidth={interactionWidth}
             onDoubleClick={handlePathDoubleClick}
-            style={{ cursor: 'pointer' }}
+            style={{ cursor: "pointer" }}
           />
           {/* Render draggable control points when selected */}
           {selected &&
@@ -618,7 +640,7 @@ const EditableEdge = memo(
                   onPointerDown={(event) =>
                     handleControlPointerDown(event, index)
                   }
-                  style={{ cursor: 'grab' }}
+                  style={{ cursor: "grab" }}
                 />
                 {/* Visible control point circle */}
                 <circle
@@ -634,7 +656,7 @@ const EditableEdge = memo(
                   onDoubleClick={(event) =>
                     handleControlDoubleClick(event, index)
                   }
-                  style={{ cursor: 'grab' }}
+                  style={{ cursor: "grab" }}
                 />
               </g>
             ))}
@@ -644,9 +666,9 @@ const EditableEdge = memo(
           <EdgeLabelRenderer>
             <div
               style={{
-                position: 'absolute',
+                position: "absolute",
                 transform: `translate(-50%, -100%) translate(${toolbarPosition.x}px, ${toolbarPosition.y}px)`,
-                pointerEvents: 'all',
+                pointerEvents: "all",
                 zIndex: 1000,
               }}
               onPointerDown={(event) => event.stopPropagation()}
@@ -661,6 +683,6 @@ const EditableEdge = memo(
   },
 );
 
-EditableEdge.displayName = 'EditableEdge';
+EditableEdge.displayName = "EditableEdge";
 
 export default EditableEdge;

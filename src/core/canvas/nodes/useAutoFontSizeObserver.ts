@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useLayoutEffect } from 'react';
-import type { Editor } from '@tiptap/react';
+import { useCallback, useEffect, useLayoutEffect } from "react";
+import type { Editor } from "@tiptap/react";
 
-import type { FontSizeSetting } from '@/components/ui/minimal-tiptap/FontSizePlugin';
+import type { FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
 
 export interface UseAutoFontSizeObserverOptions {
   editor: Editor | null;
@@ -31,11 +31,11 @@ export const useAutoFontSizeObserver = ({
   maxSize,
 }: UseAutoFontSizeObserverOptions) => {
   const measure = useCallback(() => {
-    if (!editor || typeof editor.commands.updateAutoFontSize !== 'function') {
+    if (!editor || typeof editor.commands.updateAutoFontSize !== "function") {
       return;
     }
 
-    if (fontSize !== 'auto') {
+    if (fontSize !== "auto") {
       return; // Manual mode: user controls font size explicitly
     }
 
@@ -89,11 +89,11 @@ export const useAutoFontSizeObserver = ({
   }, [measure, html, fontSize, container, measurement]);
 
   useEffect(() => {
-    if (!editor || fontSize !== 'auto') {
+    if (!editor || fontSize !== "auto") {
       return;
     }
 
-    if (!container || typeof ResizeObserver === 'undefined') {
+    if (!container || typeof ResizeObserver === "undefined") {
       return;
     }
 

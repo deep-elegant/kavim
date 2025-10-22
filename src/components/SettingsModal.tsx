@@ -78,22 +78,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   handleSettingsSave,
 }) => {
   // Track visibility state for password fields (local UI state only)
-  const [visibleProviders, setVisibleProviders] = React.useState<ProviderVisibilityMap>(
-    () => createInitialVisibilityMap(),
+  const [visibleProviders, setVisibleProviders] =
+    React.useState<ProviderVisibilityMap>(() => createInitialVisibilityMap());
+  const [visibleGateways, setVisibleGateways] =
+    React.useState<GatewayVisibilityMap>(() =>
+      createInitialGatewayVisibilityMap(),
+    );
+  const [activeTab, setActiveTab] = React.useState<"providers" | "gateways">(
+    "providers",
   );
-  const [visibleGateways, setVisibleGateways] = React.useState<GatewayVisibilityMap>(
-    () => createInitialGatewayVisibilityMap(),
-  );
-  const [activeTab, setActiveTab] = React.useState<
-    'providers' | 'gateways'
-  >('providers');
 
   // Reset UI state when modal closes to avoid leaking visible passwords
   React.useEffect(() => {
     if (!isOpen) {
       setVisibleProviders(createInitialVisibilityMap());
       setVisibleGateways(createInitialGatewayVisibilityMap());
-      setActiveTab('providers');
+      setActiveTab("providers");
     }
   }, [isOpen]);
 
@@ -116,37 +116,45 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   /** Renders the provider API keys tab with individual text inputs. */
   const renderProviderTab = () => (
     <div className="space-y-2">
-      {AI_PROVIDER_METADATA.map(({ value: provider, label, inputPlaceholder }) => {
-        const isVisible = visibleProviders[provider];
-        const providerKey = providerKeys[provider] ?? '';
+      {AI_PROVIDER_METADATA.map(
+        ({ value: provider, label, inputPlaceholder }) => {
+          const isVisible = visibleProviders[provider];
+          const providerKey = providerKeys[provider] ?? "";
 
-        return (
-          <label key={provider} className="flex flex-col gap-1 text-sm">
-            {label} API Key
-            <div className="relative">
-              <input
-                value={providerKey}
-                onChange={(event) => setProviderKey(provider, event.target.value)}
-                type={isVisible ? 'text' : 'password'}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-                placeholder={inputPlaceholder}
-              />
-              <button
-                type="button"
-                onClick={() => toggleProviderVisibility(provider)}
-                className="absolute inset-y-0 right-2 flex items-center text-muted-foreground hover:text-foreground"
-                aria-label={
-                  isVisible
-                    ? `Hide ${label} API key`
-                    : `Show ${label} API key`
-                }
-              >
-                {isVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-              </button>
-            </div>
-          </label>
-        );
-      })}
+          return (
+            <label key={provider} className="flex flex-col gap-1 text-sm">
+              {label} API Key
+              <div className="relative">
+                <input
+                  value={providerKey}
+                  onChange={(event) =>
+                    setProviderKey(provider, event.target.value)
+                  }
+                  type={isVisible ? "text" : "password"}
+                  className="border-input bg-background focus:ring-ring w-full rounded-md border px-3 py-2 pr-10 text-sm shadow-sm focus:ring-2 focus:outline-none"
+                  placeholder={inputPlaceholder}
+                />
+                <button
+                  type="button"
+                  onClick={() => toggleProviderVisibility(provider)}
+                  className="text-muted-foreground hover:text-foreground absolute inset-y-0 right-2 flex items-center"
+                  aria-label={
+                    isVisible
+                      ? `Hide ${label} API key`
+                      : `Show ${label} API key`
+                  }
+                >
+                  {isVisible ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
+            </label>
+          );
+        },
+      )}
     </div>
   );
 
@@ -170,44 +178,48 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           return (
             <div
               key={gateway}
-              className="space-y-3 rounded-lg border border-border p-3"
+              className="border-border space-y-3 rounded-lg border p-3"
             >
               <div className="space-y-1">
                 <h3 className="text-sm font-medium">{label}</h3>
                 {description ? (
-                  <p className="text-xs text-muted-foreground">{description}</p>
+                  <p className="text-muted-foreground text-xs">{description}</p>
                 ) : null}
               </div>
               <label className="flex flex-col gap-1 text-sm">
                 {label} API Key
                 <div className="relative">
                   <input
-                    value={gatewayState?.apiKey ?? ''}
+                    value={gatewayState?.apiKey ?? ""}
                     onChange={(event) =>
                       setGatewaySetting(gateway, { apiKey: event.target.value })
                     }
-                    type={isVisible ? 'text' : 'password'}
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 pr-10 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    type={isVisible ? "text" : "password"}
+                    className="border-input bg-background focus:ring-ring w-full rounded-md border px-3 py-2 pr-10 text-sm shadow-sm focus:ring-2 focus:outline-none"
                     placeholder={inputPlaceholder}
                   />
                   <button
                     type="button"
                     onClick={() => toggleGatewayVisibility(gateway)}
-                    className="absolute inset-y-0 right-2 flex items-center text-muted-foreground hover:text-foreground"
+                    className="text-muted-foreground hover:text-foreground absolute inset-y-0 right-2 flex items-center"
                     aria-label={
                       isVisible
                         ? `Hide ${label} API key`
                         : `Show ${label} API key`
                     }
                   >
-                    {isVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {isVisible ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               </label>
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 rounded border border-input"
+                  className="border-input h-4 w-4 rounded border"
                   checked={gatewayState?.useForAllModels ?? false}
                   onChange={(event) =>
                     setGatewaySetting(gateway, {
@@ -221,24 +233,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
                 <label className="flex flex-col gap-1 text-xs">
                   HTTP Referer (optional)
                   <input
-                    value={gatewayState?.referer ?? ''}
+                    value={gatewayState?.referer ?? ""}
                     onChange={(event) =>
-                      setGatewaySetting(gateway, { referer: event.target.value })
+                      setGatewaySetting(gateway, {
+                        referer: event.target.value,
+                      })
                     }
                     type="text"
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="border-input bg-background focus:ring-ring w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:ring-2 focus:outline-none"
                     placeholder={headerPlaceholders?.referer}
                   />
                 </label>
                 <label className="flex flex-col gap-1 text-xs">
                   Site title header (optional)
                   <input
-                    value={gatewayState?.title ?? ''}
+                    value={gatewayState?.title ?? ""}
                     onChange={(event) =>
                       setGatewaySetting(gateway, { title: event.target.value })
                     }
                     type="text"
-                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="border-input bg-background focus:ring-ring w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:ring-2 focus:outline-none"
                     placeholder={headerPlaceholders?.title}
                   />
                 </label>
@@ -257,33 +271,33 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <DialogTitle>LLM settings</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-1">
+          <div className="border-border bg-muted/40 flex items-center gap-2 rounded-md border p-1">
             <button
               type="button"
-              onClick={() => setActiveTab('providers')}
+              onClick={() => setActiveTab("providers")}
               className={`flex-1 rounded-sm px-3 py-1 text-sm font-medium transition-colors ${
-                activeTab === 'providers'
-                  ? 'bg-background text-foreground shadow'
-                  : 'text-muted-foreground'
+                activeTab === "providers"
+                  ? "bg-background text-foreground shadow"
+                  : "text-muted-foreground"
               }`}
             >
               Provider keys
             </button>
             <button
               type="button"
-              onClick={() => setActiveTab('gateways')}
+              onClick={() => setActiveTab("gateways")}
               className={`flex-1 rounded-sm px-3 py-1 text-sm font-medium transition-colors ${
-                activeTab === 'gateways'
-                  ? 'bg-background text-foreground shadow'
-                  : 'text-muted-foreground'
+                activeTab === "gateways"
+                  ? "bg-background text-foreground shadow"
+                  : "text-muted-foreground"
               }`}
             >
               Gateway keys
             </button>
           </div>
-          {activeTab === 'providers'
+          {activeTab === "providers"
             ? renderProviderTab()
-            : activeTab === 'gateways'
+            : activeTab === "gateways"
               ? renderGatewayTab()
               : null}
         </div>

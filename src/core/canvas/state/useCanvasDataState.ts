@@ -1,11 +1,16 @@
-import { useCallback, useMemo, type Dispatch, type SetStateAction } from 'react';
-import type { Edge, Node } from '@xyflow/react';
-import * as Y from 'yjs';
-import type { EditableEdgeData } from '../edges/EditableEdge';
-import { useCanvasDoc } from './useCanvasDoc';
-import { useCanvasNodes } from './useCanvasNodes';
-import { useCanvasEdges } from './useCanvasEdges';
-import { useStatsForNerds } from '../../diagnostics/StatsForNerdsContext';
+import {
+  useCallback,
+  useMemo,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
+import type { Edge, Node } from "@xyflow/react";
+import * as Y from "yjs";
+import type { EditableEdgeData } from "../edges/EditableEdge";
+import { useCanvasDoc } from "./useCanvasDoc";
+import { useCanvasNodes } from "./useCanvasNodes";
+import { useCanvasEdges } from "./useCanvasEdges";
+import { useStatsForNerds } from "../../diagnostics/StatsForNerdsContext";
 
 /** Main API surface for canvas state management with Yjs synchronization */
 export type CanvasDataContextValue = {
@@ -26,21 +31,32 @@ export type CanvasDataContextValue = {
  * - Accepts optional Yjs doc for external ownership (e.g., collaboration provider).
  */
 export const useCanvasDataState = (doc?: Y.Doc): CanvasDataContextValue => {
-  const { canvasDoc, nodeOrder, nodesMap, edgeOrder, edgesMap } = useCanvasDoc(doc);
+  const { canvasDoc, nodeOrder, nodesMap, edgeOrder, edgesMap } =
+    useCanvasDoc(doc);
   const { recordSetNodesInvocation } = useStatsForNerds();
 
-  const { nodes, setNodes: setNodesInternal, getNodes, updateLocalNodesState, replaceNodesInDoc } =
-    useCanvasNodes({
-      canvasDoc,
-      nodeOrder,
-      nodesMap,
-    });
-  const { edges, setEdges, getEdges, updateLocalEdgesState, replaceEdgesInDoc } =
-    useCanvasEdges({
-      canvasDoc,
-      edgeOrder,
-      edgesMap,
-    });
+  const {
+    nodes,
+    setNodes: setNodesInternal,
+    getNodes,
+    updateLocalNodesState,
+    replaceNodesInDoc,
+  } = useCanvasNodes({
+    canvasDoc,
+    nodeOrder,
+    nodesMap,
+  });
+  const {
+    edges,
+    setEdges,
+    getEdges,
+    updateLocalEdgesState,
+    replaceEdgesInDoc,
+  } = useCanvasEdges({
+    canvasDoc,
+    edgeOrder,
+    edgesMap,
+  });
 
   const setNodes: Dispatch<SetStateAction<Node[]>> = useCallback(
     (value) => {
@@ -60,7 +76,7 @@ export const useCanvasDataState = (doc?: Y.Doc): CanvasDataContextValue => {
       canvasDoc.transact(() => {
         replaceNodesInDoc(nextNodes);
         replaceEdgesInDoc(nextEdges);
-      }, 'canvas');
+      }, "canvas");
     },
     [
       canvasDoc,
@@ -82,6 +98,15 @@ export const useCanvasDataState = (doc?: Y.Doc): CanvasDataContextValue => {
       setCanvasState,
       doc: canvasDoc,
     }),
-    [canvasDoc, edges, getEdges, getNodes, nodes, setCanvasState, setEdges, setNodes],
+    [
+      canvasDoc,
+      edges,
+      getEdges,
+      getNodes,
+      nodes,
+      setCanvasState,
+      setEdges,
+      setNodes,
+    ],
   );
 };

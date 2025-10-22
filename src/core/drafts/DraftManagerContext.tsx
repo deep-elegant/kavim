@@ -43,12 +43,20 @@ type DraftManagerContextValue = {
   setLastAutoSaveAt: (value: string | null) => void;
 };
 
-const DraftManagerContext = createContext<DraftManagerContextValue | undefined>(undefined);
+const DraftManagerContext = createContext<DraftManagerContextValue | undefined>(
+  undefined,
+);
 
-export const DraftManagerProvider = ({ children }: { children: React.ReactNode }) => {
+export const DraftManagerProvider = ({
+  children,
+}: {
+  children: React.ReactNode;
+}) => {
   const [drafts, setDrafts] = useState<DraftRecord[]>([]);
   const [activeDraftId, setActiveDraftIdState] = useState<string | null>(null);
-  const [activeFilePath, setActiveFilePathState] = useState<string | null>(null);
+  const [activeFilePath, setActiveFilePathState] = useState<string | null>(
+    null,
+  );
   const [saveTarget, setSaveTarget] = useState<SaveTarget | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [lastAutoSaveAt, setLastAutoSaveAt] = useState<string | null>(null);
@@ -71,20 +79,26 @@ export const DraftManagerProvider = ({ children }: { children: React.ReactNode }
   }, [refreshDrafts]);
 
   // Switches to draft mode (for unsaved work)
-  const activateDraftSession = useCallback((draftId: string) => {
-    setActiveDraftIdState(draftId);
-    setActiveFilePathState(null);
-    setSaveTarget({ type: "draft", draftId });
-    setLastAutoSaveAt(null);
-  }, [setLastAutoSaveAt]);
+  const activateDraftSession = useCallback(
+    (draftId: string) => {
+      setActiveDraftIdState(draftId);
+      setActiveFilePathState(null);
+      setSaveTarget({ type: "draft", draftId });
+      setLastAutoSaveAt(null);
+    },
+    [setLastAutoSaveAt],
+  );
 
   // Switches to file mode (for saved documents)
-  const activateFileSession = useCallback((filePath: string) => {
-    setActiveFilePathState(filePath);
-    setActiveDraftIdState(null);
-    setSaveTarget({ type: "file", filePath });
-    setLastAutoSaveAt(null);
-  }, [setLastAutoSaveAt]);
+  const activateFileSession = useCallback(
+    (filePath: string) => {
+      setActiveFilePathState(filePath);
+      setActiveDraftIdState(null);
+      setSaveTarget({ type: "file", filePath });
+      setLastAutoSaveAt(null);
+    },
+    [setLastAutoSaveAt],
+  );
 
   const setActiveDraftId = useCallback(
     (draftId: string | null) => {
@@ -92,7 +106,9 @@ export const DraftManagerProvider = ({ children }: { children: React.ReactNode }
         activateDraftSession(draftId);
       } else {
         setActiveDraftIdState(null);
-        setSaveTarget((current) => (current?.type === "draft" ? null : current));
+        setSaveTarget((current) =>
+          current?.type === "draft" ? null : current,
+        );
       }
     },
     [activateDraftSession],
@@ -150,7 +166,9 @@ export const DraftManagerProvider = ({ children }: { children: React.ReactNode }
       } finally {
         await refreshDrafts();
         // Clear active state if deleting current draft
-        setActiveDraftIdState((current) => (current === draftId ? null : current));
+        setActiveDraftIdState((current) =>
+          current === draftId ? null : current,
+        );
         let removedDraftTarget = false;
         setSaveTarget((current) => {
           if (current?.type === "draft" && current.draftId === draftId) {
@@ -167,15 +185,21 @@ export const DraftManagerProvider = ({ children }: { children: React.ReactNode }
     [refreshDrafts],
   );
 
-  const markDraftPromoted = useCallback(async (payload: MarkDraftPromotedRequest) => {
-    try {
-      await window.drafts.markPromoted(payload);
-    } catch (error) {
-      console.error(`Failed to mark draft ${payload.draftId} as promoted`, error);
-    } finally {
-      await refreshDrafts();
-    }
-  }, [refreshDrafts]);
+  const markDraftPromoted = useCallback(
+    async (payload: MarkDraftPromotedRequest) => {
+      try {
+        await window.drafts.markPromoted(payload);
+      } catch (error) {
+        console.error(
+          `Failed to mark draft ${payload.draftId} as promoted`,
+          error,
+        );
+      } finally {
+        await refreshDrafts();
+      }
+    },
+    [refreshDrafts],
+  );
 
   const value = useMemo<DraftManagerContextValue>(
     () => ({
@@ -211,13 +235,19 @@ export const DraftManagerProvider = ({ children }: { children: React.ReactNode }
     ],
   );
 
-  return <DraftManagerContext.Provider value={value}>{children}</DraftManagerContext.Provider>;
+  return (
+    <DraftManagerContext.Provider value={value}>
+      {children}
+    </DraftManagerContext.Provider>
+  );
 };
 
 export const useDraftManager = () => {
   const context = useContext(DraftManagerContext);
   if (!context) {
-    throw new Error("useDraftManager must be used within a DraftManagerProvider");
+    throw new Error(
+      "useDraftManager must be used within a DraftManagerProvider",
+    );
   }
   return context;
 };

@@ -1,11 +1,11 @@
-export type FileTransferDirection = 'incoming' | 'outgoing';
+export type FileTransferDirection = "incoming" | "outgoing";
 
 export type FileTransferStatus =
-  | 'pending'
-  | 'in-progress'
-  | 'completed'
-  | 'failed'
-  | 'cancelled';
+  | "pending"
+  | "in-progress"
+  | "completed"
+  | "failed"
+  | "cancelled";
 
 export interface FileTransferMetadata {
   id: string;
@@ -27,7 +27,9 @@ export interface FileTransferProgressSnapshot {
   updatedAt: number;
 }
 
-export interface FileTransfer extends FileTransferMetadata, FileTransferProgressSnapshot {
+export interface FileTransfer
+  extends FileTransferMetadata,
+    FileTransferProgressSnapshot {
   startedAt: number;
   completedAt?: number;
   error?: string;
@@ -36,7 +38,7 @@ export interface FileTransfer extends FileTransferMetadata, FileTransferProgress
 }
 
 export interface FileInitMessage {
-  type: 'file-init';
+  type: "file-init";
   id: string;
   name: string;
   size: number;
@@ -47,7 +49,7 @@ export interface FileInitMessage {
 }
 
 export interface FileAckMessage {
-  type: 'file-ack';
+  type: "file-ack";
   id: string;
   acked: number[];
   receivedBytes: number;
@@ -56,24 +58,24 @@ export interface FileAckMessage {
 }
 
 export interface FileCompleteMessage {
-  type: 'file-complete';
+  type: "file-complete";
   id: string;
 }
 
 export interface FileErrorMessage {
-  type: 'file-error';
+  type: "file-error";
   id: string;
   reason: string;
 }
 
 export interface FileResendMessage {
-  type: 'file-resend';
+  type: "file-resend";
   id: string;
   missing: number[];
 }
 
 export interface FileRequestMessage {
-  type: 'file-request';
+  type: "file-request";
   assetPath: string;
   displayName?: string;
 }

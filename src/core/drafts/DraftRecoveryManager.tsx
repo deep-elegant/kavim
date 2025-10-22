@@ -26,7 +26,8 @@ export const DraftRecoveryManager = () => {
 
   // Only show drafts that haven't been saved to files and aren't currently open
   const activeDrafts = useMemo(
-    () => drafts.filter((draft) => !draft.promotedAt && draft.id !== activeDraftId),
+    () =>
+      drafts.filter((draft) => !draft.promotedAt && draft.id !== activeDraftId),
     [activeDraftId, drafts],
   );
 

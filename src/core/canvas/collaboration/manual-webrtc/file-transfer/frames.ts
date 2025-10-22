@@ -1,12 +1,16 @@
-import { FILE_CHUNK_FRAME_TYPE, FileChunkFrame } from './types';
+import { FILE_CHUNK_FRAME_TYPE, FileChunkFrame } from "./types";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-export const encodeChunkFrame = (id: string, sequence: number, payload: ArrayBuffer) => {
+export const encodeChunkFrame = (
+  id: string,
+  sequence: number,
+  payload: ArrayBuffer,
+) => {
   const idBytes = encoder.encode(id);
   if (idBytes.length > 255) {
-    throw new Error('Transfer identifier is too long to encode.');
+    throw new Error("Transfer identifier is too long to encode.");
   }
 
   const headerSize = 1 + 1 + idBytes.length + 4;
@@ -28,7 +32,9 @@ export const encodeChunkFrame = (id: string, sequence: number, payload: ArrayBuf
   return buffer;
 };
 
-export const decodeChunkFrame = async (data: ArrayBuffer | Blob): Promise<FileChunkFrame | null> => {
+export const decodeChunkFrame = async (
+  data: ArrayBuffer | Blob,
+): Promise<FileChunkFrame | null> => {
   const buffer = data instanceof Blob ? await data.arrayBuffer() : data;
   const view = new DataView(buffer);
 

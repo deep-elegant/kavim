@@ -1,6 +1,6 @@
-import { createContext, useContext } from 'react';
+import { createContext, useContext } from "react";
 
-import type { RemoteNodeInteractionState } from './useCanvasCollaboration';
+import type { RemoteNodeInteractionState } from "./useCanvasCollaboration";
 
 /**
  * Tracks which collaborators are interacting with each node.

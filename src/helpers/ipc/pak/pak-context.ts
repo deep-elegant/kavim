@@ -38,12 +38,16 @@ export function exposePakContext() {
       ipcRenderer.invoke(PAK_SAVE_CHANNEL, payload),
     load: (filePath: string): Promise<PakOperationResult> =>
       ipcRenderer.invoke(PAK_LOAD_CHANNEL, filePath),
-    addAsset: (asset: { path: string; data: unknown }): Promise<PakAssetSummary> =>
+    addAsset: (asset: {
+      path: string;
+      data: unknown;
+    }): Promise<PakAssetSummary> =>
       ipcRenderer.invoke(PAK_ADD_ASSET_CHANNEL, asset),
     removeAsset: (assetPath: string): Promise<boolean> =>
       ipcRenderer.invoke(PAK_REMOVE_ASSET_CHANNEL, assetPath),
     listAssets: (): Promise<PakAssetSummary[]> =>
       ipcRenderer.invoke(PAK_LIST_ASSETS_CHANNEL),
-    getAssetData: (assetPath: string) => ipcRenderer.invoke(PAK_GET_ASSET_CHANNEL, assetPath),
+    getAssetData: (assetPath: string) =>
+      ipcRenderer.invoke(PAK_GET_ASSET_CHANNEL, assetPath),
   });
 }

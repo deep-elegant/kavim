@@ -51,19 +51,28 @@ const getStringOrNull = (value: unknown): string | null =>
   typeof value === "string" ? value : null;
 
 // Converts PAK manifest metadata to draft record with fallbacks
-const manifestToRecord = (manifest: PakManifest, archivePath: string): DraftRecord => {
+const manifestToRecord = (
+  manifest: PakManifest,
+  archivePath: string,
+): DraftRecord => {
   const fallbackId = path.parse(archivePath).name;
   const id = getStringOrNull(manifest[MANIFEST_KEYS.draftId]) ?? fallbackId;
 
   const createdAt =
-    getStringOrNull(manifest[MANIFEST_KEYS.createdAt]) ?? manifest.savedAt ?? new Date().toISOString();
+    getStringOrNull(manifest[MANIFEST_KEYS.createdAt]) ??
+    manifest.savedAt ??
+    new Date().toISOString();
   const updatedAt =
-    getStringOrNull(manifest[MANIFEST_KEYS.updatedAt]) ?? manifest.savedAt ?? createdAt;
+    getStringOrNull(manifest[MANIFEST_KEYS.updatedAt]) ??
+    manifest.savedAt ??
+    createdAt;
 
   const projectName =
     getStringOrNull(manifest[MANIFEST_KEYS.projectName]) ??
     (typeof manifest.name === "string" ? manifest.name : null);
-  const linkedFilePath = getStringOrNull(manifest[MANIFEST_KEYS.linkedFilePath]);
+  const linkedFilePath = getStringOrNull(
+    manifest[MANIFEST_KEYS.linkedFilePath],
+  );
   const promotedAt = getStringOrNull(manifest[MANIFEST_KEYS.promotedAt]);
 
   return {
@@ -129,7 +138,9 @@ const mapToManifestExtras = (options: {
  * - Updates existing draft, preserving creation time
  * - Stores metadata in PAK manifest for quick listing
  */
-export const saveDraft = async (payload: SaveDraftRequest): Promise<DraftDetail> => {
+export const saveDraft = async (
+  payload: SaveDraftRequest,
+): Promise<DraftDetail> => {
   const now = new Date().toISOString();
   const draftId = payload.draftId ?? randomUUID();
   const archivePath = await getDraftFilePath(draftId);
@@ -137,7 +148,8 @@ export const saveDraft = async (payload: SaveDraftRequest): Promise<DraftDetail>
   const existing = await readDraft(draftId);
 
   const createdAt = existing?.record.createdAt ?? now;
-  const projectName = payload.projectName ?? existing?.record.projectName ?? null;
+  const projectName =
+    payload.projectName ?? existing?.record.projectName ?? null;
   const linkedFilePath = payload.filePath ?? existing?.record.filePath ?? null;
   const promotedAt = payload.promotedAt ?? existing?.record.promotedAt ?? null;
 
@@ -162,7 +174,9 @@ export const saveDraft = async (payload: SaveDraftRequest): Promise<DraftDetail>
 
   const assetMap = new Map<string, Buffer>();
   cachedAssets.forEach((asset) => {
-    const buffer = Buffer.isBuffer(asset.data) ? asset.data : toBuffer(asset.data);
+    const buffer = Buffer.isBuffer(asset.data)
+      ? asset.data
+      : toBuffer(asset.data);
     assetMap.set(asset.path, buffer);
   });
 
@@ -170,10 +184,12 @@ export const saveDraft = async (payload: SaveDraftRequest): Promise<DraftDetail>
     assetMap.set(asset.path, toBuffer(asset.data));
   });
 
-  const mergedAssets: PakAssetInput[] = Array.from(assetMap.entries()).map(([assetPath, data]) => ({
-    path: assetPath,
-    data,
-  }));
+  const mergedAssets: PakAssetInput[] = Array.from(assetMap.entries()).map(
+    ([assetPath, data]) => ({
+      path: assetPath,
+      data,
+    }),
+  );
 
   await createPakArchive(archivePath, payload.canvas, manifest, mergedAssets);
 
@@ -189,7 +205,9 @@ export const saveDraft = async (payload: SaveDraftRequest): Promise<DraftDetail>
 /**
  * Loads draft and sets it as active PAK (for asset resolution).
  */
-export const loadDraft = async (draftId: string): Promise<DraftDetail | null> => {
+export const loadDraft = async (
+  draftId: string,
+): Promise<DraftDetail | null> => {
   const draft = await readDraft(draftId);
   if (!draft) {
     return null;

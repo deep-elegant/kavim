@@ -1,9 +1,9 @@
-import type { Node } from '@xyflow/react';
+import type { Node } from "@xyflow/react";
 
 type NodeDataRecord = Record<string, unknown>;
 
-const asNodeDataRecord = (value: Node['data']): NodeDataRecord | undefined => {
-  if (!value || typeof value !== 'object') {
+const asNodeDataRecord = (value: Node["data"]): NodeDataRecord | undefined => {
+  if (!value || typeof value !== "object") {
     return undefined;
   }
 
@@ -16,11 +16,11 @@ const asNodeDataRecord = (value: Node['data']): NodeDataRecord | undefined => {
  * focused on the persisted node shape.
  */
 export const TRANSIENT_NODE_DATA_KEYS = new Set([
-  'isTyping',
-  'isEditing',
-  'isActive',
-  'assetStatus',
-  'assetError',
+  "isTyping",
+  "isEditing",
+  "isActive",
+  "assetStatus",
+  "assetError",
 ]);
 
 /**
@@ -33,8 +33,8 @@ export const isTransientNodeDataKey = (key: string) =>
 /**
  * Removes transient UI keys from a node's data object before sending it to Yjs.
  */
-export const sanitizeNodeDataForSync = (data: Node['data']) => {
-  if (!data || typeof data !== 'object') {
+export const sanitizeNodeDataForSync = (data: Node["data"]) => {
+  if (!data || typeof data !== "object") {
     return data;
   }
 
@@ -57,7 +57,7 @@ export const sanitizeNodeDataForSync = (data: Node['data']) => {
     return data; // Nothing to strip, return original to avoid unnecessary clones
   }
 
-  return Object.fromEntries(sanitizedEntries) as Node['data'];
+  return Object.fromEntries(sanitizedEntries) as Node["data"];
 };
 
 /**
@@ -71,11 +71,16 @@ export const sanitizeNodeForSync = (node: Node): Node => {
     return node; // No changes needed, return original
   }
 
-  const { selected: _selected, ...rest } = node;
-  return {
-    ...rest,
+  const sanitizedNode = {
+    ...node,
     data: sanitizedData,
   } as Node;
+
+  if ("selected" in sanitizedNode) {
+    delete (sanitizedNode as { selected?: Node["selected"] }).selected;
+  }
+
+  return sanitizedNode;
 };
 
 /**
@@ -96,7 +101,7 @@ export const createMutableNodeRecord = (node: Node): MutableNodeRecord => {
   return {
     node: {
       ...node,
-      data: record as Node['data'],
+      data: record as Node["data"],
     },
     data: record,
   };
@@ -108,7 +113,7 @@ export const createMutableNodeRecord = (node: Node): MutableNodeRecord => {
  */
 export const restoreTransientKeys = (
   mutableData: NodeDataRecord,
-  previousData?: Node['data'],
+  previousData?: Node["data"],
 ): boolean => {
   const previousRecord = asNodeDataRecord(previousData);
   if (!previousRecord) {
@@ -136,7 +141,10 @@ export const restoreTransientKeys = (
  * Reconciles the selected flag between incoming doc node and previous local state.
  * Keeps local selection state stable during remote updates.
  */
-export const reconcileSelectedFlag = (mutableNode: Node, previousNode: Node): boolean => {
+export const reconcileSelectedFlag = (
+  mutableNode: Node,
+  previousNode: Node,
+): boolean => {
   if (previousNode.selected !== undefined) {
     if (mutableNode.selected !== previousNode.selected) {
       mutableNode.selected = previousNode.selected;
@@ -146,8 +154,8 @@ export const reconcileSelectedFlag = (mutableNode: Node, previousNode: Node): bo
     return false;
   }
 
-  if ('selected' in mutableNode) {
-    delete (mutableNode as { selected?: Node['selected'] }).selected;
+  if ("selected" in mutableNode) {
+    delete (mutableNode as { selected?: Node["selected"] }).selected;
     return true;
   }
 
@@ -159,14 +167,20 @@ export const reconcileSelectedFlag = (mutableNode: Node, previousNode: Node): bo
  * - Restores UI flags (isTyping, selection).
  * - Returns original node if no restoration was needed (preserves identity).
  */
-export const restoreTransientNodeState = (docNode: Node, previousNode?: Node) => {
+export const restoreTransientNodeState = (
+  docNode: Node,
+  previousNode?: Node,
+) => {
   if (!previousNode) {
     return docNode;
   }
 
   const mutable = createMutableNodeRecord(docNode);
 
-  const restoredTransient = restoreTransientKeys(mutable.data, previousNode.data);
+  const restoredTransient = restoreTransientKeys(
+    mutable.data,
+    previousNode.data,
+  );
   const reconciledSelected = reconcileSelectedFlag(mutable.node, previousNode);
 
   if (!restoredTransient && !reconciledSelected) {

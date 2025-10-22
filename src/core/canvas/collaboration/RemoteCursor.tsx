@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { useReactFlow, useViewport } from '@xyflow/react';
+import React, { useEffect, useMemo, useState } from "react";
+import { useReactFlow, useViewport } from "@xyflow/react";
 
 interface WindowSize {
   width: number;
@@ -32,18 +32,22 @@ interface RemoteCursorProps {
  * - Converts flow coords to screen coords for rendering
  */
 
-export function RemoteCursor({ position, color = '#3b82f6', label = 'Remote User' }: RemoteCursorProps) {
+export function RemoteCursor({
+  position,
+  color = "#3b82f6",
+  label = "Remote User",
+}: RemoteCursorProps) {
   const { flowToScreenPosition } = useReactFlow();
   const { x: viewportX, y: viewportY, zoom: viewportZoom } = useViewport();
-  
+
   // Track window size for viewport boundary checks (SSR-safe)
   const [windowSize, setWindowSize] = useState<WindowSize>(() => ({
-    width: typeof window !== 'undefined' ? window.innerWidth : 0,
-    height: typeof window !== 'undefined' ? window.innerHeight : 0,
+    width: typeof window !== "undefined" ? window.innerWidth : 0,
+    height: typeof window !== "undefined" ? window.innerHeight : 0,
   }));
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
+    if (typeof window === "undefined") {
       return undefined;
     }
 
@@ -51,9 +55,9 @@ export function RemoteCursor({ position, color = '#3b82f6', label = 'Remote User
       setWindowSize({ width: window.innerWidth, height: window.innerHeight });
     };
 
-    window.addEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
     return () => {
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener("resize", handleResize);
     };
   }, []);
 
@@ -69,7 +73,12 @@ export function RemoteCursor({ position, color = '#3b82f6', label = 'Remote User
     return flowToScreenPosition(position);
   }, [flowToScreenPosition, position, viewportX, viewportY, viewportZoom]);
 
-  if (!position || !screenPosition || windowSize.width === 0 || windowSize.height === 0) {
+  if (
+    !position ||
+    !screenPosition ||
+    windowSize.width === 0 ||
+    windowSize.height === 0
+  ) {
     return null;
   }
 
@@ -81,8 +90,16 @@ export function RemoteCursor({ position, color = '#3b82f6', label = 'Remote User
   const isWithinViewport = withinHorizontalBounds && withinVerticalBounds;
 
   // Clamp edge indicator position to stay within margin
-  const clampedX = clamp(screenPosition.x, EDGE_MARGIN, windowSize.width - EDGE_MARGIN);
-  const clampedY = clamp(screenPosition.y, EDGE_MARGIN, windowSize.height - EDGE_MARGIN);
+  const clampedX = clamp(
+    screenPosition.x,
+    EDGE_MARGIN,
+    windowSize.width - EDGE_MARGIN,
+  );
+  const clampedY = clamp(
+    screenPosition.y,
+    EDGE_MARGIN,
+    windowSize.height - EDGE_MARGIN,
+  );
 
   const indicatorTransform = `translate(${clampedX}px, ${clampedY}px) translate(-50%, -50%)`;
   const cursorTransform = `translate(${screenPosition.x}px, ${screenPosition.y}px) translate(-50%, -50%)`;
@@ -98,19 +115,19 @@ export function RemoteCursor({ position, color = '#3b82f6', label = 'Remote User
     const isTop = screenPosition.y < EDGE_MARGIN;
     const isBottom = screenPosition.y > windowSize.height - EDGE_MARGIN;
 
-    if (isTop && isLeft) return '↖';
-    if (isTop && isRight) return '↗';
-    if (isBottom && isLeft) return '↙';
-    if (isBottom && isRight) return '↘';
-    if (isTop) return '↑';
-    if (isBottom) return '↓';
-    if (isLeft) return '←';
-    if (isRight) return '→';
-    return '•';
+    if (isTop && isLeft) return "↖";
+    if (isTop && isRight) return "↗";
+    if (isBottom && isLeft) return "↙";
+    if (isBottom && isRight) return "↘";
+    if (isTop) return "↑";
+    if (isBottom) return "↓";
+    if (isLeft) return "←";
+    if (isRight) return "→";
+    return "•";
   })();
 
   return (
-    <div className="fixed top-0 left-0 z-50 pointer-events-none">
+    <div className="pointer-events-none fixed top-0 left-0 z-50">
       {isWithinViewport ? (
         // Full cursor with label when visible in viewport
         <div
@@ -128,7 +145,7 @@ export function RemoteCursor({ position, color = '#3b82f6', label = 'Remote User
               />
             </svg>
             <div
-              className="absolute left-6 -top-1 rounded px-2 py-1 text-xs text-white shadow-lg whitespace-nowrap"
+              className="absolute -top-1 left-6 rounded px-2 py-1 text-xs whitespace-nowrap text-white shadow-lg"
               style={{ backgroundColor: color }}
             >
               {label}
@@ -137,15 +154,18 @@ export function RemoteCursor({ position, color = '#3b82f6', label = 'Remote User
         </div>
       ) : (
         // Edge indicator when cursor is off-screen
-        <div className="flex flex-col items-center gap-1" style={{ transform: indicatorTransform }}>
+        <div
+          className="flex flex-col items-center gap-1"
+          style={{ transform: indicatorTransform }}
+        >
           <div
-            className="flex h-8 w-8 items-center justify-center rounded-full border-2 bg-background text-lg font-semibold shadow-lg"
+            className="bg-background flex h-8 w-8 items-center justify-center rounded-full border-2 text-lg font-semibold shadow-lg"
             style={{ borderColor: color, color }}
           >
             {indicatorArrow}
           </div>
           <div
-            className="rounded px-2 py-1 text-xs text-white shadow-lg whitespace-nowrap"
+            className="rounded px-2 py-1 text-xs whitespace-nowrap text-white shadow-lg"
             style={{ backgroundColor: color }}
           >
             {label}

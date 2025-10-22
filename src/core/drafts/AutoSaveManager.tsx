@@ -19,8 +19,12 @@ type ManualSaveDetail = {
 
 // Deep clones canvas data to prevent mutation during async save
 const sanitizeCanvas = (nodes: unknown, edges: unknown) => {
-  const safeNodes = Array.isArray(nodes) ? JSON.parse(JSON.stringify(nodes)) : [];
-  const safeEdges = Array.isArray(edges) ? JSON.parse(JSON.stringify(edges)) : [];
+  const safeNodes = Array.isArray(nodes)
+    ? JSON.parse(JSON.stringify(nodes))
+    : [];
+  const safeEdges = Array.isArray(edges)
+    ? JSON.parse(JSON.stringify(edges))
+    : [];
   return { nodes: safeNodes, edges: safeEdges };
 };
 
@@ -45,13 +49,8 @@ const splitFilePath = (filePath: string) => {
  */
 export const AutoSaveManager: React.FC = () => {
   const { nodes, edges } = useCanvasData();
-  const {
-    drafts,
-    saveTarget,
-    saveDraft,
-    isReady,
-    setLastAutoSaveAt,
-  } = useDraftManager();
+  const { drafts, saveTarget, saveDraft, isReady, setLastAutoSaveAt } =
+    useDraftManager();
 
   // Always-current snapshot avoids stale closure issues
   const latestSnapshotRef = useRef<{ nodes: unknown; edges: unknown }>({
@@ -96,7 +95,11 @@ export const AutoSaveManager: React.FC = () => {
       const signature = JSON.stringify(snapshot);
 
       // Skip saving empty canvas with no target
-      if (!saveTarget && snapshot.nodes.length === 0 && snapshot.edges.length === 0) {
+      if (
+        !saveTarget &&
+        snapshot.nodes.length === 0 &&
+        snapshot.edges.length === 0
+      ) {
         lastSavedSignatureRef.current = signature;
         needsSaveRef.current = false;
         if (retryTimerRef.current) {
@@ -143,7 +146,8 @@ export const AutoSaveManager: React.FC = () => {
           setLastAutoSaveAt(timestamp);
         } else {
           const draft = await saveDraft({
-            draftId: saveTarget?.type === "draft" ? saveTarget.draftId : undefined,
+            draftId:
+              saveTarget?.type === "draft" ? saveTarget.draftId : undefined,
             projectName: activeDraftMeta?.projectName ?? null,
             filePath: activeDraftMeta?.filePath ?? null,
             canvas: snapshot,
@@ -276,7 +280,10 @@ export const AutoSaveManager: React.FC = () => {
       }
 
       // Update signature to prevent auto-save from re-saving same content
-      const snapshot = sanitizeCanvas(customEvent.detail.nodes, customEvent.detail.edges);
+      const snapshot = sanitizeCanvas(
+        customEvent.detail.nodes,
+        customEvent.detail.edges,
+      );
       latestSnapshotRef.current = snapshot;
       lastSavedSignatureRef.current = JSON.stringify(snapshot);
       needsSaveRef.current = false;

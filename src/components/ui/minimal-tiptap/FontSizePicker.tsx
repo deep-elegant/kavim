@@ -1,28 +1,28 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { type Editor } from '@tiptap/react';
+import React, { useEffect, useMemo, useState } from "react";
+import { type Editor } from "@tiptap/react";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from '@/components/ui/popover';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
+} from "@/components/ui/popover";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   DEFAULT_FONT_SIZE,
   type FontSizeStorage,
-} from '@/components/ui/minimal-tiptap/FontSizePlugin';
+} from "@/components/ui/minimal-tiptap/FontSizePlugin";
 
-type PresetSize = { label: string; value: number | 'auto' };
+type PresetSize = { label: string; value: number | "auto" };
 
 const FONT_SIZES: PresetSize[] = [
-  { label: 'Auto', value: 'auto' },
-  { label: '8', value: 8 },
-  { label: '12', value: 12 },
-  { label: '16', value: 16 },
-  { label: '20', value: 20 },
-  { label: '28', value: 28 },
-  { label: '48', value: 48 },
-  { label: '72', value: 72 },
+  { label: "Auto", value: "auto" },
+  { label: "8", value: 8 },
+  { label: "12", value: 12 },
+  { label: "16", value: 16 },
+  { label: "20", value: 20 },
+  { label: "28", value: 28 },
+  { label: "48", value: 48 },
+  { label: "72", value: 72 },
 ];
 
 const formatSize = (value: number) => Math.max(1, Math.round(value)).toString();
@@ -39,7 +39,7 @@ export const FontSizePicker = ({ editor }: { editor: Editor | null }) => {
     return editor.storage.fontSize as FontSizeStorage | undefined;
   }, [editor]);
 
-  const mode = storage?.mode ?? 'auto';
+  const mode = storage?.mode ?? "auto";
   const manualSize = storage?.value ?? DEFAULT_FONT_SIZE;
   useEffect(() => {
     setDraftValue(null);
@@ -50,10 +50,10 @@ export const FontSizePicker = ({ editor }: { editor: Editor | null }) => {
   }
 
   const displayValue =
-    draftValue ?? (mode === 'auto' ? 'Auto' : formatSize(manualSize));
+    draftValue ?? (mode === "auto" ? "Auto" : formatSize(manualSize));
 
-  const handleSizeSelect = (value: PresetSize['value']) => {
-    if (value === 'auto') {
+  const handleSizeSelect = (value: PresetSize["value"]) => {
+    if (value === "auto") {
       editor.commands.setAutoFontSize();
     } else {
       editor.commands.setFontSize(value);
@@ -65,7 +65,7 @@ export const FontSizePicker = ({ editor }: { editor: Editor | null }) => {
   const handleCustomSizeChange = (
     event: React.KeyboardEvent<HTMLInputElement>,
   ) => {
-    if (event.key !== 'Enter') {
+    if (event.key !== "Enter") {
       return;
     }
 
@@ -88,7 +88,7 @@ export const FontSizePicker = ({ editor }: { editor: Editor | null }) => {
         return current;
       }
 
-      return mode === 'auto' ? '' : formatSize(manualSize);
+      return mode === "auto" ? "" : formatSize(manualSize);
     });
   };
 
@@ -123,18 +123,18 @@ export const FontSizePicker = ({ editor }: { editor: Editor | null }) => {
         <div className="flex flex-col">
           {FONT_SIZES.map((size) => {
             const isActive =
-              size.value === 'auto'
-                ? mode === 'auto'
-                : mode === 'fixed' && Math.round(manualSize) === size.value;
+              size.value === "auto"
+                ? mode === "auto"
+                : mode === "fixed" && Math.round(manualSize) === size.value;
 
             return (
               <Button
                 key={size.label}
-                variant={isActive ? 'secondary' : 'ghost'}
+                variant={isActive ? "secondary" : "ghost"}
                 className="justify-start"
                 onClick={() => handleSizeSelect(size.value)}
               >
-                {size.value === 'auto' ? 'Auto' : size.label}
+                {size.value === "auto" ? "Auto" : size.label}
               </Button>
             );
           })}

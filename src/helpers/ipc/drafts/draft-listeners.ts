@@ -24,9 +24,12 @@ import type {
 export const addDraftEventListeners = () => {
   void cleanupDrafts();
 
-  ipcMain.handle(DRAFT_SAVE_CHANNEL, async (_event, payload: SaveDraftRequest) => {
-    return saveDraft(payload);
-  });
+  ipcMain.handle(
+    DRAFT_SAVE_CHANNEL,
+    async (_event, payload: SaveDraftRequest) => {
+      return saveDraft(payload);
+    },
+  );
 
   ipcMain.handle(DRAFT_LOAD_CHANNEL, async (_event, draftId: string) => {
     return loadDraft(draftId);
@@ -40,11 +43,17 @@ export const addDraftEventListeners = () => {
     await deleteDraft(draftId);
   });
 
-  ipcMain.handle(DRAFT_MARK_PROMOTED_CHANNEL, async (_event, payload: MarkDraftPromotedRequest) => {
-    await markDraftPromoted(payload);
-  });
+  ipcMain.handle(
+    DRAFT_MARK_PROMOTED_CHANNEL,
+    async (_event, payload: MarkDraftPromotedRequest) => {
+      await markDraftPromoted(payload);
+    },
+  );
 
-  ipcMain.handle(DRAFT_CLEANUP_CHANNEL, async (_event, payload?: CleanupDraftsRequest) => {
-    await cleanupDrafts(payload);
-  });
+  ipcMain.handle(
+    DRAFT_CLEANUP_CHANNEL,
+    async (_event, payload?: CleanupDraftsRequest) => {
+      await cleanupDrafts(payload);
+    },
+  );
 };

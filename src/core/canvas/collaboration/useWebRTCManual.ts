@@ -1,40 +1,40 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import * as Y from 'yjs';
+import { useState, useRef, useCallback, useEffect } from "react";
+import * as Y from "yjs";
 
-import { guessMimeType } from '@/core/pak/mimeTypes';
+import { guessMimeType } from "@/core/pak/mimeTypes";
 
 import type {
   ChannelMessage,
   DataChannelState,
   WebRTCChatMessage,
-} from './manual-webrtc/types';
+} from "./manual-webrtc/types";
 import {
   DATA_CHANNEL_MAX_BUFFER,
   DATA_CHANNEL_RESUME_THRESHOLD,
-} from './manual-webrtc/types';
+} from "./manual-webrtc/types";
 import {
   FILE_TRANSFER_CHANNEL_LABEL,
   SYNC_CHANNEL_LABEL,
   usePeerConnection,
   usePeerConnectionDataChannel,
-} from './manual-webrtc/usePeerConnection';
-import { usePresenceSync } from './manual-webrtc/usePresenceSync';
-import { useYjsSync } from './manual-webrtc/useYjsSync';
-import { useStatsForNerds } from '../../diagnostics/StatsForNerdsContext';
-import type { FileRequestMessage } from './manual-webrtc/file-transfer/types';
+} from "./manual-webrtc/usePeerConnection";
+import { usePresenceSync } from "./manual-webrtc/usePresenceSync";
+import { useYjsSync } from "./manual-webrtc/useYjsSync";
+import { useStatsForNerds } from "../../diagnostics/StatsForNerdsContext";
+import type { FileRequestMessage } from "./manual-webrtc/file-transfer/types";
 import {
   useFileTransferChannel,
   type UseFileTransferChannelResult,
-} from './manual-webrtc/file-transfer/useFileTransferChannel';
+} from "./manual-webrtc/file-transfer/useFileTransferChannel";
 
 export type {
   CollaboratorInteraction,
   CursorPresence,
   WebRTCChatMessage,
-} from './manual-webrtc/types';
+} from "./manual-webrtc/types";
 
 const stripPakProtocol = (value: string) =>
-  value.startsWith('pak://') ? value.slice('pak://'.length) : value;
+  value.startsWith("pak://") ? value.slice("pak://".length) : value;
 
 /**
  * Manual WebRTC hook for peer-to-peer collaboration.
@@ -79,20 +79,25 @@ export function useWebRTCManual(doc: Y.Doc) {
   const docGuidRef = useRef(doc.guid);
   const resyncNeededRef = useRef(true);
   const localFlushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingAssetRequestsRef = useRef<Map<string, { displayName?: string }>>(new Map());
+  const pendingAssetRequestsRef = useRef<Map<string, { displayName?: string }>>(
+    new Map(),
+  );
   const inflightAssetRequestsRef = useRef<Set<string>>(new Set());
   const servingAssetRequestsRef = useRef<Set<string>>(new Set());
-  const sendFileRef = useRef<UseFileTransferChannelResult['sendFile']>(async () => null);
-  const [fileTransferChannel, setFileTransferChannel] = useState<RTCDataChannel | null>(null);
+  const sendFileRef = useRef<UseFileTransferChannelResult["sendFile"]>(
+    async () => null,
+  );
+  const [fileTransferChannel, setFileTransferChannel] =
+    useState<RTCDataChannel | null>(null);
 
   const scheduleBufferDrain = useCallback(() => {
     const channel = syncChannelRef.current;
-    if (!channel || channel.readyState !== 'open') {
+    if (!channel || channel.readyState !== "open") {
       return;
     }
 
     if (channel.bufferedAmount <= DATA_CHANNEL_RESUME_THRESHOLD) {
-      if (typeof queueMicrotask === 'function') {
+      if (typeof queueMicrotask === "function") {
         queueMicrotask(() => {
           flushPendingYUpdatesRef.current();
         });
@@ -117,7 +122,7 @@ export function useWebRTCManual(doc: Y.Doc) {
       options: { onBackpressure?: () => void; context?: string } = {},
     ): boolean => {
       const channel = syncChannelRef.current;
-      if (!channel || channel.readyState !== 'open') {
+      if (!channel || channel.readyState !== "open") {
         return false;
       }
 
@@ -144,7 +149,10 @@ export function useWebRTCManual(doc: Y.Doc) {
 
         return true;
       } catch (error) {
-        console.error(options.context ?? 'Failed to send data channel message:', error);
+        console.error(
+          options.context ?? "Failed to send data channel message:",
+          error,
+        );
 
         options.onBackpressure?.();
         scheduleBufferDrain();
@@ -157,12 +165,9 @@ export function useWebRTCManual(doc: Y.Doc) {
     [scheduleBufferDrain, setDataChannelBufferedAmount],
   );
 
-  const handleRemoteChatMessage = useCallback(
-    (message: WebRTCChatMessage) => {
-      setMessages((prev) => [...prev, message]);
-    },
-    [],
-  );
+  const handleRemoteChatMessage = useCallback((message: WebRTCChatMessage) => {
+    setMessages((prev) => [...prev, message]);
+  }, []);
 
   const {
     applyYUpdate,
@@ -198,14 +203,14 @@ export function useWebRTCManual(doc: Y.Doc) {
     resyncNeededRef.current = true;
 
     const channel = syncChannelRef.current;
-    if (channel?.readyState === 'open') {
+    if (channel?.readyState === "open") {
       sendStateVector();
       resyncNeededRef.current = false;
     }
   }, [doc, resetPendingQueue, sendStateVector, syncChannelRef]);
 
   useEffect(() => {
-    if (dataChannelState !== 'open') {
+    if (dataChannelState !== "open") {
       resyncNeededRef.current = true;
     }
   }, [dataChannelState]);
@@ -259,13 +264,13 @@ export function useWebRTCManual(doc: Y.Doc) {
    */
   const setupDataChannel = useCallback(
     (channel: RTCDataChannel) => {
-      channel.binaryType = 'arraybuffer';
+      channel.binaryType = "arraybuffer";
       channel.bufferedAmountLowThreshold = DATA_CHANNEL_RESUME_THRESHOLD;
-      channel.addEventListener('bufferedamountlow', handleBufferedAmountLow);
+      channel.addEventListener("bufferedamountlow", handleBufferedAmountLow);
       setDataChannelState(channel.readyState as DataChannelState);
 
       channel.onopen = () => {
-        setDataChannelState('open');
+        setDataChannelState("open");
         isBufferDrainingRef.current = false;
         setDataChannelBufferedAmount(channel.bufferedAmount);
         if (resyncNeededRef.current) {
@@ -278,8 +283,11 @@ export function useWebRTCManual(doc: Y.Doc) {
 
       channel.onclose = () => {
         resyncNeededRef.current = true;
-        setDataChannelState('closed');
-        channel.removeEventListener('bufferedamountlow', handleBufferedAmountLow);
+        setDataChannelState("closed");
+        channel.removeEventListener(
+          "bufferedamountlow",
+          handleBufferedAmountLow,
+        );
         isBufferDrainingRef.current = false;
         setDataChannelBufferedAmount(0);
         clearRemotePresence();
@@ -294,7 +302,7 @@ export function useWebRTCManual(doc: Y.Doc) {
       channel.onmessage = (event) => {
         const { data } = event;
 
-        if (typeof data === 'string') {
+        if (typeof data === "string") {
           handleStringMessage(data);
           return;
         }
@@ -313,7 +321,7 @@ export function useWebRTCManual(doc: Y.Doc) {
               applyYUpdate(new Uint8Array(buffer));
             })
             .catch((error) => {
-              console.error('Failed to read binary message:', error);
+              console.error("Failed to read binary message:", error);
             });
           return;
         }
@@ -321,11 +329,13 @@ export function useWebRTCManual(doc: Y.Doc) {
         if (ArrayBuffer.isView(data)) {
           const view = data as ArrayBufferView;
           setDataChannelBufferedAmount(channel.bufferedAmount);
-          applyYUpdate(new Uint8Array(view.buffer, view.byteOffset, view.byteLength));
+          applyYUpdate(
+            new Uint8Array(view.buffer, view.byteOffset, view.byteLength),
+          );
           return;
         }
 
-        console.warn('Received unsupported data channel message type:', data);
+        console.warn("Received unsupported data channel message type:", data);
       };
     },
     [
@@ -352,7 +362,10 @@ export function useWebRTCManual(doc: Y.Doc) {
     async (message: FileRequestMessage) => {
       const assetPath = stripPakProtocol(message.assetPath);
       if (!assetPath) {
-        console.warn('[WebRTCManual] received invalid asset request', message.assetPath);
+        console.warn(
+          "[WebRTCManual] received invalid asset request",
+          message.assetPath,
+        );
         return;
       }
 
@@ -364,7 +377,7 @@ export function useWebRTCManual(doc: Y.Doc) {
 
       try {
         if (!window?.projectPak?.getAssetData) {
-          throw new Error('Project pak bridge is not available');
+          throw new Error("Project pak bridge is not available");
         }
 
         const assetData = await window.projectPak.getAssetData(assetPath);
@@ -376,17 +389,17 @@ export function useWebRTCManual(doc: Y.Doc) {
         const mimeType = assetData.mimeType || guessMimeType(assetPath);
 
         const fileName =
-          message.displayName ?? assetPath.split('/').pop() ?? 'shared-asset';
+          message.displayName ?? assetPath.split("/").pop() ?? "shared-asset";
 
         let fileToSend: File;
 
-        if (typeof File !== 'undefined') {
+        if (typeof File !== "undefined") {
           fileToSend = new File([fileBytes], fileName, {
-            type: mimeType || 'application/octet-stream',
+            type: mimeType || "application/octet-stream",
           });
         } else {
           const fallback = new Blob([fileBytes], {
-            type: mimeType || 'application/octet-stream',
+            type: mimeType || "application/octet-stream",
           }) as Blob & { name?: string };
           fallback.name = fileName;
           fileToSend = fallback as unknown as File;
@@ -397,16 +410,16 @@ export function useWebRTCManual(doc: Y.Doc) {
           displayName: fileName,
         });
 
-        console.info('[WebRTCManual] asset upload complete', {
+        console.info("[WebRTCManual] asset upload complete", {
           assetPath,
           name: fileName,
           size: fileToSend.size,
         });
       } catch (error) {
-        console.error('Failed to serve requested asset', error);
+        console.error("Failed to serve requested asset", error);
       } finally {
         servingAssetRequestsRef.current.delete(assetPath);
-        console.info('[WebRTCManual] finished serving asset request', {
+        console.info("[WebRTCManual] finished serving asset request", {
           assetPath,
         });
       }
@@ -465,19 +478,21 @@ export function useWebRTCManual(doc: Y.Doc) {
       };
 
       const handleClose = () => {
-        console.info('[WebRTCManual] file transfer channel closed');
-        setFileTransferChannel((current) => (current === channel ? null : current));
+        console.info("[WebRTCManual] file transfer channel closed");
+        setFileTransferChannel((current) =>
+          current === channel ? null : current,
+        );
         if (fileTransferChannelRef.current === channel) {
           fileTransferChannelRef.current = null;
         }
-        channel.removeEventListener('open', handleOpen);
-        channel.removeEventListener('close', handleClose);
+        channel.removeEventListener("open", handleOpen);
+        channel.removeEventListener("close", handleClose);
       };
 
-      channel.addEventListener('open', handleOpen);
-      channel.addEventListener('close', handleClose);
+      channel.addEventListener("open", handleOpen);
+      channel.addEventListener("close", handleClose);
 
-      if (channel.readyState === 'open') {
+      if (channel.readyState === "open") {
         flushPendingAssetRequests();
       }
     },
@@ -494,7 +509,7 @@ export function useWebRTCManual(doc: Y.Doc) {
     (assetPath: string, displayName?: string) => {
       const trimmed = assetPath.trim();
       if (!trimmed) {
-        console.warn('[WebRTCManual] refusing to request empty asset path');
+        console.warn("[WebRTCManual] refusing to request empty asset path");
         return false;
       }
 
@@ -518,7 +533,7 @@ export function useWebRTCManual(doc: Y.Doc) {
         displayName ? { displayName } : {},
       );
       flushPendingAssetRequests();
-      console.info('[WebRTCManual] queued asset request', {
+      console.info("[WebRTCManual] queued asset request", {
         assetPath: normalized,
         displayName,
       });
@@ -536,14 +551,14 @@ export function useWebRTCManual(doc: Y.Doc) {
     const normalized = stripPakProtocol(trimmed) || trimmed;
     pendingAssetRequestsRef.current.delete(normalized);
     inflightAssetRequestsRef.current.delete(normalized);
-    console.info('[WebRTCManual] released asset request', {
+    console.info("[WebRTCManual] released asset request", {
       assetPath: normalized,
     });
   }, []);
 
   useEffect(() => {
     completedTransfers.forEach((transfer) => {
-      if (transfer.direction === 'incoming' && transfer.assetPath) {
+      if (transfer.direction === "incoming" && transfer.assetPath) {
         inflightAssetRequestsRef.current.delete(transfer.assetPath);
       }
     });
@@ -551,7 +566,7 @@ export function useWebRTCManual(doc: Y.Doc) {
 
   useEffect(() => {
     failedTransfers.forEach((transfer) => {
-      if (transfer.direction === 'incoming' && transfer.assetPath) {
+      if (transfer.direction === "incoming" && transfer.assetPath) {
         inflightAssetRequestsRef.current.delete(transfer.assetPath);
       }
     });
@@ -564,7 +579,7 @@ export function useWebRTCManual(doc: Y.Doc) {
    */
   useEffect(() => {
     const handleDocUpdate = (update: Uint8Array, origin: unknown) => {
-      if (origin === 'webrtc') {
+      if (origin === "webrtc") {
         return;
       }
 
@@ -572,10 +587,10 @@ export function useWebRTCManual(doc: Y.Doc) {
       scheduleLocalFlush();
     };
 
-    doc.on('update', handleDocUpdate);
+    doc.on("update", handleDocUpdate);
 
     return () => {
-      doc.off('update', handleDocUpdate);
+      doc.off("update", handleDocUpdate);
     };
   }, [doc, scheduleLocalFlush]);
 
@@ -586,13 +601,13 @@ export function useWebRTCManual(doc: Y.Doc) {
   const sendMessage = useCallback(
     (message: WebRTCChatMessage) => {
       const channel = syncChannelRef.current;
-      if (!channel || channel.readyState !== 'open') {
-        console.warn('Data channel not open');
+      if (!channel || channel.readyState !== "open") {
+        console.warn("Data channel not open");
         return false;
       }
 
       const sent = sendJSONMessage(message, {
-        context: 'Failed to send chat message',
+        context: "Failed to send chat message",
       });
 
       if (sent) {
@@ -609,7 +624,7 @@ export function useWebRTCManual(doc: Y.Doc) {
   const requestSync = useCallback(() => {
     resyncNeededRef.current = true;
     const channel = syncChannelRef.current;
-    if (channel?.readyState === 'open') {
+    if (channel?.readyState === "open") {
       sendStateVector();
       resyncNeededRef.current = false;
     }

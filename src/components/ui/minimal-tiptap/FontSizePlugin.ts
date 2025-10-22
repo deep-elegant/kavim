@@ -1,8 +1,8 @@
-import { Extension } from '@tiptap/core';
-import type { Editor } from '@tiptap/core';
+import { Extension } from "@tiptap/core";
+import type { Editor } from "@tiptap/core";
 
-export type FontSizeMode = 'auto' | 'fixed';
-export type FontSizeSetting = number | 'auto';
+export type FontSizeMode = "auto" | "fixed";
+export type FontSizeSetting = number | "auto";
 
 export interface FontSizeStorage {
   mode: FontSizeMode;
@@ -33,7 +33,7 @@ const clampFontSize = (value: number): number => {
   return Math.max(1, Math.round(value));
 };
 
-declare module '@tiptap/core' {
+declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     fontSize: {
       setFontSize: (size: number) => ReturnType;
@@ -48,7 +48,7 @@ const applySizeToEditor = (editor: Editor, size: number) => {
 };
 
 const emitChange = (options: FontSizeOptions, storage: FontSizeStorage) => {
-  const value = storage.mode === 'auto' ? storage.computed : storage.value;
+  const value = storage.mode === "auto" ? storage.computed : storage.value;
 
   options.onChange?.({
     mode: storage.mode,
@@ -58,18 +58,18 @@ const emitChange = (options: FontSizeOptions, storage: FontSizeStorage) => {
 };
 
 export const FontSize = Extension.create<FontSizeOptions>({
-  name: 'fontSize',
+  name: "fontSize",
 
   addOptions() {
     return {
-      initialMode: 'auto',
+      initialMode: "auto",
       initialValue: DEFAULT_FONT_SIZE,
       onChange: undefined,
     } satisfies FontSizeOptions;
   },
 
   addStorage() {
-    const mode = this.options.initialMode ?? 'auto';
+    const mode = this.options.initialMode ?? "auto";
     const value = clampFontSize(this.options.initialValue ?? DEFAULT_FONT_SIZE);
 
     const storage: FontSizeStorage = {
@@ -84,7 +84,8 @@ export const FontSize = Extension.create<FontSizeOptions>({
 
   onCreate({ editor }) {
     const storage = this.storage as FontSizeStorage;
-    const initialSize = storage.mode === 'auto' ? storage.computed : storage.value;
+    const initialSize =
+      storage.mode === "auto" ? storage.computed : storage.value;
     applySizeToEditor(editor, initialSize);
   },
 
@@ -98,7 +99,7 @@ export const FontSize = Extension.create<FontSizeOptions>({
           const previousMode = storage.mode;
           const previousValue = storage.value;
 
-          storage.mode = 'fixed';
+          storage.mode = "fixed";
           storage.value = normalized;
           storage.computed = normalized;
 
@@ -117,7 +118,7 @@ export const FontSize = Extension.create<FontSizeOptions>({
         ({ editor }) => {
           const storage = this.storage as FontSizeStorage;
           const previousMode = storage.mode;
-          storage.mode = 'auto';
+          storage.mode = "auto";
 
           applySizeToEditor(editor, storage.computed ?? storage.value);
 
@@ -137,7 +138,7 @@ export const FontSize = Extension.create<FontSizeOptions>({
           const previousComputed = storage.computed;
           storage.computed = normalized;
 
-          if (storage.mode === 'auto') {
+          if (storage.mode === "auto") {
             if (previousComputed !== normalized) {
               storage.version += 1;
               applySizeToEditor(editor, normalized);

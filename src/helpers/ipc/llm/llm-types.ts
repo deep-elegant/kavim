@@ -1,5 +1,5 @@
-import type { AiGateway, AiProvider } from '@/core/llm/aiModels';
-import type { ChatMessage } from '@/core/llm/chatTypes';
+import type { AiGateway, AiProvider } from "@/core/llm/aiModels";
+import type { ChatMessage } from "@/core/llm/chatTypes";
 
 export type LlmStreamRequestPayload = {
   requestId: string;

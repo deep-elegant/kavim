@@ -1,8 +1,13 @@
-import React, { createContext, useContext } from 'react';
-import * as Y from 'yjs';
-import { useCanvasDataState, type CanvasDataContextValue } from '../state/useCanvasDataState';
+import React, { createContext, useContext } from "react";
+import * as Y from "yjs";
+import {
+  useCanvasDataState,
+  type CanvasDataContextValue,
+} from "../state/useCanvasDataState";
 
-const CanvasDataContext = createContext<CanvasDataContextValue | undefined>(undefined);
+const CanvasDataContext = createContext<CanvasDataContextValue | undefined>(
+  undefined,
+);
 
 /**
  * Provides canvas data state (nodes, edges) to the component tree.
@@ -18,7 +23,11 @@ export const CanvasDataProvider = ({
 }) => {
   const value = useCanvasDataState(doc);
 
-  return <CanvasDataContext.Provider value={value}>{children}</CanvasDataContext.Provider>;
+  return (
+    <CanvasDataContext.Provider value={value}>
+      {children}
+    </CanvasDataContext.Provider>
+  );
 };
 
 /**
@@ -28,7 +37,7 @@ export const CanvasDataProvider = ({
 export const useCanvasData = () => {
   const context = useContext(CanvasDataContext);
   if (!context) {
-    throw new Error('useCanvasData must be used within a CanvasDataProvider');
+    throw new Error("useCanvasData must be used within a CanvasDataProvider");
   }
   return context;
 };

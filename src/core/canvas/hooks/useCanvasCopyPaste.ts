@@ -1,27 +1,42 @@
-import { useCallback, useEffect, type Dispatch, type SetStateAction } from 'react';
-import type { ClipboardEvent as ReactClipboardEvent } from 'react';
-import type { Node } from '@xyflow/react';
-import { Buffer } from 'buffer';
-import type { PakAssetRegistration } from '@/core/pak/usePakAssets';
+import {
+  useCallback,
+  useEffect,
+  type Dispatch,
+  type SetStateAction,
+} from "react";
+import type { ClipboardEvent as ReactClipboardEvent } from "react";
+import type { Node } from "@xyflow/react";
+import { Buffer } from "buffer";
+import type { PakAssetRegistration } from "@/core/pak/usePakAssets";
 
-import type { CanvasNode, ToolId } from '../types';
+import type { CanvasNode, ToolId } from "../types";
 
 // Sentinel value to detect when clipboard contains our custom node data
-const COPIED_NODES_MARKER = '__COL_AI_NODES_COPY__';
+const COPIED_NODES_MARKER = "__COL_AI_NODES_COPY__";
 
-// Persistent ref to store copied nodes across renders (avoids stale closures)
-const copiedNodesRef: { current: Node<CanvasNode>[] } = { current: [] };
+// Persistent store to track copied nodes across hook invocations without
+// mutating module scoped objects directly inside React logic.
+const copiedNodesStore = (() => {
+  let nodes: Node<CanvasNode>[] = [];
+
+  return {
+    get: () => nodes,
+    set: (next: Node<CanvasNode>[]) => {
+      nodes = next;
+    },
+  };
+})();
 
 /** Deep clones a node using structuredClone or JSON fallback */
-const cloneNode = <T,>(node: T): T => {
-  if (typeof structuredClone === 'function') {
+const cloneNode = <T>(node: T): T => {
+  if (typeof structuredClone === "function") {
     return structuredClone(node);
   }
 
   return JSON.parse(JSON.stringify(node)) as T;
 };
 
-const cloneNodes = <T,>(nodes: T[]): T[] => nodes.map((node) => cloneNode(node));
+const cloneNodes = <T>(nodes: T[]): T[] => nodes.map((node) => cloneNode(node));
 
 /**
  * Copies selected nodes to clipboard and internal ref.
@@ -35,16 +50,16 @@ export const copyNodesToClipboard = async (
     return;
   }
 
-  copiedNodesRef.current = cloneNodes(selectedNodes);
+  copiedNodesStore.set(cloneNodes(selectedNodes));
 
-  if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
     return;
   }
 
   try {
     await navigator.clipboard.writeText(COPIED_NODES_MARKER);
   } catch (error) {
-    console.error('Failed to write to clipboard:', error);
+    console.error("Failed to write to clipboard:", error);
   }
 };
 
@@ -52,7 +67,11 @@ export interface UseCanvasCopyPasteParams {
   nodes: Node[];
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setSelectedTool: Dispatch<SetStateAction<ToolId | null>>;
-  addImageNode: (src: string, position: { x: number; y: number }, fileName?: string) => Promise<void>;
+  addImageNode: (
+    src: string,
+    position: { x: number; y: number },
+    fileName?: string,
+  ) => Promise<void>;
   getCanvasCenterPosition: () => { x: number; y: number };
   registerAssetFromBytes: (
     bytes: ArrayBuffer | Uint8Array,
@@ -84,24 +103,26 @@ export const useCanvasCopyPaste = ({
       const target = event.target as HTMLElement;
       // Skip if user is typing in an input field
       if (
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
+        target.tagName === "INPUT" ||
+        target.tagName === "TEXTAREA" ||
         target.isContentEditable
       ) {
         return;
       }
 
-      if ((event.ctrlKey || event.metaKey) && event.code === 'KeyC') {
-        const selectedNodes = nodes.filter((node) => node.selected) as Node<CanvasNode>[];
+      if ((event.ctrlKey || event.metaKey) && event.code === "KeyC") {
+        const selectedNodes = nodes.filter(
+          (node) => node.selected,
+        ) as Node<CanvasNode>[];
         if (selectedNodes.length > 0) {
           void copyNodesToClipboard(selectedNodes);
         }
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [nodes]);
 
@@ -113,17 +134,19 @@ export const useCanvasCopyPaste = ({
    */
   const handlePaste = useCallback(
     async (event: ReactClipboardEvent) => {
-      const clipboardText = event.clipboardData.getData('text/plain');
+      const clipboardText = event.clipboardData.getData("text/plain");
 
       // Check if we're pasting our own copied nodes
-      if (clipboardText === COPIED_NODES_MARKER && copiedNodesRef.current.length > 0) {
+      const copiedNodes = copiedNodesStore.get();
+
+      if (clipboardText === COPIED_NODES_MARKER && copiedNodes.length > 0) {
         event.preventDefault();
         setSelectedTool(null);
 
         const newNodes: Node<CanvasNode>[] = [];
         const updatedCopiedNodes: Node<CanvasNode>[] = [];
 
-        copiedNodesRef.current.forEach((nodeToCopy) => {
+        copiedNodes.forEach((nodeToCopy) => {
           const offset = 20;
           const newPosition = {
             x: nodeToCopy.position.x + offset,
@@ -146,7 +169,7 @@ export const useCanvasCopyPaste = ({
           updatedCopiedNodes.push(updatedNode);
         });
 
-        copiedNodesRef.current = updatedCopiedNodes;
+        copiedNodesStore.set(updatedCopiedNodes);
 
         setNodes((currentNodes) => {
           const deselected = currentNodes.map((node) =>
@@ -158,7 +181,9 @@ export const useCanvasCopyPaste = ({
       }
 
       // Check for pasted image files
-      const files = Array.from(event.clipboardData?.files ?? []).filter(isImageFile);
+      const files = Array.from(event.clipboardData?.files ?? []).filter(
+        isImageFile,
+      );
 
       if (files.length > 0) {
         event.preventDefault();
@@ -171,17 +196,20 @@ export const useCanvasCopyPaste = ({
             const arrayBuffer = await file.arrayBuffer();
             const bytes = new Uint8Array(arrayBuffer);
             const extension = (() => {
-              if (file.name && file.name.includes('.')) {
-                const nameExtension = file.name.split('.').pop();
+              if (file.name && file.name.includes(".")) {
+                const nameExtension = file.name.split(".").pop();
                 if (nameExtension) {
                   return nameExtension.toLowerCase();
                 }
               }
-              const typeExtension = file.type.split('/')[1];
-              return typeExtension ?? 'png';
+              const typeExtension = file.type.split("/")[1];
+              return typeExtension ?? "png";
             })();
-            const base64Data = Buffer.from(bytes).toString('base64');
-            const filePath = await window.fileSystem.saveClipboardImage(base64Data, extension);
+            const base64Data = Buffer.from(bytes).toString("base64");
+            const filePath = await window.fileSystem.saveClipboardImage(
+              base64Data,
+              extension,
+            );
             const fileName = getFileName(filePath);
             const asset = await registerAssetFromBytes(bytes, {
               fileName,
@@ -196,7 +224,7 @@ export const useCanvasCopyPaste = ({
               asset.fileName,
             );
           } catch (error) {
-            console.error('Failed to paste image', error);
+            console.error("Failed to paste image", error);
           }
         }
       }

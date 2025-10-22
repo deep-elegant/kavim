@@ -1,36 +1,36 @@
 export type ConnectionState =
-  | 'new'
-  | 'connecting'
-  | 'connected'
-  | 'disconnected'
-  | 'failed'
-  | 'closed';
+  | "new"
+  | "connecting"
+  | "connected"
+  | "disconnected"
+  | "failed"
+  | "closed";
 
 export type DataChannelState =
-  | 'not-initiated'
-  | 'connecting'
-  | 'open'
-  | 'closing'
-  | 'closed';
+  | "not-initiated"
+  | "connecting"
+  | "open"
+  | "closing"
+  | "closed";
 
 export interface WebRTCChatMessage {
-  type: 'chat';
+  type: "chat";
   data: string;
   timestamp: number;
 }
 
 export type SyncMessage = {
-  type: 'yjs-sync';
+  type: "yjs-sync";
   vector: string;
 };
 
 export type YjsUpdateMessage = {
-  type: 'yjs-update';
+  type: "yjs-update";
   update: string;
 };
 
 export type YjsUpdateChunkMessage = {
-  type: 'yjs-update-chunk';
+  type: "yjs-update-chunk";
   id: string;
   index: number;
   total: number;
@@ -43,7 +43,7 @@ export type ChannelMessage =
   | YjsUpdateMessage
   | YjsUpdateChunkMessage;
 
-export type CollaboratorInteraction = 'pointer' | 'selecting' | 'typing';
+export type CollaboratorInteraction = "pointer" | "selecting" | "typing";
 
 export type CursorPresence = {
   x: number;

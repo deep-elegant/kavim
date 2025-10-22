@@ -1,15 +1,19 @@
-import { useCallback, type Dispatch, type SetStateAction } from 'react';
-import type { Node, XYPosition } from '@xyflow/react';
+import { useCallback, type Dispatch, type SetStateAction } from "react";
+import type { Node, XYPosition } from "@xyflow/react";
 
-import { IMAGE_NODE_MIN_HEIGHT, IMAGE_NODE_MIN_WIDTH, type ImageNodeType } from '../nodes/ImageNode';
-import type { CanvasNode, ToolId } from '../types';
-import type { UsePakAssetsReturn } from '@/core/pak/usePakAssets';
+import {
+  IMAGE_NODE_MIN_HEIGHT,
+  IMAGE_NODE_MIN_WIDTH,
+  type ImageNodeType,
+} from "../nodes/ImageNode";
+import type { CanvasNode, ToolId } from "../types";
+import type { UsePakAssetsReturn } from "@/core/pak/usePakAssets";
 
 /** File filter for image selection dialog */
 export const IMAGE_FILE_FILTERS = [
   {
-    name: 'Images',
-    extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp'],
+    name: "Images",
+    extensions: ["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"],
   },
 ];
 
@@ -43,7 +47,7 @@ export const getFileName = (filePath: string) => {
  * - Handles cases where MIME type may be missing.
  */
 export const isImageFile = (file: File) => {
-  if (file.type.startsWith('image/')) {
+  if (file.type.startsWith("image/")) {
     return true;
   }
 
@@ -58,8 +62,8 @@ export interface UseCanvasImageNodesParams {
   setSelectedTool: Dispatch<SetStateAction<ToolId | null>>;
   screenToFlowPosition: (position: XYPosition) => XYPosition;
   getCanvasCenterPosition: () => XYPosition;
-  registerAssetFromFilePath: UsePakAssetsReturn['registerAssetFromFilePath'];
-  registerAssetFromFile: UsePakAssetsReturn['registerAssetFromFile'];
+  registerAssetFromFilePath: UsePakAssetsReturn["registerAssetFromFilePath"];
+  registerAssetFromFile: UsePakAssetsReturn["registerAssetFromFile"];
 }
 
 /**
@@ -100,34 +104,46 @@ export const useCanvasImageNodes = ({
           const heightScale = MAX_IMAGE_DIMENSION / naturalHeight;
           const scale = Math.min(1, widthScale, heightScale);
 
-          width = Math.max(IMAGE_NODE_MIN_WIDTH, Math.round(naturalWidth * scale));
-          height = Math.max(IMAGE_NODE_MIN_HEIGHT, Math.round(naturalHeight * scale));
+          width = Math.max(
+            IMAGE_NODE_MIN_WIDTH,
+            Math.round(naturalWidth * scale),
+          );
+          height = Math.max(
+            IMAGE_NODE_MIN_HEIGHT,
+            Math.round(naturalHeight * scale),
+          );
 
           const aspectRatio = naturalWidth / naturalHeight || 1;
 
           // Ensure minimum dimensions while maintaining aspect ratio
           if (height < IMAGE_NODE_MIN_HEIGHT) {
             height = IMAGE_NODE_MIN_HEIGHT;
-            width = Math.max(IMAGE_NODE_MIN_WIDTH, Math.round(height * aspectRatio));
+            width = Math.max(
+              IMAGE_NODE_MIN_WIDTH,
+              Math.round(height * aspectRatio),
+            );
           }
 
           if (width < IMAGE_NODE_MIN_WIDTH) {
             width = IMAGE_NODE_MIN_WIDTH;
-            height = Math.max(IMAGE_NODE_MIN_HEIGHT, Math.round(width / aspectRatio));
+            height = Math.max(
+              IMAGE_NODE_MIN_HEIGHT,
+              Math.round(width / aspectRatio),
+            );
           }
         }
       } catch (error) {
-        console.error('Failed to determine image dimensions', error);
+        console.error("Failed to determine image dimensions", error);
       }
 
       const nodeId = crypto.randomUUID();
       const newNode: ImageNodeType = {
         id: nodeId,
-        type: 'image-node',
+        type: "image-node",
         position,
         data: {
           src,
-          alt: fileName ?? 'Image',
+          alt: fileName ?? "Image",
           fileName,
           naturalWidth,
           naturalHeight,
@@ -154,7 +170,9 @@ export const useCanvasImageNodes = ({
   /** Opens file dialog to select and add an image */
   const handleAddImageFromDialog = useCallback(async () => {
     try {
-      const filePath = await window.fileSystem.openFile({ filters: IMAGE_FILE_FILTERS });
+      const filePath = await window.fileSystem.openFile({
+        filters: IMAGE_FILE_FILTERS,
+      });
       if (!filePath) {
         return;
       }
@@ -164,7 +182,7 @@ export const useCanvasImageNodes = ({
 
       await addImageNode(asset.uri, centerPosition, asset.fileName);
     } catch (error) {
-      console.error('Failed to add image node', error);
+      console.error("Failed to add image node", error);
     }
   }, [addImageNode, getCanvasCenterPosition, registerAssetFromFilePath]);
 
@@ -172,7 +190,7 @@ export const useCanvasImageNodes = ({
   const handleDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
     if (event.dataTransfer) {
-      event.dataTransfer.dropEffect = 'copy';
+      event.dataTransfer.dropEffect = "copy";
     }
   }, []);
 
@@ -185,7 +203,9 @@ export const useCanvasImageNodes = ({
   const handleDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
-      const files = Array.from(event.dataTransfer?.files ?? []).filter(isImageFile);
+      const files = Array.from(event.dataTransfer?.files ?? []).filter(
+        isImageFile,
+      );
 
       if (files.length === 0) {
         return;
@@ -209,11 +229,16 @@ export const useCanvasImageNodes = ({
             );
           })
           .catch((error) => {
-            console.error('Failed to process dropped image', error);
+            console.error("Failed to process dropped image", error);
           });
       });
     },
-    [addImageNode, registerAssetFromFile, screenToFlowPosition, setSelectedTool],
+    [
+      addImageNode,
+      registerAssetFromFile,
+      screenToFlowPosition,
+      setSelectedTool,
+    ],
   );
 
   return {

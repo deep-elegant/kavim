@@ -1,6 +1,6 @@
-import React, { createContext, useContext, ReactNode } from 'react';
-import * as Y from 'yjs';
-import { useWebRTCManual } from './useWebRTCManual';
+import React, { createContext, useContext, ReactNode } from "react";
+import * as Y from "yjs";
+import { useWebRTCManual } from "./useWebRTCManual";
 
 /**
  * Context for WebRTC peer-to-peer collaboration state.
@@ -16,13 +16,17 @@ const WebRTCContext = createContext<WebRTCContextType | null>(null);
  * Provides WebRTC collaboration capabilities to the component tree.
  * - Must receive the same Y.Doc instance used in CanvasDataProvider for proper sync
  */
-export function WebRTCProvider({ doc, children }: { doc: Y.Doc; children: ReactNode }) {
+export function WebRTCProvider({
+  doc,
+  children,
+}: {
+  doc: Y.Doc;
+  children: ReactNode;
+}) {
   const webrtc = useWebRTCManual(doc);
 
   return (
-    <WebRTCContext.Provider value={webrtc}>
-      {children}
-    </WebRTCContext.Provider>
+    <WebRTCContext.Provider value={webrtc}>{children}</WebRTCContext.Provider>
   );
 }
 
@@ -33,7 +37,7 @@ export function WebRTCProvider({ doc, children }: { doc: Y.Doc; children: ReactN
 export function useWebRTC() {
   const context = useContext(WebRTCContext);
   if (!context) {
-    throw new Error('useWebRTC must be used within a WebRTCProvider');
+    throw new Error("useWebRTC must be used within a WebRTCProvider");
   }
   return context;
 }

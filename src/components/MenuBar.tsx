@@ -86,13 +86,18 @@ export default function MenuBar() {
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPeerConnectionOpen, setIsPeerConnectionOpen] = useState(false);
-  const [connectionRole, setConnectionRole] = useState<'initiator' | 'responder'>('initiator');
-  const [providerKeys, setProviderKeys] = useState<ProviderKeyState>(() => createProviderKeyState());
+  const [connectionRole, setConnectionRole] = useState<
+    "initiator" | "responder"
+  >("initiator");
+  const [providerKeys, setProviderKeys] = useState<ProviderKeyState>(() =>
+    createProviderKeyState(),
+  );
   const [settingsMessage, setSettingsMessage] = useState<string>("");
   const [gatewaySettings, setGatewaySettings] = useState<GatewaySettingsState>(
     () => createGatewaySettingsState(),
   );
-  const { enabled: statsForNerdsEnabled, setEnabled: setStatsForNerdsEnabled } = useStatsForNerds();
+  const { enabled: statsForNerdsEnabled, setEnabled: setStatsForNerdsEnabled } =
+    useStatsForNerds();
 
   // Reload settings from storage when modal opens to reflect any external changes
   React.useEffect(() => {
@@ -120,7 +125,10 @@ export default function MenuBar() {
       const parsed = Date.parse(lastAutoSaveAt);
       return Number.isNaN(parsed)
         ? lastAutoSaveAt
-        : new Date(parsed).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        : new Date(parsed).toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+          });
     })();
 
     if (saveTarget.type === "draft") {
@@ -135,20 +143,28 @@ export default function MenuBar() {
 
   /** Combines draft status, save messages, and settings messages into one line. */
   const combinedStatus = useMemo(() => {
-    return [draftStatus, saveMessage, settingsMessage].filter(Boolean).join(" · ");
+    return [draftStatus, saveMessage, settingsMessage]
+      .filter(Boolean)
+      .join(" · ");
   }, [draftStatus, saveMessage, settingsMessage]);
 
   // Listen for Cmd+S / Ctrl+S to open save modal
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      const isSaveShortcut = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s";
+      const isSaveShortcut =
+        (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s";
       if (!isSaveShortcut) {
         return;
       }
 
       // Ignore shortcut if user is typing in an input/textarea/contenteditable
       const target = event.target as HTMLElement | null;
-      if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable)
+      ) {
         return;
       }
 
@@ -198,12 +214,15 @@ export default function MenuBar() {
   }, [connectionState, dataChannelState]);
 
   /** Updates a single provider's API key in local state (not persisted until save). */
-  const handleProviderKeyChange = useCallback((provider: AiProvider, value: string) => {
-    setProviderKeys((previous) => ({
-      ...previous,
-      [provider]: value,
-    }));
-  }, []);
+  const handleProviderKeyChange = useCallback(
+    (provider: AiProvider, value: string) => {
+      setProviderKeys((previous) => ({
+        ...previous,
+        [provider]: value,
+      }));
+    },
+    [],
+  );
 
   /** Updates a gateway's configuration in local state (not persisted until save). */
   const handleGatewaySettingChange = useCallback(
@@ -344,8 +363,9 @@ export default function MenuBar() {
 
     if (draft) {
       const updatedAt = Date.parse(draft.updatedAt);
-      const formatted =
-        Number.isNaN(updatedAt) ? draft.updatedAt : new Date(updatedAt).toLocaleTimeString();
+      const formatted = Number.isNaN(updatedAt)
+        ? draft.updatedAt
+        : new Date(updatedAt).toLocaleTimeString();
       setSaveMessage(`Draft saved (${formatted})`);
     } else {
       setSaveMessage("Failed to save draft.");
@@ -391,13 +411,15 @@ export default function MenuBar() {
   };
 
   return (
-    <div className="border-b border-border bg-background/95 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-background/75">
+    <div className="border-border bg-background/95 supports-[backdrop-filter]:bg-background/75 border-b shadow-sm backdrop-blur">
       <div className="flex max-w-5xl items-center justify-between gap-3 px-4">
         <Menubar className="border-none bg-transparent p-0 shadow-none">
           <MenubarMenu>
             <MenubarTrigger>{i18n.t("menuBar.file")}</MenubarTrigger>
             <MenubarContent>
-              <MenubarItem onClick={handleLoadClick}>{i18n.t("menuBar.load")}</MenubarItem>
+              <MenubarItem onClick={handleLoadClick}>
+                {i18n.t("menuBar.load")}
+              </MenubarItem>
               <MenubarItem onClick={() => setIsSaveModalOpen(true)}>
                 {i18n.t("menuBar.save")}
               </MenubarItem>
@@ -412,34 +434,50 @@ export default function MenuBar() {
               <MenubarItem onClick={() => setIsSettingsOpen(true)}>
                 {i18n.t("menuBar.llm")}
               </MenubarItem>
-              <MenubarItem onClick={() => setStatsForNerdsEnabled(!statsForNerdsEnabled)}>
-                {statsForNerdsEnabled ? i18n.t("menuBar.statsForNerdsEnabled") : i18n.t("menuBar.statsForNerdsDisabled")}
+              <MenubarItem
+                onClick={() => setStatsForNerdsEnabled(!statsForNerdsEnabled)}
+              >
+                {statsForNerdsEnabled
+                  ? i18n.t("menuBar.statsForNerdsEnabled")
+                  : i18n.t("menuBar.statsForNerdsDisabled")}
               </MenubarItem>
             </MenubarContent>
           </MenubarMenu>
           <MenubarMenu>
             <MenubarTrigger>Connect</MenubarTrigger>
             <MenubarContent>
-              <MenubarItem onClick={() => { setIsPeerConnectionOpen(true); setConnectionRole('initiator'); }}>
+              <MenubarItem
+                onClick={() => {
+                  setIsPeerConnectionOpen(true);
+                  setConnectionRole("initiator");
+                }}
+              >
                 Connect as Initiator
               </MenubarItem>
-              <MenubarItem onClick={() => { setIsPeerConnectionOpen(true); setConnectionRole('responder'); }}>
+              <MenubarItem
+                onClick={() => {
+                  setIsPeerConnectionOpen(true);
+                  setConnectionRole("responder");
+                }}
+              >
                 Connect as Responder
               </MenubarItem>
-              <MenubarItem onClick={() => requestSync?.()}>
-                Resync
-              </MenubarItem>
+              <MenubarItem onClick={() => requestSync?.()}>Resync</MenubarItem>
             </MenubarContent>
           </MenubarMenu>
         </Menubar>
         <div className="flex items-center gap-3">
           {connectionStatus ? (
-            <span className={`text-sm font-medium ${connectionStatus.className}`}>
+            <span
+              className={`text-sm font-medium ${connectionStatus.className}`}
+            >
               {connectionStatus.label}
             </span>
           ) : null}
           {combinedStatus ? (
-            <span className="text-sm text-muted-foreground">{combinedStatus}</span>
+            <span className="text-muted-foreground text-sm">
+              {combinedStatus}
+            </span>
           ) : null}
         </div>
       </div>

@@ -1,5 +1,5 @@
-import type { Node } from '@xyflow/react';
-import { describe, expect, it } from 'vitest';
+import type { Node } from "@xyflow/react";
+import { describe, expect, it } from "vitest";
 
 import {
   createMutableNodeRecord,
@@ -7,21 +7,21 @@ import {
   restoreTransientKeys,
   restoreTransientNodeState,
   sanitizeNodeDataForSync,
-} from '@/core/canvas/state/nodeSync';
+} from "@/core/canvas/state/nodeSync";
 
-const createNode = (data: Node['data'] = {}): Node =>
+const createNode = (data: Node["data"] = {}): Node =>
   ({
-    id: 'node-id',
-    type: 'test-node',
+    id: "node-id",
+    type: "test-node",
     position: { x: 0, y: 0 },
     data,
   }) as Node;
 
-describe('restoreTransientKeys', () => {
-  it('copies transient keys from the previous node data', () => {
+describe("restoreTransientKeys", () => {
+  it("copies transient keys from the previous node data", () => {
     const mutableData: Record<string, unknown> = {};
     const changed = restoreTransientKeys(mutableData, {
-      label: 'Hello',
+      label: "Hello",
       isTyping: true,
       isActive: true,
     });
@@ -33,7 +33,7 @@ describe('restoreTransientKeys', () => {
     });
   });
 
-  it('does nothing when previous data is missing', () => {
+  it("does nothing when previous data is missing", () => {
     const mutableData: Record<string, unknown> = {};
     const changed = restoreTransientKeys(mutableData, undefined);
 
@@ -42,29 +42,29 @@ describe('restoreTransientKeys', () => {
   });
 });
 
-describe('sanitizeNodeDataForSync', () => {
-  it('removes transient keys from node data', () => {
+describe("sanitizeNodeDataForSync", () => {
+  it("removes transient keys from node data", () => {
     const sanitized = sanitizeNodeDataForSync({
-      label: 'hello',
+      label: "hello",
       isTyping: true,
       isEditing: false,
     });
 
-    expect(sanitized).toMatchObject({ label: 'hello' });
-    expect('isTyping' in (sanitized as Record<string, unknown>)).toBe(false);
-    expect('isEditing' in (sanitized as Record<string, unknown>)).toBe(false);
+    expect(sanitized).toMatchObject({ label: "hello" });
+    expect("isTyping" in (sanitized as Record<string, unknown>)).toBe(false);
+    expect("isEditing" in (sanitized as Record<string, unknown>)).toBe(false);
   });
 
-  it('returns the original reference when no transient keys are present', () => {
-    const data = { label: 'hello', fontSize: 'auto' };
+  it("returns the original reference when no transient keys are present", () => {
+    const data = { label: "hello", fontSize: "auto" };
     const sanitized = sanitizeNodeDataForSync(data);
 
     expect(sanitized).toBe(data);
   });
 });
 
-describe('reconcileSelectedFlag', () => {
-  it('restores the previous selection state when provided', () => {
+describe("reconcileSelectedFlag", () => {
+  it("restores the previous selection state when provided", () => {
     const mutable = createMutableNodeRecord(createNode()).node;
     const changed = reconcileSelectedFlag(mutable, {
       ...createNode(),
@@ -75,7 +75,7 @@ describe('reconcileSelectedFlag', () => {
     expect(mutable.selected).toBe(true);
   });
 
-  it('removes the selected flag when the previous node did not have it', () => {
+  it("removes the selected flag when the previous node did not have it", () => {
     const mutable = {
       ...createNode(),
       selected: false,
@@ -84,33 +84,33 @@ describe('reconcileSelectedFlag', () => {
     const changed = reconcileSelectedFlag(mutable, createNode());
 
     expect(changed).toBe(true);
-    expect('selected' in mutable).toBe(false);
+    expect("selected" in mutable).toBe(false);
   });
 });
 
-describe('restoreTransientNodeState', () => {
-  it('returns the document node when no previous snapshot exists', () => {
-    const docNode = createNode({ label: 'hello' });
+describe("restoreTransientNodeState", () => {
+  it("returns the document node when no previous snapshot exists", () => {
+    const docNode = createNode({ label: "hello" });
     const result = restoreTransientNodeState(docNode);
 
     expect(result).toBe(docNode);
   });
 
-  it('restores transient keys without mutating the original document node', () => {
-    const docNode = createNode({ label: 'hello' });
-    const previousNode = createNode({ label: 'hello', isTyping: true });
+  it("restores transient keys without mutating the original document node", () => {
+    const docNode = createNode({ label: "hello" });
+    const previousNode = createNode({ label: "hello", isTyping: true });
 
     const result = restoreTransientNodeState(docNode, previousNode);
 
     expect(result).not.toBe(docNode);
-    expect(result.data).toMatchObject({ label: 'hello', isTyping: true });
-    expect(docNode.data).toMatchObject({ label: 'hello' });
+    expect(result.data).toMatchObject({ label: "hello", isTyping: true });
+    expect(docNode.data).toMatchObject({ label: "hello" });
   });
 
-  it('reconciles the selected flag with the previous node snapshot', () => {
-    const docNode = createNode({ label: 'hello' });
+  it("reconciles the selected flag with the previous node snapshot", () => {
+    const docNode = createNode({ label: "hello" });
     const previousNode = {
-      ...createNode({ label: 'hello' }),
+      ...createNode({ label: "hello" }),
       selected: true,
     } as Node;
 
