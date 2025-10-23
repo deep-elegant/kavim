@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useCanvasData } from "@/core/canvas/CanvasDataContext";
 import { DraftRecoveryDialog } from "@/components/DraftRecoveryDialog";
 import { useDraftManager } from "./DraftManagerContext";
@@ -24,13 +24,25 @@ export const DraftRecoveryManager = () => {
   // Prevents double-clicks during async operations
   const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
   const [hasDismissed, setHasDismissed] = useState(false);
+  const sessionStartRef = useRef<number>(Date.now());
 
   // Only show drafts that haven't been saved to files and aren't currently open
-  const activeDrafts = useMemo(
-    () =>
-      drafts.filter((draft) => !draft.promotedAt && draft.id !== activeDraftId),
-    [activeDraftId, drafts],
-  );
+  const recoverableDrafts = useMemo(() => {
+    const sessionStart = sessionStartRef.current;
+    return drafts
+      .filter((draft) => !draft.promotedAt && draft.id !== activeDraftId)
+      .filter((draft) => {
+        const updatedAt = Date.parse(draft.updatedAt);
+        if (!Number.isNaN(updatedAt)) {
+          return updatedAt < sessionStart;
+        }
+        const createdAt = draft.createdAt ? Date.parse(draft.createdAt) : NaN;
+        if (!Number.isNaN(createdAt)) {
+          return createdAt < sessionStart;
+        }
+        return true;
+      });
+  }, [activeDraftId, drafts]);
 
   // Show dialog when draft system is ready and there are drafts to recover
   useEffect(() => {
@@ -38,7 +50,7 @@ export const DraftRecoveryManager = () => {
       return;
     }
 
-    if (activeDrafts.length === 0) {
+    if (recoverableDrafts.length === 0) {
       setIsDialogOpen(false);
       setHasDismissed(false);
       return;
@@ -47,7 +59,7 @@ export const DraftRecoveryManager = () => {
     if (!hasDismissed) {
       setIsDialogOpen(true);
     }
-  }, [activeDrafts, hasDismissed, isReady]);
+  }, [recoverableDrafts, hasDismissed, isReady]);
 
   const handleDialogClose = useCallback(
     (options?: { dismissed?: boolean }) => {
@@ -100,7 +112,7 @@ export const DraftRecoveryManager = () => {
   return (
     <DraftRecoveryDialog
       isOpen={isDialogOpen}
-      drafts={activeDrafts}
+      drafts={recoverableDrafts}
       onResume={handleResume}
       onDiscard={handleDiscard}
       onClose={handleDialogClose}
