@@ -13,7 +13,7 @@ import {
 } from "electron-devtools-installer";
 
 const inDevelopment = process.env.NODE_ENV === "development";
-const APP_TITLE = "DeepElegant - kavim";
+const APP_TITLE = "DeepElegant - Kavim";
 
 app.setName(APP_TITLE);
 
