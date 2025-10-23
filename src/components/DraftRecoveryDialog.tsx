@@ -38,7 +38,7 @@ type DraftRecoveryDialogProps = {
   drafts: DraftRecord[];
   onResume: (draftId: string) => void;
   onDiscard: (draftId: string) => void;
-  onClose: () => void;
+  onClose: (options?: { dismissed?: boolean }) => void;
   processingId?: string | null;
 };
 
@@ -107,7 +107,10 @@ export const DraftRecoveryDialog: React.FC<DraftRecoveryDialogProps> = ({
           ) : null}
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
+          <Button
+            variant="ghost"
+            onClick={() => onClose({ dismissed: true })}
+          >
             Close
           </Button>
         </DialogFooter>

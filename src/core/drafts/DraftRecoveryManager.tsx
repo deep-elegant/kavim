@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useCanvasData } from "@/core/canvas/CanvasDataContext";
 import { DraftRecoveryDialog } from "@/components/DraftRecoveryDialog";
 import { useDraftManager } from "./DraftManagerContext";
@@ -23,6 +23,7 @@ export const DraftRecoveryManager = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   // Prevents double-clicks during async operations
   const [isProcessingId, setIsProcessingId] = useState<string | null>(null);
+  const [hasDismissed, setHasDismissed] = useState(false);
 
   // Only show drafts that haven't been saved to files and aren't currently open
   const activeDrafts = useMemo(
@@ -37,12 +38,27 @@ export const DraftRecoveryManager = () => {
       return;
     }
 
-    if (activeDrafts.length > 0) {
-      setIsDialogOpen(true);
-    } else {
+    if (activeDrafts.length === 0) {
       setIsDialogOpen(false);
+      setHasDismissed(false);
+      return;
     }
-  }, [activeDrafts, isReady]);
+
+    if (!hasDismissed) {
+      setIsDialogOpen(true);
+    }
+  }, [activeDrafts, hasDismissed, isReady]);
+
+  const handleDialogClose = useCallback(
+    (options?: { dismissed?: boolean }) => {
+      setIsProcessingId(null);
+      if (options?.dismissed) {
+        setHasDismissed(true);
+      }
+      setIsDialogOpen(false);
+    },
+    [setHasDismissed, setIsDialogOpen, setIsProcessingId],
+  );
 
   const handleResume = async (draftId: string) => {
     setIsProcessingId(draftId);
@@ -68,7 +84,7 @@ export const DraftRecoveryManager = () => {
         },
       }),
     );
-    setIsDialogOpen(false);
+    handleDialogClose();
   };
 
   const handleDiscard = async (draftId: string) => {
@@ -81,18 +97,13 @@ export const DraftRecoveryManager = () => {
     setIsProcessingId(null);
   };
 
-  const handleClose = () => {
-    setIsProcessingId(null);
-    setIsDialogOpen(false);
-  };
-
   return (
     <DraftRecoveryDialog
       isOpen={isDialogOpen}
       drafts={activeDrafts}
       onResume={handleResume}
       onDiscard={handleDiscard}
-      onClose={handleClose}
+      onClose={handleDialogClose}
       processingId={isProcessingId}
     />
   );
