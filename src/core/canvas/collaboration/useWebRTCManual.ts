@@ -4,8 +4,8 @@ import * as Y from "yjs";
 import { guessMimeType } from "@/core/pak/mimeTypes";
 
 import type {
-  ChannelMessage,
   DataChannelState,
+  SessionNewBoardMessage,
   WebRTCChatMessage,
 } from "./manual-webrtc/types";
 import {
@@ -89,6 +89,9 @@ export function useWebRTCManual(doc: Y.Doc) {
   );
   const [fileTransferChannel, setFileTransferChannel] =
     useState<RTCDataChannel | null>(null);
+  const [incomingNewBoard, setIncomingNewBoard] =
+    useState<SessionNewBoardMessage | null>(null);
+  const incomingNewBoardRef = useRef<string | null>(null);
 
   const scheduleBufferDrain = useCallback(() => {
     const channel = syncChannelRef.current;
@@ -169,6 +172,17 @@ export function useWebRTCManual(doc: Y.Doc) {
     setMessages((prev) => [...prev, message]);
   }, []);
 
+  const handleControlMessage = useCallback(
+    (message: SessionNewBoardMessage) => {
+      if (message.originClientId === String(doc.clientID)) {
+        return;
+      }
+      incomingNewBoardRef.current = message.sessionId;
+      setIncomingNewBoard(message);
+    },
+    [doc],
+  );
+
   const {
     applyYUpdate,
     flushPendingYUpdates,
@@ -177,12 +191,14 @@ export function useWebRTCManual(doc: Y.Doc) {
     resetChunkAssembly,
     sendStateVector,
     sendYUpdate,
+    sendControlMessage,
   } = useYjsSync({
     doc,
     channelRef: syncChannelRef,
     onReceiveChatMessage: handleRemoteChatMessage,
     scheduleBufferDrain,
     sendJSONMessage,
+    onControlMessage: handleControlMessage,
   });
 
   useEffect(() => {
@@ -630,6 +646,40 @@ export function useWebRTCManual(doc: Y.Doc) {
     }
   }, [sendStateVector, syncChannelRef]);
 
+  const broadcastNewBoard = useCallback(() => {
+    const sessionId =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const message: SessionNewBoardMessage = {
+      type: "session:new-board",
+      sessionId,
+      timestamp: Date.now(),
+      originClientId: String(doc.clientID),
+    };
+
+    const sent = sendControlMessage(message, {
+      context: "[WebRTCManual] Failed to notify collaborators about new board",
+    });
+
+    return { sent, sessionId };
+  }, [doc, sendControlMessage]);
+
+  const clearIncomingNewBoard = useCallback((sessionId?: string) => {
+    setIncomingNewBoard((current) => {
+      if (!current) {
+        return current;
+      }
+      if (sessionId && current.sessionId !== sessionId) {
+        return current;
+      }
+      return null;
+    });
+    if (!sessionId || incomingNewBoardRef.current === sessionId) {
+      incomingNewBoardRef.current = null;
+    }
+  }, []);
+
   /**
    * Cleanup on unmount.
    * - Flushes pending updates before closing
@@ -693,5 +743,8 @@ export function useWebRTCManual(doc: Y.Doc) {
     cancelTransfer,
     requestAsset,
     releaseAssetRequest,
+    broadcastNewBoard,
+    incomingNewBoard,
+    clearIncomingNewBoard,
   };
 }
