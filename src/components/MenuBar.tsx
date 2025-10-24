@@ -99,6 +99,7 @@ export default function MenuBar() {
   const {
     drafts,
     activeDraftId,
+    setActiveDraftId,
     setActiveFilePath,
     deleteDraft,
     saveDraft,
@@ -214,6 +215,19 @@ export default function MenuBar() {
           if (!draft) {
             throw new Error("Draft save completed without returning data");
           }
+
+          window.dispatchEvent(
+            new CustomEvent("canvas:manual-save", {
+              detail: {
+                nodes: snapshot.nodes,
+                edges: snapshot.edges,
+              },
+            }),
+          );
+
+          if (draftId) {
+            setActiveDraftId(null);
+          }
         }
 
         return { ok: true };
@@ -226,7 +240,14 @@ export default function MenuBar() {
         };
       }
     },
-    [activeDraftId, drafts, saveDraft, saveFileName, saveTarget],
+    [
+      activeDraftId,
+      drafts,
+      saveDraft,
+      saveFileName,
+      saveTarget,
+      setActiveDraftId,
+    ],
   );
 
   const initializeBlankBoard = useCallback(
