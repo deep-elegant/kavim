@@ -96,7 +96,7 @@ export const DraftRecoveryManager = () => {
         },
       }),
     );
-    handleDialogClose();
+    handleDialogClose({ dismissed: true });
   };
 
   const handleDiscard = async (draftId: string) => {

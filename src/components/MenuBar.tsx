@@ -6,6 +6,15 @@ import {
   MenubarMenu,
   MenubarTrigger,
 } from "@/components/ui/menubar";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { SaveModal } from "./SaveModal";
 import { SettingsModal } from "./SettingsModal";
 import { PeerConnectionModal } from "@/core/canvas/collaboration/PeerConnectionModal";
@@ -59,6 +68,17 @@ const createGatewaySettingsState = (): GatewaySettingsState =>
     return accumulator;
   }, {} as GatewaySettingsState);
 
+const splitFilePath = (filePath: string) => {
+  const normalized = filePath.replace(/\\/g, "/");
+  const index = normalized.lastIndexOf("/");
+  if (index === -1) {
+    return { directory: undefined, fileName: filePath };
+  }
+  const directory = filePath.slice(0, index);
+  const fileName = filePath.slice(index + 1);
+  return { directory: directory || undefined, fileName };
+};
+
 /**
  * Top menu bar with file operations, settings, and collaboration controls.
  * - Manages save/load for `.pak` project files and draft auto-save.
@@ -70,6 +90,7 @@ export default function MenuBar() {
   const { nodes, edges, setCanvasState } = useCanvasData();
   const { connectionState, dataChannelState, requestSync } = useWebRTC();
   const {
+    drafts,
     activeDraftId,
     setActiveFilePath,
     deleteDraft,
@@ -83,6 +104,9 @@ export default function MenuBar() {
   const [saveFolder, setSaveFolder] = useState("");
   const [saveMessage, setSaveMessage] = useState<string>("");
   const [folderPickerMessage, setFolderPickerMessage] = useState<string>("");
+  const [isNewBoardDialogOpen, setIsNewBoardDialogOpen] = useState(false);
+  const [isNewBoardWorking, setIsNewBoardWorking] = useState(false);
+  const [newBoardError, setNewBoardError] = useState<string | null>(null);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPeerConnectionOpen, setIsPeerConnectionOpen] = useState(false);
@@ -107,6 +131,133 @@ export default function MenuBar() {
       setSettingsMessage("");
     }
   }, [isSettingsOpen, statsForNerdsEnabled]);
+
+  const handleNewBoardRequest = useCallback(() => {
+    if (isNewBoardWorking) {
+      return;
+    }
+    setNewBoardError(null);
+    setIsNewBoardDialogOpen(true);
+  }, [isNewBoardWorking]);
+
+  const handleNewBoardCancel = useCallback(() => {
+    if (isNewBoardWorking) {
+      return;
+    }
+    setIsNewBoardDialogOpen(false);
+  }, [isNewBoardWorking]);
+
+  const handleNewBoardConfirm = useCallback(async () => {
+    if (isNewBoardWorking) {
+      return;
+    }
+
+    setNewBoardError(null);
+    setIsNewBoardWorking(true);
+
+    const clonedNodes = JSON.parse(JSON.stringify(nodes));
+    const clonedEdges = JSON.parse(JSON.stringify(edges));
+    const snapshotNodes = Array.isArray(clonedNodes) ? clonedNodes : [];
+    const snapshotEdges = Array.isArray(clonedEdges) ? clonedEdges : [];
+    const hasContent =
+      snapshotNodes.length > 0 || snapshotEdges.length > 0;
+
+    try {
+      if (saveTarget?.type === "file") {
+        const { fileName, directory } = splitFilePath(saveTarget.filePath);
+        await window.projectPak.save({
+          fileName,
+          directory,
+          canvas: {
+            nodes: snapshotNodes,
+            edges: snapshotEdges,
+          },
+        });
+        window.dispatchEvent(
+          new CustomEvent("canvas:manual-save", {
+            detail: {
+              nodes: snapshotNodes,
+              edges: snapshotEdges,
+              filePath: saveTarget.filePath,
+            },
+          }),
+        );
+      } else if (saveTarget?.type === "draft" || hasContent) {
+        const draftId =
+          saveTarget?.type === "draft"
+            ? saveTarget.draftId
+            : activeDraftId ?? undefined;
+        const activeDraftRecord =
+          draftId && drafts.find((draft) => draft.id === draftId);
+        const projectName =
+          activeDraftRecord?.projectName ??
+          (saveFileName.trim() ? saveFileName.trim() : null);
+
+        await saveDraft({
+          draftId,
+          projectName,
+          filePath: activeDraftRecord?.filePath ?? undefined,
+          canvas: {
+            nodes: snapshotNodes,
+            edges: snapshotEdges,
+          },
+        });
+      }
+    } catch (error) {
+      console.error(
+        "Failed to save current board before starting a new board",
+        error,
+      );
+      setNewBoardError(
+        "Saving current board failed. Please try again before starting a new board.",
+      );
+      setIsNewBoardWorking(false);
+      return;
+    }
+
+    try {
+      const newDraft = await saveDraft({
+        projectName: null,
+        canvas: { nodes: [], edges: [] },
+      });
+
+      if (!newDraft) {
+        throw new Error("Draft creation returned null");
+      }
+
+      setCanvasState([], []);
+      setActiveFilePath(null);
+      window.dispatchEvent(
+        new CustomEvent("canvas:new-session", {
+          detail: {
+            nodes: [],
+            edges: [],
+          },
+        }),
+      );
+      setIsNewBoardDialogOpen(false);
+      setSaveMessage("Started new board");
+    } catch (error) {
+      console.error("Failed to initialize new board session", error);
+      setNewBoardError(
+        "Current board saved, but starting a new board failed. Try reloading the app.",
+      );
+    } finally {
+      setIsNewBoardWorking(false);
+    }
+  }, [
+    activeDraftId,
+    drafts,
+    edges,
+    isNewBoardWorking,
+    nodes,
+    saveDraft,
+    saveFileName,
+    saveTarget,
+    setActiveFilePath,
+    setCanvasState,
+    setSaveMessage,
+  ]);
 
   /**
    * Computes status text for draft/autosave indicator.
@@ -417,6 +568,12 @@ export default function MenuBar() {
           <MenubarMenu>
             <MenubarTrigger>{i18n.t("menuBar.file")}</MenubarTrigger>
             <MenubarContent>
+              <MenubarItem
+                disabled={isNewBoardWorking}
+                onClick={handleNewBoardRequest}
+              >
+                {i18n.t("menuBar.newBoard")}
+              </MenubarItem>
               <MenubarItem onClick={handleLoadClick}>
                 {i18n.t("menuBar.load")}
               </MenubarItem>
@@ -481,6 +638,48 @@ export default function MenuBar() {
           ) : null}
         </div>
       </div>
+
+      <Dialog
+        open={isNewBoardDialogOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setNewBoardError(null);
+            setIsNewBoardDialogOpen(true);
+          } else {
+            handleNewBoardCancel();
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Start a new board?</DialogTitle>
+            <DialogDescription>
+              We{"'"}ll auto-save the current board first, then reset to a blank
+              canvas.
+            </DialogDescription>
+          </DialogHeader>
+          {newBoardError ? (
+            <p className="text-destructive text-sm">{newBoardError}</p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleNewBoardCancel}
+              disabled={isNewBoardWorking}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleNewBoardConfirm}
+              disabled={isNewBoardWorking}
+            >
+              {isNewBoardWorking ? "Starting…" : "Start New Board"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <SaveModal
         isOpen={isSaveModalOpen}
