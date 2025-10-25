@@ -7,6 +7,7 @@ import {
   AIMessage,
   AIMessageChunk,
   HumanMessage,
+  SystemMessage,
 } from "@langchain/core/messages";
 import type { BaseMessage } from "@langchain/core/messages";
 import {
@@ -50,19 +51,52 @@ const extractMessageContent = (message: AIMessage | AIMessageChunk): string => {
 const mapMessagesToLangChain = (
   messages: LlmStreamRequestPayload["messages"],
 ): BaseMessage[] =>
-  messages.map((message) =>
-    message.role === "user"
-      ? new HumanMessage({ content: message.content })
-      : new AIMessage({ content: message.content }),
-  );
+  messages.map((message) => {
+    switch (message.role) {
+      case "user":
+        return new HumanMessage({ content: message.content });
+      case "assistant":
+        return new AIMessage({ content: message.content });
+      case "system":
+        return new SystemMessage({ content: message.content });
+      default:
+        return new HumanMessage({ content: message.content });
+    }
+  });
 
-const mapMessagesToGeminiContents = (
+type GeminiTextPart = { text: string };
+type GeminiContent = {
+  role?: "user" | "model" | "system";
+  parts: GeminiTextPart[];
+};
+
+const buildGeminiRequest = (
   messages: LlmStreamRequestPayload["messages"],
-) =>
-  messages.map((message) => ({
-    role: message.role === "user" ? "user" : "model",
-    parts: [{ text: message.content }],
-  }));
+) => {
+  const contents: GeminiContent[] = [];
+  const systemParts: GeminiTextPart[] = [];
+
+  messages.forEach((message) => {
+    if (message.role === "system") {
+      if (message.content.trim()) {
+        systemParts.push({ text: message.content });
+      }
+      return;
+    }
+
+    contents.push({
+      role: message.role === "user" ? "user" : "model",
+      parts: [{ text: message.content }],
+    });
+  });
+
+  const systemInstruction =
+    systemParts.length > 0
+      ? ({ role: "system", parts: systemParts } satisfies GeminiContent)
+      : undefined;
+
+  return { contents, systemInstruction };
+};
 
 const createOpenAiChatClient = (payload: LlmStreamRequestPayload) => {
   const { provider, apiKey, modelName, baseURL, headers } = payload;
@@ -115,10 +149,11 @@ export const addLlmEventListeners = () => {
           }
 
           const genAI = new GoogleGenAI({ apiKey });
-          const contents = mapMessagesToGeminiContents(messages);
+          const { contents, systemInstruction } = buildGeminiRequest(messages);
           const response = await genAI.models.generateContentStream({
             model: modelName,
             contents,
+            ...(systemInstruction ? { systemInstruction } : {}),
           });
 
           for await (const chunk of response) {
