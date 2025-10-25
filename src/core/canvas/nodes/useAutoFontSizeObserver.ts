@@ -10,7 +10,11 @@ export interface UseAutoFontSizeObserverOptions {
   containerRef: React.RefObject<HTMLElement>;
   measurementRef: React.RefObject<HTMLElement>; // Hidden clone used for overflow detection
   minSize?: number;
-  maxSize?: number;
+  /**
+   * Optional upper bound for auto font size.
+   * - Accepts a numeric cap or a callback that reacts to container bounds.
+   */
+  maxSize?: number | ((bounds: { width: number; height: number }) => number);
 }
 
 const DEFAULT_MIN_SIZE = 8;
@@ -51,9 +55,15 @@ export const useAutoFontSizeObserver = ({
       return; // Skip if container not yet rendered or hidden
     }
 
+    const resolvedMax =
+      typeof maxSize === "function"
+        ? maxSize({ width: clientWidth, height: clientHeight })
+        : maxSize;
     const minBound = Math.max(1, Math.floor(minSize ?? DEFAULT_MIN_SIZE));
     const maxCandidate =
-      maxSize ?? Math.max(clientWidth, clientHeight, minBound);
+      Number.isFinite(resolvedMax) && resolvedMax !== undefined
+        ? resolvedMax
+        : Math.max(clientWidth, clientHeight, minBound);
     const maxBound = Math.max(minBound, Math.floor(maxCandidate));
 
     // Binary search to find largest font size that doesn't overflow
