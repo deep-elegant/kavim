@@ -67,6 +67,7 @@ const sharedHandleStyle: React.CSSProperties = {
 };
 
 const DEFAULT_CONNECTION_RADIUS = 30;
+const TOOLBAR_VERTICAL_GAP = 50; // Space between node bounds and floating toolbar to keep top handles accessible.
 
 export type NodeInteractionOverlayProps = PropsWithChildren<{
   nodeId: string;
@@ -214,7 +215,10 @@ const NodeInteractionOverlay = ({
           {editor && (
             <div
               data-editor-toolbar
-              className="pointer-events-auto absolute top-0 left-1/2 z-10 -mt-2 -translate-x-1/2 -translate-y-full"
+              className="pointer-events-auto absolute top-0 left-1/2 z-10"
+              style={{
+                transform: `translate(-50%, calc(-100% - ${TOOLBAR_VERTICAL_GAP}px))`,
+              }}
             >
               {(isActive || isEditing) && (
                 <TiptapToolbar editor={editor} items={toolbarItems} />
