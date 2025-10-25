@@ -28,7 +28,8 @@ import { copyNodesToClipboard } from "../hooks/useCanvasCopyPaste";
 import type { CanvasNode } from "../types";
 
 const HANDLE_SIZE = 12;
-const HANDLE_OFFSET = 10; // Distance handles appear outside node bounds
+const HANDLE_OFFSET = 10; // Distance resize handles appear outside node bounds
+const CONNECTION_HANDLE_OFFSET = 14; // Additional gap for connection handles to avoid overlapping node edges
 
 /**
  * All 4 sides provide both source and target handles for maximum connection flexibility.
@@ -45,13 +46,21 @@ const handlePositions: { id: string; position: Position }[] = [
 const getHandleStyle = (position: Position): React.CSSProperties => {
   switch (position) {
     case Position.Top:
-      return { marginTop: -HANDLE_OFFSET };
+      return {
+        marginTop: -(HANDLE_OFFSET + CONNECTION_HANDLE_OFFSET),
+      };
     case Position.Bottom:
-      return { marginBottom: -HANDLE_OFFSET };
+      return {
+        marginBottom: -(HANDLE_OFFSET + CONNECTION_HANDLE_OFFSET),
+      };
     case Position.Left:
-      return { marginLeft: -HANDLE_OFFSET };
+      return {
+        marginLeft: -(HANDLE_OFFSET + CONNECTION_HANDLE_OFFSET),
+      };
     case Position.Right:
-      return { marginRight: -HANDLE_OFFSET };
+      return {
+        marginRight: -(HANDLE_OFFSET + CONNECTION_HANDLE_OFFSET),
+      };
     default:
       return {};
   }
@@ -67,7 +76,7 @@ const sharedHandleStyle: React.CSSProperties = {
 };
 
 const DEFAULT_CONNECTION_RADIUS = 30;
-const TOOLBAR_VERTICAL_GAP = 50; // Space between node bounds and floating toolbar to keep top handles accessible.
+const TOOLBAR_VERTICAL_GAP = 36; // Space between node bounds and floating toolbar to keep top handles accessible.
 
 export type NodeInteractionOverlayProps = PropsWithChildren<{
   nodeId: string;
