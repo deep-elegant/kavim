@@ -253,6 +253,36 @@ export const AutoSaveManager: React.FC = () => {
     scheduleDebouncedSave();
   }, [isReady, scheduleDebouncedSave]);
 
+  // Reset auto-save state when starting a new session
+  useEffect(() => {
+    const handleNewSession = (event: Event) => {
+      const customEvent = event as CustomEvent<ManualSaveDetail | undefined>;
+      const detail = customEvent.detail;
+      const snapshot = sanitizeCanvas(
+        detail?.nodes ?? [],
+        detail?.edges ?? [],
+      );
+      latestSnapshotRef.current = snapshot;
+      lastSavedSignatureRef.current = JSON.stringify(snapshot);
+      needsSaveRef.current = false;
+      rerunRequestedRef.current = false;
+
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
+
+    window.addEventListener("canvas:new-session", handleNewSession);
+    return () => {
+      window.removeEventListener("canvas:new-session", handleNewSession);
+    };
+  }, []);
+
   // Cleanup timers on unmount
   useEffect(() => {
     return () => {

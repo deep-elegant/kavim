@@ -6,6 +6,7 @@ import {
   DATA_CHANNEL_MAX_BUFFER,
   MAX_MESSAGE_CHUNK_SIZE,
   SyncMessage,
+  SessionNewBoardMessage,
   WebRTCChatMessage,
 } from "./types";
 import { decodeFromBase64, encodeToBase64 } from "./encoding";
@@ -20,6 +21,7 @@ interface UseYjsSyncParams {
     options?: { onBackpressure?: () => void; context?: string },
   ) => boolean;
   onReceiveChatMessage: (message: WebRTCChatMessage) => void;
+  onControlMessage?: (message: SessionNewBoardMessage) => void;
 }
 
 interface UseYjsSyncResult {
@@ -30,6 +32,10 @@ interface UseYjsSyncResult {
   applyYUpdate: (update: Uint8Array) => void;
   resetChunkAssembly: () => void;
   resetPendingQueue: () => void;
+  sendControlMessage: (
+    message: SessionNewBoardMessage,
+    options?: { context?: string },
+  ) => boolean;
 }
 
 type PendingChunk = {
@@ -49,6 +55,7 @@ export const useYjsSync = ({
   onReceiveChatMessage,
   scheduleBufferDrain,
   sendJSONMessage,
+  onControlMessage,
 }: UseYjsSyncParams): UseYjsSyncResult => {
   const pendingYUpdatesRef = useRef<Uint8Array[]>([]);
   const incomingChunksRef = useRef<Map<string, PendingChunk>>(new Map());
@@ -219,6 +226,11 @@ export const useYjsSync = ({
         return;
       }
 
+      if (message.type === "session:new-board") {
+        onControlMessage?.(message);
+        return;
+      }
+
       if (message.type === "yjs-update") {
         const decoded = decodeFromBase64(message.update);
         applyYUpdate(decoded);
@@ -265,6 +277,7 @@ export const useYjsSync = ({
       applyYUpdate,
       doc,
       flushPendingYUpdates,
+      onControlMessage,
       onReceiveChatMessage,
       sendYUpdate,
     ],
@@ -280,6 +293,18 @@ export const useYjsSync = ({
     updateQueueMetrics();
   }, [updateQueueMetrics]);
 
+  const sendControlMessage = useCallback(
+    (
+      message: SessionNewBoardMessage,
+      options?: { context?: string },
+    ): boolean => {
+      return sendJSONMessage(message, {
+        context: options?.context ?? "Failed to send control message",
+      });
+    },
+    [sendJSONMessage],
+  );
+
   return useMemo(
     () => ({
       applyYUpdate,
@@ -289,6 +314,7 @@ export const useYjsSync = ({
       handleStringMessage,
       sendStateVector,
       sendYUpdate,
+      sendControlMessage,
     }),
     [
       applyYUpdate,
@@ -296,6 +322,7 @@ export const useYjsSync = ({
       resetChunkAssembly,
       flushPendingYUpdates,
       handleStringMessage,
+      sendControlMessage,
       sendStateVector,
       sendYUpdate,
     ],

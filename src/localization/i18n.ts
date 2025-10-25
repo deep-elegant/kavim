@@ -8,6 +8,7 @@ i18n.use(initReactI18next).init({
       translation: {
         menuBar: {
           file: "File",
+          newBoard: "New Board",
           load: "Load",
           save: "Save",
           saveDraft: "Save Draft",

@@ -37,11 +37,19 @@ export type YjsUpdateChunkMessage = {
   chunk: string;
 };
 
+export type SessionNewBoardMessage = {
+  type: "session:new-board";
+  sessionId: string;
+  timestamp: number;
+  originClientId: string;
+};
+
 export type ChannelMessage =
   | WebRTCChatMessage
   | SyncMessage
   | YjsUpdateMessage
-  | YjsUpdateChunkMessage;
+  | YjsUpdateChunkMessage
+  | SessionNewBoardMessage;
 
 export type CollaboratorInteraction = "pointer" | "selecting" | "typing";
 

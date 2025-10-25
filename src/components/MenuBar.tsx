@@ -6,6 +6,15 @@ import {
   MenubarMenu,
   MenubarTrigger,
 } from "@/components/ui/menubar";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { SaveModal } from "./SaveModal";
 import { SettingsModal } from "./SettingsModal";
 import { PeerConnectionModal } from "@/core/canvas/collaboration/PeerConnectionModal";
@@ -59,6 +68,17 @@ const createGatewaySettingsState = (): GatewaySettingsState =>
     return accumulator;
   }, {} as GatewaySettingsState);
 
+const splitFilePath = (filePath: string) => {
+  const normalized = filePath.replace(/\\/g, "/");
+  const index = normalized.lastIndexOf("/");
+  if (index === -1) {
+    return { directory: undefined, fileName: filePath };
+  }
+  const directory = filePath.slice(0, index);
+  const fileName = filePath.slice(index + 1);
+  return { directory: directory || undefined, fileName };
+};
+
 /**
  * Top menu bar with file operations, settings, and collaboration controls.
  * - Manages save/load for `.pak` project files and draft auto-save.
@@ -68,9 +88,18 @@ const createGatewaySettingsState = (): GatewaySettingsState =>
 export default function MenuBar() {
   const { i18n } = useTranslation();
   const { nodes, edges, setCanvasState } = useCanvasData();
-  const { connectionState, dataChannelState, requestSync } = useWebRTC();
   const {
+    connectionState,
+    dataChannelState,
+    requestSync,
+    broadcastNewBoard,
+    incomingNewBoard,
+    clearIncomingNewBoard,
+  } = useWebRTC();
+  const {
+    drafts,
     activeDraftId,
+    setActiveDraftId,
     setActiveFilePath,
     deleteDraft,
     saveDraft,
@@ -83,6 +112,19 @@ export default function MenuBar() {
   const [saveFolder, setSaveFolder] = useState("");
   const [saveMessage, setSaveMessage] = useState<string>("");
   const [folderPickerMessage, setFolderPickerMessage] = useState<string>("");
+  const [isNewBoardDialogOpen, setIsNewBoardDialogOpen] = useState(false);
+  const [isNewBoardWorking, setIsNewBoardWorking] = useState(false);
+  const [newBoardError, setNewBoardError] = useState<string | null>(null);
+  const [isRemoteNewBoardModalOpen, setIsRemoteNewBoardModalOpen] =
+    useState(false);
+  const [isRemoteNewBoardWorking, setIsRemoteNewBoardWorking] =
+    useState(false);
+  const [remoteNewBoardError, setRemoteNewBoardError] = useState<string | null>(
+    null,
+  );
+  const [remoteNewBoardSessionId, setRemoteNewBoardSessionId] = useState<
+    string | null
+  >(null);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isPeerConnectionOpen, setIsPeerConnectionOpen] = useState(false);
@@ -107,6 +149,273 @@ export default function MenuBar() {
       setSettingsMessage("");
     }
   }, [isSettingsOpen, statsForNerdsEnabled]);
+
+  const getCurrentSnapshot = useCallback(() => {
+    const clonedNodes = JSON.parse(JSON.stringify(nodes));
+    const clonedEdges = JSON.parse(JSON.stringify(edges));
+    return {
+      nodes: Array.isArray(clonedNodes) ? clonedNodes : [],
+      edges: Array.isArray(clonedEdges) ? clonedEdges : [],
+    };
+  }, [nodes, edges]);
+
+  const performPreResetSave = useCallback(
+    async (
+      snapshot: { nodes: unknown[]; edges: unknown[] },
+    ): Promise<{ ok: true } | { ok: false; error: string }> => {
+      const hasContent =
+        Array.isArray(snapshot.nodes) && snapshot.nodes.length > 0
+          ? true
+          : Array.isArray(snapshot.edges) && snapshot.edges.length > 0;
+
+      try {
+        if (saveTarget?.type === "file") {
+          const { fileName, directory } = splitFilePath(saveTarget.filePath);
+          await window.projectPak.save({
+            fileName,
+            directory,
+            canvas: {
+              nodes: snapshot.nodes,
+              edges: snapshot.edges,
+            },
+          });
+          window.dispatchEvent(
+            new CustomEvent("canvas:manual-save", {
+              detail: {
+                nodes: snapshot.nodes,
+                edges: snapshot.edges,
+                filePath: saveTarget.filePath,
+              },
+            }),
+          );
+          return { ok: true };
+        }
+
+        if (saveTarget?.type === "draft" || hasContent) {
+          const draftId =
+            saveTarget?.type === "draft"
+              ? saveTarget.draftId
+              : activeDraftId ?? undefined;
+          const activeDraftRecord =
+            draftId && drafts.find((draft) => draft.id === draftId);
+          const projectName =
+            activeDraftRecord?.projectName ??
+            (saveFileName.trim() ? saveFileName.trim() : null);
+
+          const draft = await saveDraft({
+            draftId,
+            projectName,
+            filePath: activeDraftRecord?.filePath ?? undefined,
+            canvas: {
+              nodes: snapshot.nodes,
+              edges: snapshot.edges,
+            },
+          });
+
+          if (!draft) {
+            throw new Error("Draft save completed without returning data");
+          }
+
+          window.dispatchEvent(
+            new CustomEvent("canvas:manual-save", {
+              detail: {
+                nodes: snapshot.nodes,
+                edges: snapshot.edges,
+              },
+            }),
+          );
+
+          if (draftId) {
+            setActiveDraftId(null);
+          }
+        }
+
+        return { ok: true };
+      } catch (error) {
+        console.error("Failed to save current board before reset", error);
+        return {
+          ok: false,
+          error:
+            "Saving current board failed. Please try again before starting a new board.",
+        };
+      }
+    },
+    [
+      activeDraftId,
+      drafts,
+      saveDraft,
+      saveFileName,
+      saveTarget,
+      setActiveDraftId,
+    ],
+  );
+
+  const initializeBlankBoard = useCallback(
+    async (
+      options?: { message?: string },
+    ): Promise<{ ok: true } | { ok: false; error: string }> => {
+      try {
+        const newDraft = await saveDraft({
+          projectName: null,
+          canvas: { nodes: [], edges: [] },
+        });
+
+        if (!newDraft) {
+          throw new Error("Draft creation returned null");
+        }
+
+        setCanvasState([], []);
+        setActiveFilePath(null);
+        window.dispatchEvent(
+          new CustomEvent("canvas:new-session", {
+            detail: {
+              nodes: [],
+              edges: [],
+            },
+          }),
+        );
+        setIsNewBoardDialogOpen(false);
+        setSaveMessage(options?.message ?? "Started new board");
+        return { ok: true };
+      } catch (error) {
+        console.error("Failed to initialize new board session", error);
+        return {
+          ok: false,
+          error:
+            "Current board saved, but starting a new board failed. Try reloading the app.",
+        };
+      }
+    },
+    [saveDraft, setActiveFilePath, setCanvasState, setSaveMessage],
+  );
+
+  const handleNewBoardRequest = useCallback(() => {
+    if (isNewBoardWorking) {
+      return;
+    }
+    setNewBoardError(null);
+    setIsNewBoardDialogOpen(true);
+  }, [isNewBoardWorking]);
+
+  const handleNewBoardCancel = useCallback(() => {
+    if (isNewBoardWorking) {
+      return;
+    }
+    setIsNewBoardDialogOpen(false);
+  }, [isNewBoardWorking]);
+
+  const handleNewBoardConfirm = useCallback(async () => {
+    if (isNewBoardWorking) {
+      return;
+    }
+
+    setNewBoardError(null);
+    setIsNewBoardWorking(true);
+
+    const snapshot = getCurrentSnapshot();
+    const saveResult = await performPreResetSave(snapshot);
+    if (!saveResult.ok) {
+      setNewBoardError(saveResult.error);
+      setIsNewBoardWorking(false);
+      return;
+    }
+
+    let completionMessage: string | undefined;
+
+    if (dataChannelState === "open") {
+      const { sent } = broadcastNewBoard();
+      if (!sent) {
+        completionMessage =
+          "Started new board (collaborators may not have been notified)";
+      }
+    }
+
+    const initResult = await initializeBlankBoard({
+      message: completionMessage,
+    });
+    if (!initResult.ok) {
+      setNewBoardError(initResult.error);
+      setIsNewBoardWorking(false);
+      return;
+    }
+
+    setIsNewBoardWorking(false);
+  }, [
+    broadcastNewBoard,
+    dataChannelState,
+    getCurrentSnapshot,
+    initializeBlankBoard,
+    isNewBoardWorking,
+    performPreResetSave,
+    setSaveMessage,
+  ]);
+
+  React.useEffect(() => {
+    if (!incomingNewBoard) {
+      return;
+    }
+
+    let isActive = true;
+
+    clearIncomingNewBoard(incomingNewBoard.sessionId);
+    setRemoteNewBoardSessionId(incomingNewBoard.sessionId);
+    setRemoteNewBoardError(null);
+    setIsRemoteNewBoardModalOpen(true);
+    setIsRemoteNewBoardWorking(true);
+
+    const snapshot = getCurrentSnapshot();
+
+    const process = async () => {
+      const saveResult = await performPreResetSave(snapshot);
+      if (!isActive) {
+        return;
+      }
+      if (!saveResult.ok) {
+        setRemoteNewBoardError(saveResult.error);
+        return;
+      }
+
+      const initResult = await initializeBlankBoard({
+        message: "New board started (collaboration)",
+      });
+      if (!isActive) {
+        return;
+      }
+      if (!initResult.ok) {
+        setRemoteNewBoardError(initResult.error);
+        return;
+      }
+
+      setIsRemoteNewBoardWorking(false);
+      setIsRemoteNewBoardModalOpen(false);
+      setRemoteNewBoardSessionId(null);
+    };
+
+    process()
+      .catch((error) => {
+        console.error("Failed to process collaborator new board", error);
+        if (isActive) {
+          setRemoteNewBoardError(
+            "We could not start the new board from your collaborator.",
+          );
+        }
+      })
+      .finally(() => {
+        if (isActive) {
+          setIsRemoteNewBoardWorking(false);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [
+    clearIncomingNewBoard,
+    getCurrentSnapshot,
+    incomingNewBoard,
+    initializeBlankBoard,
+    performPreResetSave,
+  ]);
 
   /**
    * Computes status text for draft/autosave indicator.
@@ -417,6 +726,12 @@ export default function MenuBar() {
           <MenubarMenu>
             <MenubarTrigger>{i18n.t("menuBar.file")}</MenubarTrigger>
             <MenubarContent>
+              <MenubarItem
+                disabled={isNewBoardWorking}
+                onClick={handleNewBoardRequest}
+              >
+                {i18n.t("menuBar.newBoard")}
+              </MenubarItem>
               <MenubarItem onClick={handleLoadClick}>
                 {i18n.t("menuBar.load")}
               </MenubarItem>
@@ -481,6 +796,95 @@ export default function MenuBar() {
           ) : null}
         </div>
       </div>
+
+      <Dialog
+        open={isNewBoardDialogOpen}
+        onOpenChange={(open) => {
+          if (open) {
+            setNewBoardError(null);
+            setIsNewBoardDialogOpen(true);
+          } else {
+            handleNewBoardCancel();
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Start a new board?</DialogTitle>
+            <DialogDescription>
+              We{"'"}ll auto-save the current board first, then reset to a blank
+              canvas.
+            </DialogDescription>
+          </DialogHeader>
+          {newBoardError ? (
+            <p className="text-destructive text-sm">{newBoardError}</p>
+          ) : null}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleNewBoardCancel}
+              disabled={isNewBoardWorking}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={handleNewBoardConfirm}
+              disabled={isNewBoardWorking}
+            >
+              {isNewBoardWorking ? "Starting…" : "Start New Board"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={isRemoteNewBoardModalOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsRemoteNewBoardModalOpen(false);
+            setRemoteNewBoardError(null);
+            setRemoteNewBoardSessionId(null);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Collaborator starting a new board</DialogTitle>
+            <DialogDescription>
+              We{"'"}ll save the current board, then reset to a blank canvas.
+              {remoteNewBoardSessionId
+                ? ` (Session ${remoteNewBoardSessionId.slice(0, 6)})`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {remoteNewBoardError ? (
+            <p className="text-destructive text-sm">{remoteNewBoardError}</p>
+          ) : (
+            <p className="text-muted-foreground text-sm">
+              Preparing the new board with your collaborator…
+            </p>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setIsRemoteNewBoardModalOpen(false);
+                setRemoteNewBoardError(null);
+                setRemoteNewBoardSessionId(null);
+              }}
+            >
+              {remoteNewBoardError
+                ? "Close"
+                : isRemoteNewBoardWorking
+                  ? "Dismiss"
+                  : "Close"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <SaveModal
         isOpen={isSaveModalOpen}
