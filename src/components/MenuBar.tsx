@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { SaveModal } from "./SaveModal";
 import { SettingsModal } from "./SettingsModal";
+import { PrepromptModal } from "./PrepromptModal";
 import { PeerConnectionModal } from "@/core/canvas/collaboration/PeerConnectionModal";
 import { useCanvasData } from "@/core/canvas/CanvasDataContext";
 import { useWebRTC } from "@/core/canvas/collaboration/WebRTCContext";
@@ -140,6 +141,11 @@ export default function MenuBar() {
   );
   const { enabled: statsForNerdsEnabled, setEnabled: setStatsForNerdsEnabled } =
     useStatsForNerds();
+  const [isPrepromptModalOpen, setIsPrepromptModalOpen] = useState(false);
+  const [prepromptText, setPrepromptText] = useState("");
+  const [prepromptStatus, setPrepromptStatus] = useState<
+    { message: string; tone: "default" | "success" | "error" } | null
+  >(null);
 
   // Reload settings from storage when modal opens to reflect any external changes
   React.useEffect(() => {
@@ -149,6 +155,13 @@ export default function MenuBar() {
       setSettingsMessage("");
     }
   }, [isSettingsOpen, statsForNerdsEnabled]);
+
+  React.useEffect(() => {
+    if (isPrepromptModalOpen) {
+      setPrepromptText(window.settingsStore.getPreprompt() ?? "");
+      setPrepromptStatus(null);
+    }
+  }, [isPrepromptModalOpen]);
 
   const getCurrentSnapshot = useCallback(() => {
     const clonedNodes = JSON.parse(JSON.stringify(nodes));
@@ -547,6 +560,19 @@ export default function MenuBar() {
     [],
   );
 
+  const handlePrepromptSave = useCallback(() => {
+    try {
+      window.settingsStore.setPreprompt(prepromptText);
+      setPrepromptStatus({ message: "Preprompt saved.", tone: "success" });
+    } catch (error) {
+      console.error("Failed to save preprompt", error);
+      setPrepromptStatus({
+        message: "Failed to save preprompt. Please try again.",
+        tone: "error",
+      });
+    }
+  }, [prepromptText]);
+
   /**
    * Opens file picker to load a `.pak` project file.
    * - Deserializes canvas data and replaces current state.
@@ -749,6 +775,9 @@ export default function MenuBar() {
               <MenubarItem onClick={() => setIsSettingsOpen(true)}>
                 {i18n.t("menuBar.llm")}
               </MenubarItem>
+              <MenubarItem onClick={() => setIsPrepromptModalOpen(true)}>
+                {i18n.t("menuBar.preprompt")}
+              </MenubarItem>
               <MenubarItem
                 onClick={() => setStatsForNerdsEnabled(!statsForNerdsEnabled)}
               >
@@ -906,6 +935,22 @@ export default function MenuBar() {
         gatewaySettings={gatewaySettings}
         setGatewaySetting={handleGatewaySettingChange}
         handleSettingsSave={handleSettingsSave}
+      />
+
+      <PrepromptModal
+        isOpen={isPrepromptModalOpen}
+        value={prepromptText}
+        onChange={(value) => {
+          setPrepromptText(value);
+          setPrepromptStatus(null);
+        }}
+        onCancel={() => {
+          setIsPrepromptModalOpen(false);
+          setPrepromptStatus(null);
+        }}
+        onSave={handlePrepromptSave}
+        statusMessage={prepromptStatus?.message}
+        statusTone={prepromptStatus?.tone}
       />
 
       <PeerConnectionModal

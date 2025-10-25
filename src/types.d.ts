@@ -119,6 +119,8 @@ declare global {
                 headers?: { referer?: string; title?: string };
             },
             ) => void;
+            getPreprompt: () => string;
+            setPreprompt: (value: string) => void;
         };
         projectPak: PakContext;
         fileSystem: FileSystemContext;

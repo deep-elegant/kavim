@@ -13,6 +13,7 @@ i18n.use(initReactI18next).init({
           save: "Save",
           saveDraft: "Save Draft",
           llm: "LLM",
+          preprompt: "Conversation preprompt",
           settings: "Settings",
           statsForNerdsEnabled: "Stats for Nerds (Disable)",
           statsForNerdsDisabled: "Stats for Nerds (Enable)",

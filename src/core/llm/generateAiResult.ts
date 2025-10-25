@@ -148,6 +148,13 @@ export const generateAiResult = async ({
 
   assertLlmBridgeAvailable();
 
+  const storedPreprompt = window.settingsStore.getPreprompt();
+  const trimmedPreprompt = storedPreprompt.trim();
+  const messagesWithPreprompt =
+    trimmedPreprompt.length > 0
+      ? ([{ role: "system", content: trimmedPreprompt }, ...messages] as ChatMessage[])
+      : messages;
+
   await new Promise<void>((resolve, reject) => {
     // Track event listeners to unsubscribe when stream completes/errors
     const cleanupCallbacks: Array<() => void> = [];
@@ -288,7 +295,7 @@ export const generateAiResult = async ({
         modelName: effectiveModelName,
         baseURL: effectiveBaseURL,
         apiKey: effectiveApiKey,
-        messages,
+        messages: messagesWithPreprompt,
         requestId,
         headers,
       });

@@ -4,6 +4,6 @@
  * - Compatible with most LLM APIs for conversation history.
  */
 export type ChatMessage = {
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";
   content: string;
 };
