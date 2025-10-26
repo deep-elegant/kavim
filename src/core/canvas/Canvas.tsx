@@ -301,7 +301,13 @@ const CanvasInner = () => {
 
       const newNode = toolImpl.onPaneMouseDown(nodeId, flowPosition);
 
-      setNodes((currentNodes) => [...currentNodes, newNode]);
+      // Clear any existing selection so the freshly created node becomes the sole active element.
+      setNodes((currentNodes) => {
+        const deselected = currentNodes.map((node) =>
+          node.selected ? { ...node, selected: false } : node,
+        );
+        return [...deselected, newNode];
+      });
       drawingState.current = {
         nodeId,
         start: flowPosition,
