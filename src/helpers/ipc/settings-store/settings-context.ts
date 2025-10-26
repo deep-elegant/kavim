@@ -1,7 +1,6 @@
 import { contextBridge } from "electron";
 import Store from "electron-store";
 import type { AiGateway, AiProvider } from "../../core/llm/aiModels";
-import * as fs from "fs";
 
 type ProviderSettingsValue = { apiKey: string };
 
