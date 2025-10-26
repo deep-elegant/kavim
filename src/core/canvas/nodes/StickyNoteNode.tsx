@@ -27,8 +27,22 @@ export type StickyNoteData = {
 
 export type StickyNoteNodeType = Node<StickyNoteData, "sticky-note">;
 
-const MIN_WIDTH = 100;
-const MIN_HEIGHT = 30;
+/**
+ * Sticky note sizing heuristics.
+ * - Default size keeps new notes readable when created with a click-release gesture.
+ * - Minimum size allows users to shrink notes for lightweight annotations.
+ */
+const DEFAULT_NOTE_SIZE = 140;
+const MIN_NOTE_SIZE = 20;
+/** Minimum sticky note footprint; default spawn size stays larger for readability. */
+const MIN_WIDTH = MIN_NOTE_SIZE;
+const MIN_HEIGHT = MIN_NOTE_SIZE;
+const DRAG_ACTIVATION_THRESHOLD = 4; // Ignore tiny pointer jitters so click-release uses the default size.
+const NOTE_PADDING_X = 8; // Matches Tailwind px-2 in content containers
+const NOTE_PADDING_Y = 6; // Matches Tailwind py-1.5 in content containers
+const NOTE_AUTO_FONT_MIN = 10;
+const NOTE_AUTO_FONT_RATIO = 0.7;
+const NOTE_LINE_HEIGHT = 1.2;
 
 /** Classic sticky note yellow - provides familiar UX for quick notes */
 const defaultColor: ColorStyle = {
@@ -52,15 +66,25 @@ export const stickyNoteDrawable: DrawableNode<StickyNoteNodeType> = {
       color: defaultColor,
       fontSize: "auto",
     },
-    width: MIN_WIDTH,
-    height: MIN_HEIGHT,
-    style: { width: MIN_WIDTH, height: MIN_HEIGHT },
+    width: DEFAULT_NOTE_SIZE,
+    height: DEFAULT_NOTE_SIZE,
+    style: { width: DEFAULT_NOTE_SIZE, height: DEFAULT_NOTE_SIZE },
     selected: true,
   }),
 
   onPaneMouseMove: (node, start, current) => {
-    const width = Math.max(Math.abs(current.x - start.x), MIN_WIDTH);
-    const height = Math.max(Math.abs(current.y - start.y), MIN_HEIGHT);
+    const deltaX = Math.abs(current.x - start.x);
+    const deltaY = Math.abs(current.y - start.y);
+    // Only transition into resize mode once the pointer meaningfully moves away from the origin.
+    const hasDragged =
+      Math.max(deltaX, deltaY) >= DRAG_ACTIVATION_THRESHOLD;
+
+    if (!hasDragged) {
+      return node;
+    }
+
+    const width = Math.max(deltaX, MIN_WIDTH);
+    const height = Math.max(deltaY, MIN_HEIGHT);
     const position = {
       x: Math.min(start.x, current.x),
       y: Math.min(start.y, current.y),
@@ -135,12 +159,35 @@ const StickyNoteNode = memo(
       [label],
     );
 
+    /**
+     * Derives an upper bound for auto font sizing based on the current note geometry.
+     * - Subtracts padding so the computed size reflects the actual drawable area.
+     * - Scales proportionally to keep text legible across very small notes.
+     */
+    const getAutoFontCap = useCallback(
+      ({ width, height }: { width: number; height: number }) => {
+        const usableWidth = Math.max(
+          Math.min(width - NOTE_PADDING_X * 2, width),
+          NOTE_AUTO_FONT_MIN,
+        );
+        const usableHeight = Math.max(
+          Math.min(height - NOTE_PADDING_Y * 2, height),
+          NOTE_AUTO_FONT_MIN,
+        );
+        const available = Math.min(usableWidth, usableHeight);
+        const scaled = Math.floor(available * NOTE_AUTO_FONT_RATIO);
+        return Math.max(NOTE_AUTO_FONT_MIN, scaled);
+      },
+      [],
+    );
+
     useAutoFontSizeObserver({
       editor,
       fontSize: fontSizeSetting,
       html: displayHtml,
       containerRef,
       measurementRef,
+      maxSize: getAutoFontCap,
     });
 
     const handleColorChange = useCallback(
@@ -202,24 +249,31 @@ const StickyNoteNode = memo(
                   <MinimalTiptap
                     editor={editor}
                     theme="transparent"
-                    className={cn("h-full w-full")}
+                    className={cn(
+                      "h-full w-full leading-tight",
+                      "[&_.ProseMirror]:min-h-0",
+                      "[&_.ProseMirror]:px-2",
+                      "[&_.ProseMirror]:py-1.5",
+                      "[&_.ProseMirror]:leading-[1.2]",
+                    )}
                     style={{
                       color: color.text,
                       fontSize: `${resolvedFontSize}px`,
+                      lineHeight: NOTE_LINE_HEIGHT,
                     }}
                   />
                 </div>
               ) : (
                 <div
                   className={cn(
-                    "prose prose-sm w-full max-w-none",
+                    "prose prose-sm w-full max-w-none leading-tight",
                     "prose-h1:text-xl prose-h1:leading-tight",
                     "prose-h2:text-lg prose-h2:leading-snug",
                     "prose-h3:text-base prose-h3:leading-snug",
-                    "prose-p:my-1 prose-p:leading-normal",
+                    "prose-p:my-1 prose-p:leading-tight",
                     "prose-ul:my-1 prose-ol:my-1",
                     "prose-li:my-0",
-                    "min-h-[1.5rem] px-3 py-2",
+                    "min-h-0 px-2 py-1.5",
                     "break-words",
                   )}
                   style={{
@@ -235,6 +289,7 @@ const StickyNoteNode = memo(
                     "--tw-prose-captions": color.text,
                     color: color.text,
                     fontSize: `${resolvedFontSize}px`,
+                    lineHeight: NOTE_LINE_HEIGHT,
                   }}
                   dangerouslySetInnerHTML={{
                     __html: displayHtml,
@@ -248,14 +303,14 @@ const StickyNoteNode = memo(
                 aria-hidden
                 className={cn(
                   "pointer-events-none absolute inset-0 box-border overflow-hidden opacity-0",
-                  "prose prose-sm w-full max-w-none",
+                  "prose prose-sm w-full max-w-none leading-tight",
                   "prose-h1:text-xl prose-h1:leading-tight",
                   "prose-h2:text-lg prose-h2:leading-snug",
                   "prose-h3:text-base prose-h3:leading-snug",
-                  "prose-p:my-1 prose-p:leading-normal",
+                  "prose-p:my-1 prose-p:leading-tight",
                   "prose-ul:my-1 prose-ol:my-1",
                   "prose-li:my-0",
-                  "min-h-[1.5rem] px-3 py-2",
+                  "min-h-0 px-2 py-1.5",
                   "break-words",
                 )}
                 style={{
@@ -269,6 +324,7 @@ const StickyNoteNode = memo(
                   "--tw-prose-quotes": color.text,
                   "--tw-prose-quote-borders": color.border,
                   "--tw-prose-captions": color.text,
+                  lineHeight: NOTE_LINE_HEIGHT,
                 }}
                 dangerouslySetInnerHTML={{
                   __html: displayHtml,
