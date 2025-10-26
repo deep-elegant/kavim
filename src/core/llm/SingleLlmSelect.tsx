@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React from "react";
 import {
   Select,
   SelectContent,
@@ -10,11 +10,27 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { FormControl } from "@/components/ui/form";
-import { AI_MODELS } from "@/core/llm/aiModels";
+import {
+  LLM_PROVIDER_KEYS_UPDATED_EVENT,
+  resolveModelAvailability,
+} from "@/core/llm/llmAvailability";
+import { cn } from "@/utils/tailwind";
+
+const DISABLED_MODEL_TOOLTIP =
+  "Add this provider's API key in Settings to enable the model.";
+
+type AvailabilityEntry = ReturnType<typeof resolveModelAvailability>[number];
+
+const reorderByAvailability = (entries: AvailabilityEntry[]) => {
+  const enabled = entries.filter((entry) => entry.isEnabled);
+  const disabled = entries.filter((entry) => !entry.isEnabled);
+  return [...enabled, ...disabled];
+};
 
 /**
  * Dropdown selector for AI models.
- * - Separates models requiring organization verification (beta access, etc.).
+ * - Promotes models with configured API keys to the top of each section.
+ * - Disabled entries stay visible with guidance on how to enable them.
  * - Integrates with react-hook-form via FormControl for validation.
  */
 export const SingleLlmSelect = ({
@@ -24,18 +40,85 @@ export const SingleLlmSelect = ({
   value: string;
   onChange: (value: string) => void;
 }) => {
-  // Split models by access level (general availability vs. org-verified beta)
-  const unrestrictedModels = useMemo(
-    () => AI_MODELS.filter((model) => !model.requiresOrganizationVerification),
-    [],
+  const [refreshState, setRefreshState] = React.useState(0);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleAvailabilityRefresh = () => {
+      setRefreshState((previous) => previous + 1);
+    };
+
+    window.addEventListener(
+      LLM_PROVIDER_KEYS_UPDATED_EVENT,
+      handleAvailabilityRefresh,
+    );
+
+    return () => {
+      window.removeEventListener(
+        LLM_PROVIDER_KEYS_UPDATED_EVENT,
+        handleAvailabilityRefresh,
+      );
+    };
+  }, []);
+
+  const availability = React.useMemo(
+    () => resolveModelAvailability(),
+    [refreshState],
   );
-  const restrictedModels = useMemo(
-    () =>
-      AI_MODELS.filter(
-        (model) => model.requiresOrganizationVerification === true,
-      ),
-    [],
-  );
+
+  const { unrestricted, restricted } = React.useMemo(() => {
+    const unrestrictedEntries: AvailabilityEntry[] = [];
+    const restrictedEntries: AvailabilityEntry[] = [];
+
+    for (const entry of availability) {
+      if (entry.model.requiresOrganizationVerification) {
+        restrictedEntries.push(entry);
+      } else {
+        unrestrictedEntries.push(entry);
+      }
+    }
+
+    return {
+      unrestricted: reorderByAvailability(unrestrictedEntries),
+      restricted: reorderByAvailability(restrictedEntries),
+    };
+  }, [availability]);
+
+  const renderOption = (entry: AvailabilityEntry) => {
+    const { model, isEnabled } = entry;
+
+    return (
+      <SelectItem
+        key={model.value}
+        value={model.value}
+        onSelect={
+          isEnabled
+            ? undefined
+            : (event) => {
+                event.preventDefault();
+              }
+        }
+        aria-disabled={!isEnabled}
+        title={isEnabled ? undefined : DISABLED_MODEL_TOOLTIP}
+        className={cn(
+          !isEnabled &&
+            "text-slate-400 !cursor-not-allowed hover:bg-transparent focus:bg-transparent data-[highlighted]:bg-transparent data-[highlighted]:text-slate-400 data-[state=checked]:bg-transparent data-[state=checked]:text-slate-400",
+        )}
+      >
+        <div className="flex flex-col">
+          <span>{model.label}</span>
+          {!isEnabled ? (
+            <span className="text-[11px] font-normal text-slate-500">
+              Configure the API key in Settings to enable this model.
+            </span>
+          ) : null}
+        </div>
+      </SelectItem>
+    );
+  };
 
   return (
     <Select onValueChange={onChange} value={value}>
@@ -45,22 +128,14 @@ export const SingleLlmSelect = ({
         </SelectTrigger>
       </FormControl>
       <SelectContent>
-        {unrestrictedModels.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            {option.label}
-          </SelectItem>
-        ))}
+        {unrestricted.map(renderOption)}
         {/* Visually separate restricted models to set clear expectations */}
-        {restrictedModels.length > 0 && (
+        {restricted.length > 0 && (
           <>
             <SelectSeparator />
             <SelectGroup>
               <SelectLabel>Requires organization verification</SelectLabel>
-              {restrictedModels.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label} (requires organization verification)
-                </SelectItem>
-              ))}
+              {restricted.map(renderOption)}
             </SelectGroup>
           </>
         )}

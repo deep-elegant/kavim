@@ -28,6 +28,7 @@ import {
   type AiGateway,
   type AiProvider,
 } from "@/core/llm/aiModels";
+import { LLM_PROVIDER_KEYS_UPDATED_EVENT } from "@/core/llm/llmAvailability";
 import { useDraftManager } from "@/core/drafts/DraftManagerContext";
 import { useStatsForNerds } from "@/core/diagnostics/StatsForNerdsContext";
 
@@ -714,19 +715,30 @@ export default function MenuBar() {
    */
   const handleSettingsSave = () => {
     try {
+      const enabledProviders: AiProvider[] = [];
+      let gatewayFallbackEnabled = false;
+
       AI_PROVIDER_METADATA.forEach(({ value: provider }) => {
+        const rawKey = providerKeys[provider] ?? "";
+        const trimmedKey = rawKey.trim();
+
         window.settingsStore.setProvider(provider, {
-          apiKey: providerKeys[provider] ?? "",
+          apiKey: trimmedKey,
         });
+
+        if (trimmedKey) {
+          enabledProviders.push(provider);
+        }
       });
 
       AI_GATEWAY_METADATA.forEach(({ value: gateway }) => {
         const current = gatewaySettings[gateway];
-        const referer = current?.referer.trim();
-        const title = current?.title.trim();
+        const apiKey = current?.apiKey?.trim();
+        const referer = current?.referer?.trim();
+        const title = current?.title?.trim();
 
         window.settingsStore.setGateway(gateway, {
-          apiKey: current?.apiKey ?? "",
+          apiKey: apiKey ?? "",
           useForAllModels: current?.useForAllModels ?? false,
           headers:
             referer || title
@@ -736,7 +748,22 @@ export default function MenuBar() {
                 }
               : undefined,
         });
+
+        if (apiKey && current?.useForAllModels) {
+          gatewayFallbackEnabled = true;
+        }
       });
+
+      // Notify any open selects that availability changed (avoids stale dropdown state).
+      window.dispatchEvent(
+        new CustomEvent(LLM_PROVIDER_KEYS_UPDATED_EVENT, {
+          detail: {
+            enabledProviders,
+            gatewayFallbackEnabled,
+          },
+        }),
+      );
+
       setIsSettingsOpen(false);
       setSettingsMessage("Settings saved locally.");
     } catch (error) {
