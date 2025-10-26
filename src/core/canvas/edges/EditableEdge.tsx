@@ -45,7 +45,8 @@ type EditableEdgeProps = EdgeProps<EditableEdgeData>;
 type Point = XYPosition;
 
 const DEFAULT_STROKE = "#000000";
-const DEFAULT_MARKER: EdgeMarkerType = "none";
+const DEFAULT_SOURCE_MARKER: EdgeMarkerType = "none";
+const DEFAULT_TARGET_MARKER: EdgeMarkerType = "arrow"; // Default to forward arrowheads so new links show directionality immediately.
 const DEFAULT_STYLE_TYPE: EdgeLineStyle = "regular";
 const CONTROL_POINT_RADIUS = 6;
 // Larger hit area makes control points easier to grab
@@ -61,8 +62,8 @@ const ARROW_HEAD_RIGHT = "M0,0 L0,12 L12,6 z";
 /** Factory for initial edge data with sensible defaults */
 export const createDefaultEditableEdgeData = (): EditableEdgeData => ({
   controlPoints: [],
-  sourceMarker: DEFAULT_MARKER,
-  targetMarker: DEFAULT_MARKER,
+  sourceMarker: DEFAULT_SOURCE_MARKER,
+  targetMarker: DEFAULT_TARGET_MARKER,
   styleType: DEFAULT_STYLE_TYPE,
   color: DEFAULT_STROKE,
 });
@@ -172,8 +173,8 @@ const EditableEdge = memo(
     ];
 
     const controlPoints = data?.controlPoints ?? [];
-    const sourceMarker = data?.sourceMarker ?? DEFAULT_MARKER;
-    const targetMarker = data?.targetMarker ?? DEFAULT_MARKER;
+    const sourceMarker = data?.sourceMarker ?? DEFAULT_SOURCE_MARKER;
+    const targetMarker = data?.targetMarker ?? DEFAULT_TARGET_MARKER;
     const styleType = data?.styleType ?? DEFAULT_STYLE_TYPE;
     const edgeColor = data?.color ?? DEFAULT_STROKE;
 
