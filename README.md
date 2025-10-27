@@ -32,7 +32,7 @@
 
 **Meet [Kavim](https://kavim.deepelegant.com/)** — the open-source **canvas for brainstorming** with friends (and AIs). Sketch, debate, drop ideas, continue each other’s thoughts, and do it all **privately**, without the chaos of cloud storage or corporate surveillance. 🎨🤝
 
-> Kavim is evolving faster than your group chat’s inside jokes. Your feedback, wild ideas, and bug reports help us shape the future of collaborative creativity. Jump into the Discord or open an issue on [GitHub](https://github.com/deepelegant/kavim/issues).
+> Kavim is evolving faster than your group chat’s inside jokes. Your feedback, wild ideas, and bug reports help us shape the future of collaborative creativity. Jump into the Discord or open an issue on [GitHub](https://github.com/deep-elegant/kavim/issues).
 > We read everything — sometimes twice — and respond before your coffee gets cold. ☕
 
 ## 🚀 Installation
