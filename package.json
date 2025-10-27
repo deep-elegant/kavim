@@ -6,7 +6,7 @@
   "main": ".vite/build/main.js",
   "private": true,
   "scripts": {
-    "start": "electron-forge start",
+    "start": "electron-forge start -- --show-fps",
     "debug": "npm run start -- --inspect-electron",
     "package": "electron-forge package",
     "make": "electron-forge make",

@@ -390,8 +390,9 @@ const CanvasInner = () => {
     setSelectedTool(null);
   }, [selectedTool, setNodes]);
 
-  const isDrawingToolSelected =
-    selectedTool != null && drawingTools.includes(selectedTool);
+  const isDrawingToolSelected = useMemo(() => {
+    return selectedTool != null && drawingTools.includes(selectedTool);
+  }, [selectedTool]);
 
   // Broadcasts which node user has selected to remote collaborators
   const handleSelectionChange = useCallback(
@@ -439,6 +440,30 @@ const CanvasInner = () => {
     isImageFile,
   });
 
+  const panOnDragOptions = useMemo(() => {
+    return [2];
+  }, []);
+
+  const defaultEdgeOptions = useMemo(() => {
+    return {
+      type: "editable",
+      deletable: true,
+      reconnectable: true,
+    };
+  }, []);
+
+  const deleteKeyCode = useMemo(() => {
+    return ["Delete", "Backspace"];
+  }, []);
+
+  const connectionRadius = useMemo(() => {
+    return 50;
+  }, []);
+
+  const cursor = useMemo(() => {
+    return isDrawingToolSelected ? "cursor-crosshair" : undefined;
+  }, [isDrawingToolSelected]);
+
   return (
     <div
       className="relative"
@@ -464,21 +489,14 @@ const CanvasInner = () => {
           onDrop={handleDrop}
           onDragOver={handleDragOver}
           // Panning with the right mouse button
-          panOnDrag={[2]}
+          panOnDrag={panOnDragOptions}
           selectionOnDrag={!isDrawingToolSelected}
           nodeTypes={nodeTypes}
           edgesReconnectable
-          defaultEdgeOptions={{
-            type: "editable",
-            deletable: true,
-            reconnectable: true,
-          }}
-          deleteKeyCode={["Delete", "Backspace"]}
-          connectionRadius={50}
-          className={isDrawingToolSelected ? "cursor-crosshair" : undefined}
-          style={{
-            cursor: isDrawingToolSelected ? "cursor-crosshair" : undefined,
-          }}
+          defaultEdgeOptions={defaultEdgeOptions}
+          deleteKeyCode={deleteKeyCode}
+          connectionRadius={connectionRadius}
+          className={cursor}
           onSelectionChange={handleSelectionChange}
         >
           <MiniMap />
