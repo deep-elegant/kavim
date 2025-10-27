@@ -2,7 +2,7 @@
   "name": "deepelegant-kavim",
   "productName": "DeepElegant - Kavim",
   "version": "1.0.0",
-  "description": "Electron Forge with shadcn-ui (Vite + Typescript)",
+  "description": "Kavim is a visual workspace for creative brainstorming — connect ideas, models, and notes on a single collaborative canvas.",
   "main": ".vite/build/main.js",
   "private": true,
   "scripts": {
@@ -20,7 +20,7 @@
     "test:e2e": "playwright test",
     "test:all": "vitest run && playwright test"
   },
-  "author": "help@deepelegant.com",
+  "author": "office@deepelegant.com",
   "license": "AGPL-3.0-only",
   "devDependencies": {
     "@electron-forge/cli": "^7.9.0",
