@@ -4,6 +4,7 @@ import { exposeFileSystemContext } from "./file-system/file-system-context";
 import { exposeSettingsContext } from "./settings-store/settings-context";
 import { exposeLlmContext } from "./llm/llm-context";
 import { exposeDraftContext } from "./drafts/draft-context";
+import { exposeAppContext } from "./app/app-context";
 
 export default function exposeContexts() {
   exposeWindowContext();
@@ -12,4 +13,5 @@ export default function exposeContexts() {
   exposeSettingsContext();
   exposeLlmContext();
   exposeDraftContext();
+  exposeAppContext();
 }

@@ -18,6 +18,7 @@ import {
 import { SaveModal } from "./SaveModal";
 import { SettingsModal } from "./SettingsModal";
 import { PrepromptModal } from "./PrepromptModal";
+import { AboutModal } from "./AboutModal";
 import { PeerConnectionModal } from "@/core/canvas/collaboration/PeerConnectionModal";
 import { useCanvasData } from "@/core/canvas/CanvasDataContext";
 import { useWebRTC } from "@/core/canvas/collaboration/WebRTCContext";
@@ -147,6 +148,7 @@ export default function MenuBar() {
   const [prepromptStatus, setPrepromptStatus] = useState<
     { message: string; tone: "default" | "success" | "error" } | null
   >(null);
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
 
   // Reload settings from storage when modal opens to reflect any external changes
   React.useEffect(() => {
@@ -836,6 +838,14 @@ export default function MenuBar() {
               <MenubarItem onClick={() => requestSync?.()}>Resync</MenubarItem>
             </MenubarContent>
           </MenubarMenu>
+          <MenubarMenu>
+            <MenubarTrigger>{i18n.t("menuBar.help")}</MenubarTrigger>
+            <MenubarContent>
+              <MenubarItem onClick={() => setIsAboutOpen(true)}>
+                {i18n.t("menuBar.about")}
+              </MenubarItem>
+            </MenubarContent>
+          </MenubarMenu>
         </Menubar>
         <div className="flex items-center gap-3">
           {connectionStatus ? (
@@ -894,6 +904,10 @@ export default function MenuBar() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AboutModal
+        isOpen={isAboutOpen}
+        onClose={() => setIsAboutOpen(false)}
+      />
 
       <Dialog
         open={isRemoteNewBoardModalOpen}
