@@ -96,6 +96,14 @@ interface DraftContext {
   cleanup: (payload?: CleanupDraftsRequest) => Promise<void>;
 }
 
+interface AppMetadata {
+  version: string;
+}
+
+interface AppInfoContext {
+  get: () => Promise<AppMetadata>;
+}
+
 declare global {
     const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
     const MAIN_WINDOW_VITE_NAME: string;
@@ -126,6 +134,7 @@ declare global {
         fileSystem: FileSystemContext;
         llm: LlmContext;
         drafts: DraftContext;
+        appInfo: AppInfoContext;
     }
 }
 export {}
