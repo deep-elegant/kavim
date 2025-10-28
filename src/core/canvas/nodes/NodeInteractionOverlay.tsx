@@ -1,4 +1,9 @@
-import React, { type PropsWithChildren, useCallback, useMemo } from "react";
+import React, {
+  type PropsWithChildren,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import {
   Handle,
   NodeResizer,
@@ -26,6 +31,7 @@ import {
 import { useCanvasData } from "../CanvasDataContext";
 import { copyNodesToClipboard } from "../hooks/useCanvasCopyPaste";
 import type { CanvasNode } from "../types";
+import { useCanvasUndoRedo } from "../undo";
 
 const HANDLE_SIZE = 12;
 const HANDLE_OFFSET = 10; // Distance resize handles appear outside node bounds
@@ -115,6 +121,17 @@ const NodeInteractionOverlay = ({
   contextMenuItems,
 }: NodeInteractionOverlayProps) => {
   const { setNodes, getNodes } = useCanvasData();
+  // The `useCanvasUndoRedo` hook provides functions to manage undo/redo state.
+  // `beginAction` is called at the start of an operation (like node resizing)
+  // to mark a point in the undo history. It returns a unique token.
+  // `commitAction` is called at the end of the operation, using the token
+  // to finalize the undoable state, grouping all changes between `begin` and `commit`
+  // into a single undo/redo step.
+  const { beginAction, commitAction, isReplaying } = useCanvasUndoRedo();
+  // `resizeTokenRef` stores the unique token returned by `beginAction` when a resize starts.
+  // This ensures that `commitAction` can correctly identify and finalize the specific
+  // resize operation, making it a single undoable unit.
+  const resizeTokenRef = useRef<symbol | null>(null);
   const { selecting: remoteSelecting, typing: remoteTyping } =
     useRemoteNodeCollaborators(nodeId);
 
@@ -207,6 +224,25 @@ const NodeInteractionOverlay = ({
     const selectedNodes = latestNodes.filter((node) => node.selected);
     void copyNodesToClipboard(selectedNodes);
   }, [getNodes]);
+
+  // Use a token-based approach for the resize action, so that the entire
+  // resize operation is a single undoable action.
+  const handleResizeStart = useCallback(() => {
+    if (isReplaying) {
+      return;
+    }
+    resizeTokenRef.current = beginAction("node-resize");
+  }, [beginAction, isReplaying]);
+
+  const handleResizeEnd = useCallback(() => {
+    const token = resizeTokenRef.current;
+    resizeTokenRef.current = null;
+    if (!token) {
+      return;
+    }
+
+    commitAction(token);
+  }, [commitAction]);
 
   return (
     <ContextMenu onOpenChange={handleContextMenuOpenChange}>
@@ -309,6 +345,8 @@ const NodeInteractionOverlay = ({
             minHeight={minHeight}
             lineClassName="!border-sky-500/60"
             handleStyle={sharedHandleStyle}
+            onResizeStart={handleResizeStart}
+            onResizeEnd={handleResizeEnd}
           />
 
           {/* Connection handles on all 4 sides (both source and target) */}

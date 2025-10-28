@@ -63,6 +63,11 @@ import type { CanvasNode, ToolId } from "./types";
 import { StatsForNerdsOverlay } from "@/components/diagnostics/StatsForNerdsOverlay";
 import { usePakAssets } from "@/core/pak/usePakAssets";
 import { useWebRTC } from "./collaboration/WebRTCContext";
+import {
+  CanvasUndoRedoProvider,
+  useCanvasUndoRedo,
+  useUndoRedoShortcuts,
+} from "./undo";
 
 // Available drawing tools in the toolbar
 const tools: {
@@ -105,6 +110,14 @@ const drawingTools: ToolId[] = ["sticky-note", "shape", "text", "prompt-node"];
  */
 const CanvasInner = () => {
   const { nodes, edges, setNodes, setEdges } = useCanvasData();
+  const {
+    beginAction,
+    commitAction,
+    performAction,
+    undo,
+    redo,
+    isReplaying,
+  } = useCanvasUndoRedo();
   const [selectedTool, setSelectedTool] = useState<ToolId | null>(null);
   // Tracks active drawing operation (node being created by dragging)
   const drawingState = useRef<{
@@ -113,6 +126,7 @@ const CanvasInner = () => {
   } | null>(null);
   const reactFlowWrapperRef = useRef<HTMLDivElement | null>(null);
   const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow();
+  const nodeDragTokenRef = useRef<symbol | null>(null);
   // Prevents redundant broadcasts when selection hasn't changed
   const lastSelectionBroadcastRef = useRef<string | null>(null);
   const currentSelectedNodeRef = useRef<string | null>(null);
@@ -132,18 +146,68 @@ const CanvasInner = () => {
     releaseAssetRequest: releaseRemoteAssetRequest,
   } = useWebRTC();
 
+  // Wrap structural changes in `performAction` to make them undoable.
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
+      // A structural change is anything that adds or removes a node.
+      const hasStructuralChange = changes.some(
+        (change) => change.type === "remove" || change.type === "add",
+      );
+
+      // If it's structural, wrap it in an undoable action.
+      if (hasStructuralChange) {
+        performAction(() =>
+          setNodes((nds) => applyNodeChanges(changes, nds as Node<CanvasNode>[])),
+        );
+        return;
+      }
+
+      // Otherwise, apply the changes directly without creating an undo step.
+      // This is for performance, as it avoids snapshots for simple moves.
       setNodes((nds) => applyNodeChanges(changes, nds as Node<CanvasNode>[]));
     },
-    [setNodes],
+    [performAction, setNodes],
   );
 
+  // Wrap structural edge changes in `performAction` to make them undoable.
   const onEdgesChange = useCallback(
-    (changes: EdgeChange<EditableEdgeData>[]) =>
-      setEdges((current) => applyEdgeChanges(changes, current)),
-    [setEdges],
+    (changes: EdgeChange<EditableEdgeData>[]) => {
+      const hasStructuralChange = changes.some(
+        (change) => change.type === "remove" || change.type === "add",
+      );
+
+      if (hasStructuralChange) {
+        performAction(() =>
+          setEdges((current) => applyEdgeChanges(changes, current)),
+        );
+        return;
+      }
+
+      setEdges((current) => applyEdgeChanges(changes, current));
+    },
+    [performAction, setEdges],
   );
+
+  // For long-running actions like dragging, we use a token-based approach.
+  // `beginAction` takes a snapshot, and `commitAction` takes another.
+  // The two snapshots are then diffed to create a single undo entry.
+  const handleNodeDragStart = useCallback(() => {
+    // Don't record history if we are currently replaying it.
+    if (isReplaying) {
+      return;
+    }
+    nodeDragTokenRef.current = beginAction("node-drag");
+  }, [beginAction, isReplaying]);
+
+  const handleNodeDragStop = useCallback(() => {
+    const token = nodeDragTokenRef.current;
+    nodeDragTokenRef.current = null;
+    if (!token) {
+      return;
+    }
+
+    commitAction(token);
+  }, [commitAction]);
 
   // Clear typing state when clicking empty canvas (commits edits)
   const onPaneClick = useCallback(() => {
@@ -172,56 +236,62 @@ const CanvasInner = () => {
   // Creates new edges when user drags connection between nodes
   const onConnect = useCallback(
     (params: Connection) =>
-      setEdges((eds) =>
-        addEdge<EditableEdgeData>(
-          {
-            ...params,
-            type: "editable", // This should be a custom edge type
-            data: createDefaultEditableEdgeData(),
-            deletable: true,
-            reconnectable: true,
-          },
-          eds,
-        ),
+      performAction(
+        () =>
+          setEdges((eds) =>
+            addEdge<EditableEdgeData>(
+              {
+                ...params,
+                type: "editable", // This should be a custom edge type
+                data: createDefaultEditableEdgeData(),
+                deletable: true,
+                reconnectable: true,
+              },
+              eds,
+            ),
+          ),
+        "edge-add",
       ),
-    [setEdges],
+    [performAction, setEdges],
   );
 
   // Handles edge reconnection when user drags edge endpoint to different node
   const handleEdgeUpdate = useCallback(
     (oldEdge: Edge<EditableEdgeData>, newConnection: Connection) => {
-      setEdges((currentEdges) => {
-        const index = currentEdges.findIndex((edge) => edge.id === oldEdge.id);
-        if (index === -1) {
-          return currentEdges;
-        }
+      performAction(() => {
+        setEdges((currentEdges) => {
+          const index = currentEdges.findIndex((edge) => edge.id === oldEdge.id);
+          if (index === -1) {
+            return currentEdges;
+          }
 
-        const edge = currentEdges[index];
-        const nextEdge: Edge<EditableEdgeData> = {
-          ...edge,
-          source: newConnection.source ?? edge.source,
-          target: newConnection.target ?? edge.target,
-          sourceHandle: newConnection.sourceHandle,
-          targetHandle: newConnection.targetHandle,
-        };
+          const edge = currentEdges[index];
+          const nextEdge: Edge<EditableEdgeData> = {
+            ...edge,
+            source: newConnection.source ?? edge.source,
+            target: newConnection.target ?? edge.target,
+            sourceHandle: newConnection.sourceHandle,
+            targetHandle: newConnection.targetHandle,
+          };
 
-        const isSameSource =
-          nextEdge.source === edge.source &&
-          nextEdge.sourceHandle === edge.sourceHandle;
-        const isSameTarget =
-          nextEdge.target === edge.target &&
-          nextEdge.targetHandle === edge.targetHandle;
+          const isSameSource =
+            nextEdge.source === edge.source &&
+            nextEdge.sourceHandle === edge.sourceHandle;
+          const isSameTarget =
+            nextEdge.target === edge.target &&
+            nextEdge.targetHandle === edge.targetHandle;
 
-        if (isSameSource && isSameTarget) {
-          return currentEdges;
-        }
+          if (isSameSource && isSameTarget) {
+            return currentEdges;
+          }
 
-        const next = [...currentEdges];
-        next[index] = nextEdge;
-        return next;
-      });
+          const next = [...currentEdges];
+          next[index] = nextEdge;
+          return next;
+        });
+      }, "edge-reconnect");
     },
-    [setEdges],
+    [performAction, setEdges],
   );
 
   const edgeTypes = useMemo(() => ({ editable: EditableEdge }), []);
@@ -428,6 +498,9 @@ const CanvasInner = () => {
     }
   }, [broadcastSelection, broadcastTyping, nodes]);
 
+  // Enable undo/redo keyboard shortcuts.
+  useUndoRedoShortcuts({ undo, redo });
+
   const { handlePaste } = useCanvasCopyPaste({
     nodes,
     setNodes,
@@ -456,6 +529,8 @@ const CanvasInner = () => {
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onEdgeUpdate={handleEdgeUpdate}
+          onNodeDragStart={handleNodeDragStart}
+          onNodeDragStop={handleNodeDragStop}
           edgeTypes={edgeTypes}
           onPaneClick={onPaneClick}
           onMouseDown={handlePaneMouseDown}
@@ -552,9 +627,12 @@ const CanvasInner = () => {
   );
 };
 
+// The CanvasInner component is wrapped in the ReactFlowProvider and our new UndoRedo provider.
 const Flow = () => (
   <ReactFlowProvider>
-    <CanvasInner />
+    <CanvasUndoRedoProvider>
+      <CanvasInner />
+    </CanvasUndoRedoProvider>
   </ReactFlowProvider>
 );
 

@@ -2,6 +2,7 @@ import React, {
   memo,
   useCallback,
   useMemo,
+  useRef,
   type PointerEvent as ReactPointerEvent,
   type MouseEvent as ReactMouseEvent,
 } from "react";
@@ -24,6 +25,7 @@ import {
   SimpleColorPicker,
   type ColorStyle,
 } from "@/components/ui/simple-color-picker";
+import { useCanvasUndoRedo } from "../undo";
 
 /** Determines what to show at edge endpoints */
 export type EdgeMarkerType = "none" | "arrow";
@@ -164,6 +166,11 @@ const EditableEdge = memo(
   }: EditableEdgeProps) => {
     const { setEdges, screenToFlowPosition } = useReactFlow();
     const store = useStoreApi();
+    // Get undo/redo functions from the context.
+    const { performAction, beginAction, commitAction, isReplaying } =
+      useCanvasUndoRedo();
+    // A ref to hold the token for a long-running action (like dragging).
+    const controlDragTokenRef = useRef<symbol | null>(null);
 
     // Determine arrow icon orientation based on connection direction
     const isSourceLeft = sourceX < targetX;
@@ -297,12 +304,15 @@ const EditableEdge = memo(
           return;
         }
 
-        updateEdgeData((current) => ({
-          ...current,
-          sourceMarker: value as EdgeMarkerType,
-        }));
+        // Wrap the state update in `performAction` to make it undoable.
+        performAction(() => {
+          updateEdgeData((current) => ({
+            ...current,
+            sourceMarker: value as EdgeMarkerType,
+          }));
+        }, "edge-source-marker");
       },
-      [updateEdgeData],
+      [performAction, updateEdgeData],
     );
 
     const handleTargetMarkerChange = useCallback(
@@ -311,12 +321,14 @@ const EditableEdge = memo(
           return;
         }
 
-        updateEdgeData((current) => ({
-          ...current,
-          targetMarker: value as EdgeMarkerType,
-        }));
+        performAction(() => {
+          updateEdgeData((current) => ({
+            ...current,
+            targetMarker: value as EdgeMarkerType,
+          }));
+        }, "edge-target-marker");
       },
-      [updateEdgeData],
+      [performAction, updateEdgeData],
     );
 
     const handleStyleTypeChange = useCallback(
@@ -325,22 +337,26 @@ const EditableEdge = memo(
           return;
         }
 
-        updateEdgeData((current) => ({
-          ...current,
-          styleType: value as EdgeLineStyle,
-        }));
+        performAction(() => {
+          updateEdgeData((current) => ({
+            ...current,
+            styleType: value as EdgeLineStyle,
+          }));
+        }, "edge-style");
       },
-      [updateEdgeData],
+      [performAction, updateEdgeData],
     );
 
     const handleColorChange = useCallback(
       (color: ColorStyle) => {
-        updateEdgeData((current) => ({
-          ...current,
-          color: color.background,
-        }));
+        performAction(() => {
+          updateEdgeData((current) => ({
+            ...current,
+            color: color.background,
+          }));
+        }, "edge-color");
       },
-      [updateEdgeData],
+      [performAction, updateEdgeData],
     );
 
     const edgeToolbarItems = useMemo<ToolbarItem[]>(() => {
@@ -464,6 +480,14 @@ const EditableEdge = memo(
         event.stopPropagation();
         event.preventDefault();
 
+        // Start a new undoable action when the drag begins.
+        if (!controlDragTokenRef.current && !isReplaying) {
+          const token = beginAction("edge-control-move");
+          if (token) {
+            controlDragTokenRef.current = token;
+          }
+        }
+
         const pointerId = event.pointerId;
         const element = event.currentTarget;
         element.setPointerCapture(pointerId);
@@ -494,13 +518,26 @@ const EditableEdge = memo(
           window.removeEventListener("pointermove", handlePointerMove);
           window.removeEventListener("pointerup", handlePointerUp);
           window.removeEventListener("pointercancel", handlePointerUp);
+
+          // Commit the action when the drag ends.
+          const token = controlDragTokenRef.current;
+          controlDragTokenRef.current = null;
+          if (token) {
+            commitAction(token);
+          }
         };
 
         window.addEventListener("pointermove", handlePointerMove);
         window.addEventListener("pointerup", handlePointerUp);
         window.addEventListener("pointercancel", handlePointerUp);
       },
-      [screenToFlowPosition, updateControlPoints],
+      [
+        beginAction,
+        commitAction,
+        isReplaying,
+        screenToFlowPosition,
+        updateControlPoints,
+      ],
     );
 
     /** Double-clicking a control point removes it */
@@ -509,9 +546,12 @@ const EditableEdge = memo(
         event.stopPropagation();
         event.preventDefault();
 
-        updateControlPoints((current) => current.filter((_, i) => i !== index));
+        // Wrap the state update in `performAction` to make it undoable.
+        performAction(() => {
+          updateControlPoints((current) => current.filter((_, i) => i !== index));
+        }, "edge-control-remove");
       },
-      [updateControlPoints],
+      [performAction, updateControlPoints],
     );
 
     /**
@@ -525,44 +565,48 @@ const EditableEdge = memo(
           return;
         }
 
-        const position = screenToFlowPosition({
-          x: event.clientX,
-          y: event.clientY,
-        });
+        // Wrap the state update in `performAction` to make it undoable.
+        performAction(() => {
+          const position = screenToFlowPosition({
+            x: event.clientX,
+            y: event.clientY,
+          });
 
-        // Find which segment the click is closest to
-        const segmentIndex = (() => {
-          let bestIndex = 0;
-          let bestDistance = Number.POSITIVE_INFINITY;
+          // Find which segment the click is closest to
+          const segmentIndex = (() => {
+            let bestIndex = 0;
+            let bestDistance = Number.POSITIVE_INFINITY;
 
-          for (let i = 0; i < points.length - 1; i += 1) {
-            const segmentDistance = distancePointToSegment(
-              position,
-              points[i],
-              points[i + 1],
-            );
+            for (let i = 0; i < points.length - 1; i += 1) {
+              const segmentDistance = distancePointToSegment(
+                position,
+                points[i],
+                points[i + 1],
+              );
 
-            if (segmentDistance < bestDistance) {
-              bestDistance = segmentDistance;
-              bestIndex = i;
+              if (segmentDistance < bestDistance) {
+                bestDistance = segmentDistance;
+                bestIndex = i;
+              }
             }
-          }
 
-          return Math.min(bestIndex, controlPoints.length);
-        })();
+            return Math.min(bestIndex, controlPoints.length);
+          })();
 
-        updateControlPoints((current) => {
-          const next = [...current];
-          next.splice(segmentIndex, 0, position);
-          return next;
-        });
+          updateControlPoints((current) => {
+            const next = [...current];
+            next.splice(segmentIndex, 0, position);
+            return next;
+          });
 
-        const { addSelectedEdges } = store.getState();
-        addSelectedEdges([id]);
+          const { addSelectedEdges } = store.getState();
+          addSelectedEdges([id]);
+        }, "edge-control-add");
       },
       [
         controlPoints.length,
         id,
+        performAction,
         points,
         screenToFlowPosition,
         store,

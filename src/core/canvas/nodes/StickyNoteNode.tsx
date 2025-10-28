@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/simple-color-picker";
 import { type FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
 import { useAutoFontSizeObserver } from "./useAutoFontSizeObserver";
+import { useCanvasUndoRedo } from "../undo";
 
 /** Data structure for sticky notes with color theming and font sizing */
 export type StickyNoteData = {
@@ -147,6 +148,8 @@ const StickyNoteNode = memo(
       fontSizeSetting,
       resolvedFontSize,
     } = useNodeAsEditor({ id, data });
+    // Get the `performAction` function to wrap mutations in undoable actions.
+    const { performAction } = useCanvasUndoRedo();
     const label = data.label ?? "";
     const color = data.color ?? defaultColor;
     const containerRef = useRef<HTMLDivElement>(null);
@@ -192,9 +195,12 @@ const StickyNoteNode = memo(
 
     const handleColorChange = useCallback(
       (value: ColorStyle) => {
-        updateNodeData({ color: value });
+        // Wrap the color change in `performAction` to make it undoable.
+        performAction(() => {
+          updateNodeData({ color: value });
+        }, "sticky-note-color");
       },
-      [updateNodeData],
+      [performAction, updateNodeData],
     );
 
     // Extend default formatting tools (bold, italic, etc.) with color picker

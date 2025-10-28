@@ -18,6 +18,7 @@ import {
   type FontSizeStorage,
 } from "../components/ui/minimal-tiptap/FontSizePlugin";
 import { useCanvasData } from "@/core/canvas/CanvasDataContext";
+import { useCanvasUndoRedo } from "@/core/canvas/undo";
 
 /**
  * Base shape for node data that supports rich text editing.
@@ -48,9 +49,12 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
   data,
 }: UseNodeAsEditorParams<T>) => {
   const { setNodes } = useCanvasData();
+  const { beginAction, commitAction, isReplaying } = useCanvasUndoRedo();
   const isTyping = Boolean(data.isTyping);
   const label = data.label ?? "";
   const fontSizeSetting = data.fontSize ?? "auto";
+  // A ref to hold the token for the current typing session.
+  const typingHistoryTokenRef = useRef<symbol | null>(null);
 
   /** Merges partial updates into this node's data object. */
   const updateNodeData = useCallback(
@@ -69,7 +73,7 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
         ),
       );
     },
-    [id, setNodes],
+    [beginAction, id, isReplaying, setNodes],
   );
 
   // Stable ref to avoid re-creating TipTap extensions when updateNodeData changes
@@ -214,6 +218,14 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
    */
   const setTypingState = useCallback(
     (value: boolean) => {
+      // When starting to type, begin a new undoable action.
+      if (value && !typingHistoryTokenRef.current && !isReplaying) {
+        const token = beginAction("node-edit");
+        if (token) {
+          typingHistoryTokenRef.current = token;
+        }
+      }
+
       setNodes((nodes) =>
         nodes.map((node) => {
           // Set typing state for this node, the rest of the nodes will be set by the onBlur event, so we don't need to do it here
@@ -230,8 +242,23 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
         }),
       );
     },
-    [id, setNodes],
+    [beginAction, id, isReplaying, setNodes],
   );
+
+  // When the user stops typing, commit the action to the undo stack.
+  useEffect(() => {
+    if (isTyping) {
+      return;
+    }
+
+    const token = typingHistoryTokenRef.current;
+    if (!token) {
+      return;
+    }
+
+    typingHistoryTokenRef.current = null;
+    commitAction(token);
+  }, [commitAction, isTyping]);
 
   /** Enter edit mode on double-click. */
   const handleDoubleClick = (event: MouseEvent<HTMLDivElement>) => {
