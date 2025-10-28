@@ -116,4 +116,10 @@ See our [CONTRIBUTING.md](./CONTRIBUTING.md) to learn how to send your first pul
 
 ## License
 
-This project is licensed under the [GNU Affero General Public License v3.0](https://github.com/deep-elegant/kavim/blob/master/LICENSE.txt).
+This project is primarily licensed under the [GNU Affero General Public License v3.0 (AGPLv3)](./LICENSE).
+
+Portions of the software may be licensed differently:
+- Code under any directory named `ee` (e.g., `/ee`, `/src/ee/`, etc.) is licensed under the separate terms defined in the `EE_LICENSE` file.
+- Third-party components are distributed under their original licenses.
+
+For full details, see the [LICENSE](./LICENSE) file.
