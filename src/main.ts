@@ -1,6 +1,8 @@
 import { app, BrowserWindow, Menu } from "electron";
 import Store from "electron-store";
 import registerListeners from "./helpers/ipc/listeners-register";
+import { updateElectronApp } from "update-electron-app";
+updateElectronApp(); // additional configuration options available
 
 // Initialize renderer process access to electron-store
 Store.initRenderer();
