@@ -39,6 +39,9 @@ import {
 } from "@/components/ui/form";
 import { createDefaultEditableEdgeData } from "../edges/EditableEdge";
 import { useCanvasData } from "../CanvasDataContext";
+import type { TextNodeData } from "./TextNode";
+import type { StickyNoteData } from "./StickyNoteNode";
+import type { ShapeNodeData } from "./ShapeNode";
 
 export type AiStatus = "not-started" | "in-progress" | "done";
 
@@ -54,9 +57,11 @@ export type AiNodeData = {
 
 export type AiNodeType = Node<AiNodeData, "ai-node">;
 
+// Defines the minimum dimensions for an AI node.
 const MIN_WIDTH = 360;
 const MIN_HEIGHT = 270;
-const NODE_HORIZONTAL_GAP = 80; // Spacing when creating split nodes
+// Defines the horizontal gap between a node and a newly created split node.
+const NODE_HORIZONTAL_GAP = 80;
 
 const PROMPT_PLACEHOLDER_HTML = "<p>No prompt yet.</p>";
 const PROMPT_TYPOGRAPHY = cn(
@@ -84,6 +89,45 @@ const AI_MODEL_VALUES = AI_MODELS.map((option) => option.value) as [
   AiModel,
   ...AiModel[],
 ];
+
+const TEXTUAL_NODE_TYPES = new Set(["text-node", "sticky-note", "shape-node"]);
+
+/**
+ * Formats a summary of a textual node's content for use in AI prompts.
+ * @param node The node to summarize.
+ * @returns A string summary, or null if the node is not a supported textual type.
+ */
+const formatTextualNodeSummary = (node: Node): string | null => {
+  if (!TEXTUAL_NODE_TYPES.has(node.type ?? "")) {
+    return null;
+  }
+
+  const rawLabel =
+    (node.data as
+      | (TextNodeData | StickyNoteData | ShapeNodeData | undefined))
+      ?.label ?? "";
+  const plainText = htmlToPlainText(rawLabel);
+
+  if (!plainText) {
+    return null;
+  }
+
+  switch (node.type) {
+    case "text-node":
+      return `Text node: ${plainText}`;
+    case "sticky-note":
+      return `Sticky note: ${plainText}`;
+    case "shape-node": {
+      const { shapeType } = (node.data as ShapeNodeData | undefined) ?? {};
+      const shapeLabel = shapeType
+        ? `${shapeType.charAt(0).toUpperCase()}${shapeType.slice(1)} shape`
+        : "Shape node";
+      return `${shapeLabel}: ${plainText}`;
+    }
+    default:
+      return null;
+  }
+};
 
 const aiNodeFormSchema = z.object({
   model: z.enum(AI_MODEL_VALUES),
@@ -315,8 +359,23 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
         return [...messagesBefore, ...messages];
       };
 
+      const textualContextEntries = flowNodes
+        .map((node) => formatTextualNodeSummary(node))
+        .filter((entry): entry is string => Boolean(entry));
+
+      const history: ChatMessage[] = [];
+
+      if (textualContextEntries.length > 0) {
+        history.push({
+          role: "system",
+          content: `Canvas context:\n${textualContextEntries
+            .map((entry) => `- ${entry}`)
+            .join("\n")}`,
+        });
+      }
+
       // Collect history from all parent AI nodes connected to this one
-      const history = (incomingMap.get(id) ?? []).flatMap((edge) => {
+      const aiHistory = (incomingMap.get(id) ?? []).flatMap((edge) => {
         const sourceId = edge.source;
         if (typeof sourceId !== "string") {
           return [];
@@ -324,6 +383,8 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
         return collectFromNode(sourceId);
       });
+
+      history.push(...aiHistory);
 
       // Add current prompt as the final user message
       const promptText = htmlToPlainText(promptHtml);
@@ -566,6 +627,10 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     return response;
   }, [result]);
 
+  /**
+   * Copies the AI-generated response to the clipboard.
+   * Displays a toast notification to confirm success or failure.
+   */
   const handleCopyAiResponse = useCallback(async () => {
     const plainText = result;
     if (!plainText) {
@@ -616,6 +681,11 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     [handleBlur],
   );
 
+  /**
+   * Handles changes to the AI model selection.
+   * Updates the node's data and re-focuses the editor.
+   * @param value The new AI model value.
+   */
   const onChangeModel = useCallback(
     (value: string) => {
       updateNodeData({ model: value as AiModel });
