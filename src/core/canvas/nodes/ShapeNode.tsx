@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/simple-color-picker";
 import { type FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
 import { useAutoFontSizeObserver } from "./useAutoFontSizeObserver";
+import { useCanvasUndoRedo } from "../undo";
 
 export type ShapeType = "circle" | "rectangle";
 
@@ -130,6 +131,8 @@ const ShapeNodeComponent = memo(
       fontSizeSetting,
       resolvedFontSize,
     } = useNodeAsEditor({ id, data });
+    // Get the `performAction` function to wrap mutations in undoable actions.
+    const { performAction } = useCanvasUndoRedo();
     const { label = "", shapeType } = data;
     const color = data.color ?? defaultColor;
     const containerRef = useRef<HTMLDivElement>(null);
@@ -153,9 +156,12 @@ const ShapeNodeComponent = memo(
 
     const handleColorChange = useCallback(
       (value: ColorStyle) => {
-        updateNodeData({ color: value });
+        // Wrap the color change in `performAction` to make it undoable.
+        performAction(() => {
+          updateNodeData({ color: value });
+        }, "shape-color");
       },
-      [updateNodeData],
+      [performAction, updateNodeData],
     );
 
     // Add color picker to the standard toolbar for per-node color customization
