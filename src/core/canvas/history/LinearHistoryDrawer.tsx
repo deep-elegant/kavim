@@ -1,5 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { X } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -13,14 +15,34 @@ import { SingleLlmSelect } from "@/core/llm/SingleLlmSelect";
 import type { AiModel } from "@/core/llm/aiModels";
 
 import { useLinearHistory } from "./LinearHistoryContext";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+
+type LinearHistoryFormValues = {
+  model: AiModel;
+  prompt: string;
+};
 
 const LinearHistoryDrawer = () => {
   const { isOpen, items, close, activeNodeId, isCycleTruncated, sendPrompt } =
     useLinearHistory();
   const activeItemRef = useRef<HTMLDivElement | null>(null);
-  const [model, setModel] = useState<AiModel>("deepseek");
-  const [prompt, setPrompt] = useState("");
-  const [isSending, setIsSending] = useState(false);
+  const form = useForm<LinearHistoryFormValues>({
+    defaultValues: {
+      model: "deepseek",
+      prompt: "",
+    },
+    mode: "onSubmit",
+  });
+  const {
+    control,
+    handleSubmit,
+    reset,
+    watch,
+    register,
+    formState: { isSubmitting },
+  } = form;
+  const promptValue = watch("prompt");
+  const isPromptEmpty = promptValue.trim().length === 0;
 
   useEffect(() => {
     if (!isOpen) {
@@ -30,25 +52,23 @@ const LinearHistoryDrawer = () => {
     activeItemRef.current?.scrollIntoView({ block: "center" });
   }, [isOpen, activeNodeId]);
 
-  const handleSubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const onSubmit = useCallback(
+    async (values: LinearHistoryFormValues) => {
+      const trimmedPrompt = values.prompt.trim();
+      if (!trimmedPrompt) {
+        return;
+      }
 
-    const trimmedPrompt = prompt.trim();
-    if (!trimmedPrompt || isSending) {
-      return;
-    }
-
-    setIsSending(true);
-
-    try {
-      await sendPrompt({ model, prompt: trimmedPrompt });
-      setPrompt("");
-    } catch (error) {
-      console.error("Workspace AI prompt failed", error);
-    } finally {
-      setIsSending(false);
-    }
-  }, [model, prompt, sendPrompt, isSending]);
+      try {
+        await sendPrompt({ model: values.model, prompt: trimmedPrompt });
+        reset({ model: values.model, prompt: "" });
+      } catch (error) {
+        console.error("Workspace AI prompt failed", error);
+        toast.error("Failed to generate AI response");
+      }
+    },
+    [reset, sendPrompt],
+  );
 
   return (
     <Drawer open={isOpen} onOpenChange={(open) => (!open ? close() : undefined)}>
@@ -135,39 +155,68 @@ const LinearHistoryDrawer = () => {
           </div>
 
           <div className="border-t px-4 py-4">
-            <form className="space-y-3" onSubmit={handleSubmit}>
-              <div className="space-y-2">
-                <label
-                  htmlFor="linear-history-composer"
-                  className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-                >
-                  Workspace AI
-                </label>
-                <div className={cn(isSending && "pointer-events-none opacity-70")}>
-                  <SingleLlmSelect
-                    value={model}
-                    onChange={(value) => setModel(value as AiModel)}
-                  />
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                <div className="space-y-2">
+                    <label
+                    htmlFor="linear-history-composer"
+                    className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                    >
+                    Workspace AI
+                    </label>
+                    <div className={cn(isSubmitting && "pointer-events-none opacity-70")}>
+                        <FormField
+                            control={form.control}
+                            name="model"
+                            render={({ field }) => (
+                            <FormItem className="space-y-1">
+                                <FormLabel className="text-xs font-medium text-slate-600">
+                                Model
+                                </FormLabel>
+                                <FormControl>
+                                <SingleLlmSelect
+                                    value={field.value}
+                                    onChange={field.onChange}
+                                />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                    </div>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <textarea
-                  id="linear-history-composer"
-                  className="h-24 w-full resize-none rounded-md border border-dashed border-muted-foreground/40 bg-muted/30 p-3 text-sm text-foreground"
-                  placeholder="Ask the workspace AI to extend this path..."
-                  value={prompt}
-                  onChange={(event) => setPrompt(event.target.value)}
-                  disabled={isSending}
-                />
-              </div>
-              <Button
-                className="w-full"
-                type="submit"
-                disabled={isSending || prompt.trim().length === 0}
-              >
-                {isSending ? "Sending..." : "Send"}
-              </Button>
-            </form>
+                <div className="space-y-2">
+                    <FormField
+                        control={form.control}
+                        name="prompt"
+                        render={({ field }) => (
+                            <FormItem className="flex h-full flex-col space-y-0">
+                                <FormLabel className="text-xs font-medium text-slate-600">
+                                Prompt
+                                </FormLabel>
+                                <FormControl className="mt-1 min-h-[120px] flex-1">
+                                <textarea
+                                    id="linear-history-composer"
+                                    className="h-24 w-full resize-none rounded-md border border-dashed border-muted-foreground/40 bg-muted/30 p-3 text-sm text-foreground"
+                                    placeholder="Ask the workspace AI to extend this path..."
+                                    disabled={isSubmitting}
+                                    {...field}
+                                />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                </div>
+                <Button
+                    className="w-full"
+                    type="submit"
+                    disabled={isSubmitting || isPromptEmpty}
+                >
+                    {isSubmitting ? "Sending..." : "Send"}
+                </Button>
+              </form>
+            </Form>
           </div>
         </div>
       </DrawerContent>
