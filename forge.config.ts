@@ -67,6 +67,27 @@ const config: ForgeConfig = {
       [FuseV1Options.OnlyLoadAppFromAsar]: true,
     }),
   ],
+   publishers: [
+    {
+      name: "@electron-forge/publisher-github",
+      config: {
+        repository: {
+          owner: "deep-elegant",
+          name: "kavim",
+        },
+        draft: true,
+        prerelease: false,
+        generateReleaseNotes: true,
+        tagPrefix: "v",
+        assetMatchers: [
+          "out/make/**/*.{zip,dmg,exe,msi,deb,rpm,AppImage}",
+          "out/make/**/*.nupkg",
+          "out/make/**/RELEASES",
+          "out/make/**/*.yml",
+        ],
+      },
+    },
+  ],
 };
 
 export default config;

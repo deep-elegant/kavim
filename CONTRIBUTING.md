@@ -88,6 +88,17 @@ The repository includes configuration files for ESLint, Prettier, and TypeScript
 ## Releases
 Only maintainers publish releases for now.
 
+## 🔁 Auto-update & releases
+
+Packaged builds now publish signed update artifacts to GitHub so the desktop app can discover and install new versions automatically.
+
+1. **Set credentials** – export a `GITHUB_TOKEN` with permission to create releases in [`deep-elegant/kavim`](https://github.com/deep-elegant/kavim).
+2. **Bump the version** – update `package.json` and commit the change before publishing.
+3. **Publish** – run `npm run publish` to generate installers (`.dmg`, `.zip`, `.deb`, `.rpm`, `.nupkg`, etc.) and upload them alongside the required auto-update metadata (`latest.yml`, `RELEASES`, delta packages).
+4. **Promote the release** – once the draft looks good, finalize it on GitHub. Clients on Windows, macOS, and Linux will receive the new version the next time they check for updates.
+
+> **Tip:** auto-update checks are skipped while running `npm start`. Build a packaged app to exercise the full flow end-to-end.
+
 ## Need help?
 
 - Open a question in [GitHub Discussions](https://github.com/orgs/deep-elegant/discussions)
