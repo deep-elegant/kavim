@@ -6,11 +6,20 @@ import { addLlmEventListeners } from "./llm/llm-listeners";
 import { addDraftEventListeners } from "./drafts/draft-listeners";
 import { addAppEventListeners } from "./app/app-listeners";
 
+let globalListenersRegistered = false;
+
 export default function registerListeners(mainWindow: BrowserWindow) {
   addWindowEventListeners(mainWindow);
+
+  if (globalListenersRegistered) {
+    return;
+  }
+
   addPakEventListeners();
   addFileSystemEventListeners();
   addLlmEventListeners();
   addDraftEventListeners();
   addAppEventListeners();
+
+  globalListenersRegistered = true;
 }
