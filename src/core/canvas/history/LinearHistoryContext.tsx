@@ -255,58 +255,97 @@ export const LinearHistoryProvider = ({
       }
 
       const sourceNode = pathNodes[pathNodes.length - 1]!;
+      const sourceNodeData = sourceNode.data as AiNodeData | undefined;
+      const sourcePromptText =
+        sourceNode.type === "ai-node"
+          ? htmlToPlainText(sourceNodeData?.label ?? "").trim()
+          : "";
+      const sourceResponseText =
+        sourceNode.type === "ai-node"
+          ? (sourceNodeData?.result ?? "").trim()
+          : "";
+      const shouldReuseActive =
+        sourceNode.type === "ai-node" &&
+        sourcePromptText.length === 0 &&
+        sourceResponseText.length === 0;
+
       const sourceWidth = Number(
         sourceNode.width ?? sourceNode.style?.width ?? AI_NODE_DEFAULT_WIDTH,
       );
-      const newNodeId = crypto.randomUUID();
+      const targetNodeId = shouldReuseActive
+        ? sourceNode.id
+        : crypto.randomUUID();
       const promptHtml = convertPromptToHtml(trimmedPrompt);
 
-      const newNode: Node<AiNodeData> = {
-        id: newNodeId,
-        type: "ai-node",
-        position: {
-          x: sourceNode.position.x + sourceWidth + AI_NODE_HORIZONTAL_GAP,
-          y: sourceNode.position.y,
-        },
-        data: {
-          label: promptHtml,
-          model,
-          status: "in-progress",
-          result: "",
-          isTyping: false,
-        },
-        width: AI_NODE_DEFAULT_WIDTH,
-        height: AI_NODE_DEFAULT_HEIGHT,
-        style: {
+      let newNode: Node<AiNodeData> | null = null;
+      let newEdge: Edge<EditableEdgeData> | null = null;
+
+      if (!shouldReuseActive) {
+        newNode = {
+          id: targetNodeId,
+          type: "ai-node",
+          position: {
+            x: sourceNode.position.x + sourceWidth + AI_NODE_HORIZONTAL_GAP,
+            y: sourceNode.position.y,
+          },
+          data: {
+            label: promptHtml,
+            model,
+            status: "in-progress",
+            result: "",
+            isTyping: false,
+          },
           width: AI_NODE_DEFAULT_WIDTH,
           height: AI_NODE_DEFAULT_HEIGHT,
-        },
-        selected: true,
-      };
+          style: {
+            width: AI_NODE_DEFAULT_WIDTH,
+            height: AI_NODE_DEFAULT_HEIGHT,
+          },
+          selected: true,
+        };
 
-      const newEdge: Edge<EditableEdgeData> = {
-        id: crypto.randomUUID(),
-        source: sourceNode.id,
-        target: newNodeId,
-        type: "editable",
-        data: { ...createDefaultEditableEdgeData(), targetMarker: "arrow" },
-        targetHandle: "left-target",
-      };
+        newEdge = {
+          id: crypto.randomUUID(),
+          source: sourceNode.id,
+          target: targetNodeId,
+          type: "editable",
+          data: { ...createDefaultEditableEdgeData(), targetMarker: "arrow" },
+          targetHandle: "left-target",
+        };
 
-      if (sourceNode.type === "ai-node") {
-        newEdge.sourceHandle = "right-source";
+        if (sourceNode.type === "ai-node") {
+          newEdge.sourceHandle = "right-source";
+        }
       }
 
       performAction(() => {
-        setNodes((existing) => {
-          const clearedSelection = existing.map((node) => {
-            if (node.id === activeNodeId) {
+        if (shouldReuseActive) {
+          setNodes((existing) =>
+            existing.map((node) => {
+              if (node.id === targetNodeId && node.type === "ai-node") {
+                const nodeData = node.data as AiNodeData;
+
+                return {
+                  ...node,
+                  data: {
+                    ...nodeData,
+                    label: promptHtml,
+                    model,
+                    status: "in-progress",
+                    result: "",
+                    isTyping: false,
+                  },
+                  selected: true,
+                } as Node<AiNodeData>;
+              }
+
               if (node.type === "ai-node") {
+                const nodeData = node.data as AiNodeData;
                 return {
                   ...node,
                   selected: false,
                   data: {
-                    ...(node.data as AiNodeData),
+                    ...nodeData,
                     isTyping: false,
                   },
                 } as Node<AiNodeData>;
@@ -319,40 +358,69 @@ export const LinearHistoryProvider = ({
                 };
               }
 
-              return {
-                ...node,
-                selected: false,
-              };
-            }
+              return node;
+            }),
+          );
+        } else if (newNode) {
+          setNodes((existing) => {
+            const clearedSelection = existing.map((node) => {
+              if (node.id === activeNodeId) {
+                if (node.type === "ai-node") {
+                  return {
+                    ...node,
+                    selected: false,
+                    data: {
+                      ...(node.data as AiNodeData),
+                      isTyping: false,
+                    },
+                  } as Node<AiNodeData>;
+                }
 
-            if (node.selected) {
-              if (node.type === "ai-node") {
+                if (node.selected) {
+                  return {
+                    ...node,
+                    selected: false,
+                  };
+                }
+
                 return {
                   ...node,
                   selected: false,
-                  data: {
-                    ...(node.data as AiNodeData),
-                    isTyping: false,
-                  },
-                } as Node<AiNodeData>;
+                };
               }
 
-              return {
-                ...node,
-                selected: false,
-              };
-            }
+              if (node.selected) {
+                if (node.type === "ai-node") {
+                  return {
+                    ...node,
+                    selected: false,
+                    data: {
+                      ...(node.data as AiNodeData),
+                      isTyping: false,
+                    },
+                  } as Node<AiNodeData>;
+                }
 
-            return node;
+                return {
+                  ...node,
+                  selected: false,
+                };
+              }
+
+              return node;
+            });
+
+            return [...clearedSelection, newNode];
           });
 
-          return [...clearedSelection, newNode];
-        });
-
-        setEdges((existing) => [...existing, newEdge]);
+          if (newEdge) {
+            const edgeToAdd = newEdge;
+            setEdges((existing) => [...existing, edgeToAdd]);
+          }
+        }
       }, "Workspace AI prompt");
 
-      setState({ isOpen: true, activeNodeId: newNodeId });
+      setState({ isOpen: true, activeNodeId: targetNodeId });
 
       const textualContextEntries = pathNodes
         .map((node) => formatTextualNodeSummary(node))
@@ -404,7 +472,7 @@ export const LinearHistoryProvider = ({
 
             setNodes((existing) =>
               existing.map((node) => {
-                if (node.id !== newNodeId || node.type !== "ai-node") {
+                if (node.id !== targetNodeId || node.type !== "ai-node") {
                   return node;
                 }
 
@@ -425,7 +493,7 @@ export const LinearHistoryProvider = ({
         if (requestIdRef.current === currentRequestId) {
           setNodes((existing) =>
             existing.map((node) => {
-              if (node.id !== newNodeId || node.type !== "ai-node") {
+              if (node.id !== targetNodeId || node.type !== "ai-node") {
                 return node;
               }
 
@@ -452,7 +520,7 @@ export const LinearHistoryProvider = ({
         if (requestIdRef.current === currentRequestId) {
           setNodes((existing) =>
             existing.map((node) => {
-              if (node.id !== newNodeId || node.type !== "ai-node") {
+              if (node.id !== targetNodeId || node.type !== "ai-node") {
                 return node;
               }
 
