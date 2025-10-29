@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -9,13 +9,18 @@ import {
   DrawerTitle,
 } from "@/components/ui/drawer";
 import { cn } from "@/utils/tailwind";
+import { SingleLlmSelect } from "@/core/llm/SingleLlmSelect";
+import type { AiModel } from "@/core/llm/aiModels";
 
 import { useLinearHistory } from "./LinearHistoryContext";
 
 const LinearHistoryDrawer = () => {
-  const { isOpen, items, close, activeNodeId, isCycleTruncated } =
+  const { isOpen, items, close, activeNodeId, isCycleTruncated, sendPrompt } =
     useLinearHistory();
   const activeItemRef = useRef<HTMLDivElement | null>(null);
+  const [model, setModel] = useState<AiModel>("deepseek");
+  const [prompt, setPrompt] = useState("");
+  const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
     if (!isOpen) {
@@ -24,6 +29,26 @@ const LinearHistoryDrawer = () => {
 
     activeItemRef.current?.scrollIntoView({ block: "center" });
   }, [isOpen, activeNodeId]);
+
+  const handleSubmit = useCallback(async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const trimmedPrompt = prompt.trim();
+    if (!trimmedPrompt || isSending) {
+      return;
+    }
+
+    setIsSending(true);
+
+    try {
+      await sendPrompt({ model, prompt: trimmedPrompt });
+      setPrompt("");
+    } catch (error) {
+      console.error("Workspace AI prompt failed", error);
+    } finally {
+      setIsSending(false);
+    }
+  }, [model, prompt, sendPrompt, isSending]);
 
   return (
     <Drawer open={isOpen} onOpenChange={(open) => (!open ? close() : undefined)}>
@@ -110,23 +135,39 @@ const LinearHistoryDrawer = () => {
           </div>
 
           <div className="border-t px-4 py-4">
-            <div className="space-y-2">
-              <label
-                htmlFor="linear-history-composer"
-                className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+            <form className="space-y-3" onSubmit={handleSubmit}>
+              <div className="space-y-2">
+                <label
+                  htmlFor="linear-history-composer"
+                  className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                >
+                  Workspace AI
+                </label>
+                <div className={cn(isSending && "pointer-events-none opacity-70")}>
+                  <SingleLlmSelect
+                    value={model}
+                    onChange={(value) => setModel(value as AiModel)}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <textarea
+                  id="linear-history-composer"
+                  className="h-24 w-full resize-none rounded-md border border-dashed border-muted-foreground/40 bg-muted/30 p-3 text-sm text-foreground"
+                  placeholder="Ask the workspace AI to extend this path..."
+                  value={prompt}
+                  onChange={(event) => setPrompt(event.target.value)}
+                  disabled={isSending}
+                />
+              </div>
+              <Button
+                className="w-full"
+                type="submit"
+                disabled={isSending || prompt.trim().length === 0}
               >
-                Workspace AI (coming soon)
-              </label>
-              <textarea
-                id="linear-history-composer"
-                className="bg-muted/30 h-24 w-full resize-none rounded-md border border-dashed border-muted-foreground/40 p-3 text-sm text-muted-foreground"
-                placeholder="Ask the workspace AI to extend this path..."
-                disabled
-              />
-              <Button className="w-full" disabled>
-                Send
+                {isSending ? "Sending..." : "Send"}
               </Button>
-            </div>
+            </form>
           </div>
         </div>
       </DrawerContent>
@@ -135,4 +176,3 @@ const LinearHistoryDrawer = () => {
 };
 
 export default LinearHistoryDrawer;
-
