@@ -37,18 +37,10 @@ export const formatTextualNodeSummary = (node: Node): string | null => {
 
   switch (node.type) {
     case "text-node":
-      return `Text node: ${plainText}`;
     case "sticky-note":
-      return `Sticky note: ${plainText}`;
-    case "shape-node": {
-      const { shapeType } = (node.data as ShapeNodeData | undefined) ?? {};
-      const shapeLabel = shapeType
-        ? `${shapeType.charAt(0).toUpperCase()}${shapeType.slice(1)} shape`
-        : "Shape node";
-      return `${shapeLabel}: ${plainText}`;
-    }
+    case "shape-node":
+      return `${plainText}`;
     default:
       return null;
   }
 };
-

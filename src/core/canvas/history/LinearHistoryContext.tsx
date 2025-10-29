@@ -362,7 +362,7 @@ export const LinearHistoryProvider = ({
 
       if (textualContextEntries.length > 0) {
         messages.push({
-          role: "system",
+          role: "user",
           content: `Canvas context:\n${textualContextEntries
             .map((entry) => `- ${entry}`)
             .join("\n")}`,
@@ -538,4 +538,3 @@ export const useLinearHistory = () => {
   }
   return context;
 };
-
