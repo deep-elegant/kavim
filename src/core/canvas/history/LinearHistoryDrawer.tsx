@@ -34,11 +34,8 @@ const LinearHistoryDrawer = () => {
     mode: "onSubmit",
   });
   const {
-    control,
-    handleSubmit,
     reset,
     watch,
-    register,
     formState: { isSubmitting },
   } = form;
   const promptValue = watch("prompt");
@@ -75,7 +72,10 @@ const LinearHistoryDrawer = () => {
       <DrawerContent
         side="right"
         showHandle={false}
-        className="w-full max-w-md border-l bg-background p-0"
+        adjustable
+        drawerId="linear-history"
+        defaultSize={480}
+        className="border-l bg-background p-0"
       >
         <div className="flex h-full flex-col">
           <div className="border-b px-4 py-3">

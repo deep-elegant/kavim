@@ -104,6 +104,13 @@ interface AppInfoContext {
   get: () => Promise<AppMetadata>;
 }
 
+interface DrawerPreferencesContext {
+  getSize: (id: string) => number | undefined;
+  setSize: (id: string, size: number) => void;
+  deleteSize: (id: string) => void;
+  getAll: () => Record<string, number>;
+}
+
 declare global {
     const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
     const MAIN_WINDOW_VITE_NAME: string;
@@ -135,6 +142,7 @@ declare global {
         llm: LlmContext;
         drafts: DraftContext;
         appInfo: AppInfoContext;
+        drawerPreferences?: DrawerPreferencesContext;
     }
 }
 export {}
