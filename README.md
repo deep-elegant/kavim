@@ -46,6 +46,8 @@ Choose your platform to download the app:
     <a href="https://github.com/deep-elegant/kavim/releases"><b>Linux</b></a>
 </p>
 
+> **macOS tip:** If Gatekeeper says the developer can’t be verified, follow our [Open Kavim When macOS Blocks It](https://docs.kavim.deepelegant.com/getting-started/troubleshooting/macos-allow-kavim) guide.
+
 ## 🌟 Features
 
 **💸 One AI Subscription Is Enough**
