@@ -14,6 +14,9 @@ const iconPath = path.resolve(__dirname, "assets", "icon");
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    name: 'DeepElegant-Kavim',
+    executableName: 'deepelegant-kavim', // Consistent executable name across all platforms
+    appBundleId: 'com.deepelegant.kavim', // Add if you don't have it
     extraResource: ["./assets"],
     icon: iconPath,
   },
@@ -22,16 +25,27 @@ const config: ForgeConfig = {
     new MakerWix({
         manufacturer: "DeepElegant",
         icon: "./assets/icon.ico",
+        name: 'DeepElegantKavim' // No spaces for Windows
     }),
     new MakerDMG({
+      name: 'DeepElegantKavim',
       format: "ULFO",
       icon: "./assets/icon.icns",
     }),
     new MakerZIP({}, ["darwin"]),
-    new MakerRpm({}),
+    new MakerRpm({
+        options: {
+          name: 'deepelegant-kavim', // Must match executableName
+          productName: 'DeepElegant Kavim',
+          bin: 'deepelegant-kavim'
+        }
+    }),
     new MakerDeb({
       options: {
         icon: "./assets/icon.png",
+        name: 'deepelegant-kavim', // Must match executableName
+        productName: 'DeepElegant Kavim', // Display name (can have spaces)
+        bin: 'deepelegant-kavim' // Must match executableName
       },
     }),
   ],
