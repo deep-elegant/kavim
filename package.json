@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "description": "Kavim is a visual workspace for creative brainstorming — connect ideas, models, and notes on a single collaborative canvas.",
   "main": ".vite/build/main.js",
+  "repository": "https://github.com/deep-elegant/kavim.git",
   "private": true,
   "scripts": {
     "start": "electron-forge start",
