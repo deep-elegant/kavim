@@ -39,9 +39,7 @@ import {
 } from "@/components/ui/form";
 import { createDefaultEditableEdgeData } from "../edges/EditableEdge";
 import { useCanvasData } from "../CanvasDataContext";
-import type { TextNodeData } from "./TextNode";
-import type { StickyNoteData } from "./StickyNoteNode";
-import type { ShapeNodeData } from "./ShapeNode";
+import { formatTextualNodeSummary, htmlToPlainText } from "../utils/text";
 
 export type AiStatus = "not-started" | "in-progress" | "done";
 
@@ -77,57 +75,10 @@ const PROMPT_TYPOGRAPHY = cn(
   "break-words",
 );
 
-/** Strips HTML tags to get plain text for AI prompts (preserves semantic content only) */
-const htmlToPlainText = (value: string): string =>
-  value
-    .replace(/<[^>]*>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-
 const AI_MODEL_VALUES = AI_MODELS.map((option) => option.value) as [
   AiModel,
   ...AiModel[],
 ];
-
-const TEXTUAL_NODE_TYPES = new Set(["text-node", "sticky-note", "shape-node"]);
-
-/**
- * Formats a summary of a textual node's content for use in AI prompts.
- * @param node The node to summarize.
- * @returns A string summary, or null if the node is not a supported textual type.
- */
-const formatTextualNodeSummary = (node: Node): string | null => {
-  if (!TEXTUAL_NODE_TYPES.has(node.type ?? "")) {
-    return null;
-  }
-
-  const rawLabel =
-    (node.data as
-      | (TextNodeData | StickyNoteData | ShapeNodeData | undefined))
-      ?.label ?? "";
-  const plainText = htmlToPlainText(rawLabel);
-
-  if (!plainText) {
-    return null;
-  }
-
-  switch (node.type) {
-    case "text-node":
-      return `Text node: ${plainText}`;
-    case "sticky-note":
-      return `Sticky note: ${plainText}`;
-    case "shape-node": {
-      const { shapeType } = (node.data as ShapeNodeData | undefined) ?? {};
-      const shapeLabel = shapeType
-        ? `${shapeType.charAt(0).toUpperCase()}${shapeType.slice(1)} shape`
-        : "Shape node";
-      return `${shapeLabel}: ${plainText}`;
-    }
-    default:
-      return null;
-  }
-};
 
 const aiNodeFormSchema = z.object({
   model: z.enum(AI_MODEL_VALUES),

@@ -32,25 +32,41 @@ const DrawerOverlay = React.forwardRef<
 ))
 DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName
 
+type DrawerContentProps = React.ComponentPropsWithoutRef<
+  typeof DrawerPrimitive.Content
+> & {
+  side?: "bottom" | "right"
+  showHandle?: boolean
+}
+
 const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <DrawerPortal>
-    <DrawerOverlay />
-    <DrawerPrimitive.Content
-      ref={ref}
-      className={cn(
-        "fixed inset-x-0 bottom-0 z-50 mt-24 flex h-auto flex-col rounded-t-[10px] border bg-background",
-        className
-      )}
-      {...props}
-    >
-      <div className="mx-auto mt-4 h-2 w-[100px] rounded-full bg-muted" />
-      {children}
-    </DrawerPrimitive.Content>
-  </DrawerPortal>
-))
+  DrawerContentProps
+>(({ className, children, side = "bottom", showHandle, ...props }, ref) => {
+  const shouldShowHandle = showHandle ?? side === "bottom"
+
+  return (
+    <DrawerPortal>
+      <DrawerOverlay />
+      <DrawerPrimitive.Content
+        ref={ref}
+        className={cn(
+          "fixed z-50 flex flex-col border bg-background shadow-lg transition-transform duration-300",
+          side === "bottom"
+            ? "inset-x-0 bottom-0 mt-24 h-auto rounded-t-[10px] data-[state=closed]:translate-y-full data-[state=open]:translate-y-0"
+            : "right-0 top-0 h-full w-full rounded-none border-l data-[state=closed]:translate-x-full data-[state=open]:translate-x-0",
+          className
+        )}
+        {...props}
+      >
+        {shouldShowHandle ? (
+          <div className="mx-auto mt-4 h-2 w-[100px] rounded-full bg-muted" />
+        ) : null}
+        {children}
+      </DrawerPrimitive.Content>
+    </DrawerPortal>
+  )
+})
 DrawerContent.displayName = "DrawerContent"
 
 const DrawerHeader = ({

@@ -58,6 +58,8 @@ import { RemoteCursor } from "./collaboration/RemoteCursor";
 import { RemoteNodePresenceProvider } from "./collaboration/RemoteNodePresenceContext";
 import { useCanvasCollaboration } from "./collaboration/useCanvasCollaboration";
 import { useCanvasCopyPaste } from "./hooks/useCanvasCopyPaste";
+import { LinearHistoryProvider } from "./history/LinearHistoryContext";
+import LinearHistoryDrawer from "./history/LinearHistoryDrawer";
 import useCanvasImageNodes, {
   getFileName,
   isImageFile,
@@ -727,15 +729,19 @@ const CanvasInner = () => {
         onOpenChange={handleYouTubeDialogOpenChange}
         onSubmit={handleYouTubeDialogSubmit}
       />
+
+      <LinearHistoryDrawer />
     </div>
   );
 };
 
-// The CanvasInner component is wrapped in the ReactFlowProvider and our new UndoRedo provider.
+// The CanvasInner component is wrapped in the ReactFlowProvider and supporting providers.
 const Flow = () => (
   <ReactFlowProvider>
     <CanvasUndoRedoProvider>
-      <CanvasInner />
+      <LinearHistoryProvider>
+        <CanvasInner />
+      </LinearHistoryProvider>
     </CanvasUndoRedoProvider>
   </ReactFlowProvider>
 );

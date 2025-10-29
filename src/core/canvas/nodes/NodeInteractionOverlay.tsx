@@ -32,6 +32,7 @@ import { useCanvasData } from "../CanvasDataContext";
 import { copyNodesToClipboard } from "../hooks/useCanvasCopyPaste";
 import type { CanvasNode } from "../types";
 import { useCanvasUndoRedo } from "../undo";
+import { useLinearHistory } from "../history/LinearHistoryContext";
 
 const HANDLE_SIZE = 12;
 const HANDLE_OFFSET = 10; // Distance resize handles appear outside node bounds
@@ -121,6 +122,7 @@ const NodeInteractionOverlay = ({
   contextMenuItems,
 }: NodeInteractionOverlayProps) => {
   const { setNodes, getNodes } = useCanvasData();
+  const { open: openLinearHistory } = useLinearHistory();
   // The `useCanvasUndoRedo` hook provides functions to manage undo/redo state.
   // `beginAction` is called at the start of an operation (like node resizing)
   // to mark a point in the undo history. It returns a unique token.
@@ -224,6 +226,10 @@ const NodeInteractionOverlay = ({
     const selectedNodes = latestNodes.filter((node) => node.selected);
     void copyNodesToClipboard(selectedNodes);
   }, [getNodes]);
+
+  const handleLinearHistorySelect = useCallback(() => {
+    openLinearHistory(nodeId);
+  }, [nodeId, openLinearHistory]);
 
   // Use a token-based approach for the resize action, so that the entire
   // resize operation is a single undoable action.
@@ -382,6 +388,9 @@ const NodeInteractionOverlay = ({
       </ContextMenuTrigger>
 
       <ContextMenuContent>
+        <ContextMenuItem onSelect={handleLinearHistorySelect}>
+          Show Linear History
+        </ContextMenuItem>
         <ContextMenuItem onSelect={handleCopySelect}>Copy</ContextMenuItem>
         {contextMenuItems ? (
           <>
