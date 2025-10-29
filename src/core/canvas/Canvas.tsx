@@ -296,45 +296,6 @@ const CanvasInner = () => {
     [performAction, setEdges],
   );
 
-  // Handles edge reconnection when user drags edge endpoint to different node
-  const handleEdgeUpdate = useCallback(
-    (oldEdge: Edge<EditableEdgeData>, newConnection: Connection) => {
-      performAction(() => {
-        setEdges((currentEdges) => {
-          const index = currentEdges.findIndex((edge) => edge.id === oldEdge.id);
-          if (index === -1) {
-            return currentEdges;
-          }
-
-          const edge = currentEdges[index];
-          const nextEdge: Edge<EditableEdgeData> = {
-            ...edge,
-            source: newConnection.source ?? edge.source,
-            target: newConnection.target ?? edge.target,
-            sourceHandle: newConnection.sourceHandle,
-            targetHandle: newConnection.targetHandle,
-          };
-
-          const isSameSource =
-            nextEdge.source === edge.source &&
-            nextEdge.sourceHandle === edge.sourceHandle;
-          const isSameTarget =
-            nextEdge.target === edge.target &&
-            nextEdge.targetHandle === edge.targetHandle;
-
-          if (isSameSource && isSameTarget) {
-            return currentEdges;
-          }
-
-          const next = [...currentEdges];
-          next[index] = nextEdge;
-          return next;
-        });
-      }, "edge-reconnect");
-    },
-    [performAction, setEdges],
-  );
-
   const edgeTypes = useMemo(() => ({ editable: EditableEdge }), []);
 
   // Calculates center of visible canvas (for placing nodes without mouse position)
@@ -613,7 +574,6 @@ const CanvasInner = () => {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
-          onEdgeUpdate={handleEdgeUpdate}
           onNodeDragStart={handleNodeDragStart}
           onNodeDragStop={handleNodeDragStop}
           edgeTypes={edgeTypes}
