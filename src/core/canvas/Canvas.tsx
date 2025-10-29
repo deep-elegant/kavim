@@ -24,6 +24,7 @@ import {
   type NodeChange,
   type Node,
   type OnSelectionChangeParams,
+  type SelectionMode,
 } from "@xyflow/react";
 import {
   StickyNote,
@@ -34,6 +35,7 @@ import {
   Image as ImageIcon,
   WandSparklesIcon,
   Circle,
+  Youtube,
 } from "lucide-react";
 
 import "@xyflow/react/dist/style.css";
@@ -43,7 +45,9 @@ import AiNode, { aiNodeDrawable } from "./nodes/AINode";
 import ShapeNodeComponent, { shapeDrawable } from "./nodes/ShapeNode";
 import TextNodeComponent, { textDrawable } from "./nodes/TextNode";
 import ImageNode from "./nodes/ImageNode";
+import YouTubeNode from "./nodes/YouTubeNode";
 import { type DrawableNode } from "./nodes/DrawableNode";
+import YouTubeEmbedDialog from "./components/YouTubeEmbedDialog"; // Dialog for embedding YouTube videos
 import { Button } from "@/components/ui/button";
 import EditableEdge, {
   createDefaultEditableEdgeData,
@@ -58,6 +62,7 @@ import useCanvasImageNodes, {
   getFileName,
   isImageFile,
 } from "./hooks/useCanvasImageNodes";
+import useCanvasYouTubeNodes from "./hooks/useCanvasYouTubeNodes"; // Hook for managing YouTube nodes on the canvas
 import useImageAssetTransfers from "./hooks/useImageAssetTransfers";
 import type { CanvasNode, ToolId } from "./types";
 import { StatsForNerdsOverlay } from "@/components/diagnostics/StatsForNerdsOverlay";
@@ -69,17 +74,44 @@ import {
   useUndoRedoShortcuts,
 } from "./undo";
 
-// Available drawing tools in the toolbar
-const tools: {
-  id: ToolId;
+/**
+ * Configuration for a drawing tool, excluding image and YouTube tools.
+ */
+type DrawingToolConfig = {
+  id: Exclude<ToolId, "image" | "youtube">;
   label: string;
   icon: ComponentType<{ className?: string }>;
-}[] = [
+};
+
+const drawingToolConfigs: DrawingToolConfig[] = [ // Configuration for tools that create nodes by drawing on the canvas
   { id: "sticky-note", label: "Sticky Note", icon: StickyNote },
   { id: "shape", label: "Shape", icon: Circle },
   { id: "prompt-node", label: "Prompt Node", icon: WandSparklesIcon },
   { id: "text", label: "Text", icon: Type },
+];
+
+/**
+ * Type for the ID of a drawing tool.
+ */
+type DrawingToolId = DrawingToolConfig["id"];
+
+/**
+ * Type for the ID of an action button (image or YouTube).
+ */
+type ActionButtonId = Extract<ToolId, "image" | "youtube">;
+
+/**
+ * Configuration for an action button (e.g., for adding images or YouTube videos).
+ */
+type ActionButtonConfig = {
+  id: ActionButtonId;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+};
+
+const actionButtonConfigs: ActionButtonConfig[] = [ // Configuration for toolbar buttons that trigger specific actions (e.g., adding media)
   { id: "image", label: "Image", icon: ImageIcon },
+  { id: "youtube", label: "YouTube Video", icon: Youtube },
 ];
 
 // ReactFlow node type mapping
@@ -89,6 +121,7 @@ const nodeTypes = {
   "text-node": TextNodeComponent,
   "ai-node": AiNode,
   "image-node": ImageNode,
+  "youtube-node": YouTubeNode,
 };
 
 // Drawable tools implement mouse-based drawing (drag to create)
@@ -100,7 +133,7 @@ const drawableNodeTools: Partial<Record<ToolId, DrawableNode>> = {
 };
 
 // Tools that support click-and-drag creation
-const drawingTools: ToolId[] = ["sticky-note", "shape", "text", "prompt-node"];
+const drawingToolIds: ToolId[] = drawingToolConfigs.map((tool) => tool.id);
 
 /**
  * Main canvas component for the infinite collaborative whiteboard.
@@ -119,6 +152,8 @@ const CanvasInner = () => {
     isReplaying,
   } = useCanvasUndoRedo();
   const [selectedTool, setSelectedTool] = useState<ToolId | null>(null);
+  // State to control the visibility of the YouTube embed dialog
+  const [isYouTubeDialogOpen, setIsYouTubeDialogOpen] = useState(false);
   // Tracks active drawing operation (node being created by dragging)
   const drawingState = useRef<{
     nodeId: string;
@@ -145,6 +180,10 @@ const CanvasInner = () => {
     requestAsset: requestRemoteAsset,
     releaseAssetRequest: releaseRemoteAssetRequest,
   } = useWebRTC();
+
+  const selectionMode = useMemo(() => {
+    return 'partial' as SelectionMode
+  }, [])
 
   // Wrap structural changes in `performAction` to make them undoable.
   const onNodesChange = useCallback(
@@ -324,6 +363,56 @@ const CanvasInner = () => {
       registerAssetFromFile: pakAssets.registerAssetFromFile,
     });
 
+  const { addYouTubeNode } = useCanvasYouTubeNodes({
+    getCanvasCenterPosition,
+    setNodes,
+    setSelectedTool,
+    performAction,
+  });
+
+  /**
+   * Handles the open/close state of the YouTube embed dialog.
+   * @param open - Whether the dialog should be open.
+   */
+  const handleYouTubeDialogOpenChange = useCallback(
+    (open: boolean) => {
+      setIsYouTubeDialogOpen(open);
+    },
+    [setIsYouTubeDialogOpen],
+  );
+
+  /**
+   * Handles actions triggered by toolbar buttons (e.g., adding images or YouTube videos).
+   * @param actionId - The ID of the action to perform.
+   */
+  const handleToolbarAction = useCallback(
+    (actionId: ActionButtonId) => {
+      setSelectedTool(null);
+      if (actionId === "image") {
+        void handleAddImageFromDialog();
+        return;
+      }
+
+      if (actionId === "youtube") {
+        setIsYouTubeDialogOpen(true);
+      }
+    },
+    [handleAddImageFromDialog, setIsYouTubeDialogOpen, setSelectedTool],
+  );
+
+  /**
+   * Handles the submission of the YouTube embed dialog, adding a new YouTube node to the canvas.
+   * @param videoId - The ID of the YouTube video.
+   * @param url - The URL of the YouTube video.
+   */
+  const handleYouTubeDialogSubmit = useCallback(
+    (videoId: string, url: string) => {
+      addYouTubeNode(videoId, url);
+      setIsYouTubeDialogOpen(false);
+    },
+    [addYouTubeNode, setIsYouTubeDialogOpen],
+  );
+
   useImageAssetTransfers({
     nodes,
     setNodes,
@@ -338,18 +427,12 @@ const CanvasInner = () => {
     },
   });
 
-  // Image tool opens file picker, other tools toggle active state
-  const handleToolSelect = useCallback(
-    (id: ToolId) => {
-      if (id === "image") {
-        setSelectedTool(null);
-        void handleAddImageFromDialog();
-        return;
-      }
-
+  // Drawing tools toggle active state
+  const handleDrawingToolSelect = useCallback(
+    (id: DrawingToolId) => {
       setSelectedTool((current) => (current === id ? null : id));
     },
-    [handleAddImageFromDialog],
+    [],
   );
 
   // Starts drawing operation when mouse pressed with drawing tool active
@@ -461,7 +544,7 @@ const CanvasInner = () => {
   }, [selectedTool, setNodes]);
 
   const isDrawingToolSelected =
-    selectedTool != null && drawingTools.includes(selectedTool);
+    selectedTool != null && drawingToolIds.includes(selectedTool);
 
   // Broadcasts which node user has selected to remote collaborators
   const handleSelectionChange = useCallback(
@@ -550,6 +633,7 @@ const CanvasInner = () => {
           }}
           deleteKeyCode={["Delete", "Backspace"]}
           connectionRadius={50}
+          selectionMode={selectionMode}
           className={isDrawingToolSelected ? "cursor-crosshair" : undefined}
           style={{
             cursor: isDrawingToolSelected ? "cursor-crosshair" : undefined,
@@ -591,13 +675,26 @@ const CanvasInner = () => {
                 <Maximize className="h-5 w-5" />
               </Button>
               <div className="border-border mx-1 h-6 border-r" />
-              {tools.map(({ id, label, icon: Icon }) => (
+              {drawingToolConfigs.map(({ id, label, icon: Icon }) => (
+                <Button
+                  key={id}
+                  aria-label={label}
+                  variant={selectedTool === id ? "secondary" : "ghost"}
+                  title={label}
+                  onClick={() => handleDrawingToolSelect(id)}
+                >
+                  <Icon className="h-5 w-5" />
+                  <span className="sr-only">{label}</span>
+                </Button>
+              ))}
+              <div className="border-border mx-1 h-6 border-r" />
+              {actionButtonConfigs.map(({ id, label, icon: Icon }) => (
                 <Button
                   key={id}
                   aria-label={label}
                   variant="ghost"
                   title={label}
-                  onClick={() => handleToolSelect(id)}
+                  onClick={() => handleToolbarAction(id)}
                 >
                   <Icon className="h-5 w-5" />
                   <span className="sr-only">{label}</span>
@@ -623,6 +720,13 @@ const CanvasInner = () => {
         )}
 
       <StatsForNerdsOverlay />
+
+      {/* Dialog for embedding YouTube videos */}
+      <YouTubeEmbedDialog
+        open={isYouTubeDialogOpen}
+        onOpenChange={handleYouTubeDialogOpenChange}
+        onSubmit={handleYouTubeDialogSubmit}
+      />
     </div>
   );
 };
