@@ -1,6 +1,7 @@
 import React, {
   type PropsWithChildren,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
 } from "react";
@@ -95,6 +96,9 @@ export type NodeInteractionOverlayProps = PropsWithChildren<{
   editor?: Editor | null;
   toolbarItems?: ToolbarItem[];
   contextMenuItems?: React.ReactNode;
+  allowInteractionsWhileEditing?: boolean;
+  onEditingInteractionStart?: () => void;
+  onEditingInteractionEnd?: () => void;
 }>;
 
 /**
@@ -120,6 +124,9 @@ const NodeInteractionOverlay = ({
   editor,
   toolbarItems,
   contextMenuItems,
+  allowInteractionsWhileEditing = false,
+  onEditingInteractionStart,
+  onEditingInteractionEnd,
 }: NodeInteractionOverlayProps) => {
   const { setNodes, getNodes } = useCanvasData();
   // The `useLinearHistory` hook provides a function to open the linear history view for a node.
@@ -138,8 +145,73 @@ const NodeInteractionOverlay = ({
   const { selecting: remoteSelecting, typing: remoteTyping } =
     useRemoteNodeCollaborators(nodeId);
 
-  // Show resize handles and selection UI only when selected but not editing
-  const shouldShowInteractions = isActive && !isEditing;
+  const interactionsDisabledWhileEditing =
+    isEditing && !allowInteractionsWhileEditing;
+
+  // Keeps track of temporary drags/resizes triggered while a node is in typing mode.
+  const editingInteractionActiveRef = useRef(false);
+  // Used to clean up the window-level pointerup listener that restores typing focus.
+  const pointerUpListenerRef = useRef<((event: PointerEvent) => void) | null>(
+    null,
+  );
+  const editingInteractionEndRef = useRef(onEditingInteractionEnd);
+
+  useEffect(() => {
+    editingInteractionEndRef.current = onEditingInteractionEnd;
+  }, [onEditingInteractionEnd]);
+
+  const finishEditingInteraction = useCallback(() => {
+    if (!editingInteractionActiveRef.current) {
+      return;
+    }
+
+    editingInteractionActiveRef.current = false;
+    const listener = pointerUpListenerRef.current;
+    if (listener) {
+      window.removeEventListener("pointerup", listener);
+      pointerUpListenerRef.current = null;
+    }
+    editingInteractionEndRef.current?.();
+  }, []);
+
+  const handleEditingInteractionStart = useCallback(() => {
+    if (!allowInteractionsWhileEditing || !isEditing) {
+      return;
+    }
+
+    if (editingInteractionActiveRef.current) {
+      return;
+    }
+
+    editingInteractionActiveRef.current = true;
+    onEditingInteractionStart?.();
+
+    const pointerUpListener = () => {
+      finishEditingInteraction();
+    };
+    pointerUpListenerRef.current = pointerUpListener;
+    window.addEventListener("pointerup", pointerUpListener, { once: true });
+  }, [
+    allowInteractionsWhileEditing,
+    finishEditingInteraction,
+    isEditing,
+    onEditingInteractionStart,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      finishEditingInteraction();
+    };
+  }, [finishEditingInteraction]);
+
+  useEffect(() => {
+    if (!isEditing) {
+      finishEditingInteraction();
+    }
+  }, [finishEditingInteraction, isEditing]);
+
+  // Show resize handles and selection UI when selected. Keep them visible while editing if allowed.
+  const shouldShowInteractions = isActive && !interactionsDisabledWhileEditing;
 
   const connectionRadius = useStore(
     (state) => state.connectionRadius ?? DEFAULT_CONNECTION_RADIUS,
@@ -260,7 +332,7 @@ const NodeInteractionOverlay = ({
           className={cn(
             "relative h-full w-full",
             className,
-            isEditing && "cursor-text",
+            isEditing && !allowInteractionsWhileEditing && "cursor-text",
             shouldShowInteractions && "cursor-grab active:cursor-grabbing",
           )}
           style={containerStyle}
@@ -286,6 +358,28 @@ const NodeInteractionOverlay = ({
           {shouldShowInteractions && (
             <div className="pointer-events-none absolute inset-0 -m-2">
               <div className="absolute inset-0 rounded-xl border-2 border-sky-500/80" />
+            </div>
+          )}
+
+          {/* Drag surfaces outside the editable content so sticky notes can move while typing */}
+          {allowInteractionsWhileEditing && isEditing && isActive && (
+            <div aria-hidden className="absolute inset-0">
+              <div
+                className="pointer-events-auto absolute -top-2 left-4 right-4 h-3 cursor-grab active:cursor-grabbing"
+                onPointerDownCapture={handleEditingInteractionStart}
+              />
+              <div
+                className="pointer-events-auto absolute -bottom-2 left-4 right-4 h-3 cursor-grab active:cursor-grabbing"
+                onPointerDownCapture={handleEditingInteractionStart}
+              />
+              <div
+                className="pointer-events-auto absolute top-4 bottom-4 -left-2 w-3 cursor-grab active:cursor-grabbing"
+                onPointerDownCapture={handleEditingInteractionStart}
+              />
+              <div
+                className="pointer-events-auto absolute top-4 bottom-4 -right-2 w-3 cursor-grab active:cursor-grabbing"
+                onPointerDownCapture={handleEditingInteractionStart}
+              />
             </div>
           )}
 
@@ -347,15 +441,21 @@ const NodeInteractionOverlay = ({
             </div>
           )}
 
-          {/* Corner resize handles (only visible when node selected and not editing) */}
+          {/* Corner resize handles (visible when node interactions are enabled) */}
           <NodeResizer
             isVisible={shouldShowInteractions}
             minWidth={minWidth}
             minHeight={minHeight}
             lineClassName="!border-sky-500/60"
             handleStyle={sharedHandleStyle}
-            onResizeStart={handleResizeStart}
-            onResizeEnd={handleResizeEnd}
+            onResizeStart={() => {
+              handleEditingInteractionStart();
+              handleResizeStart();
+            }}
+            onResizeEnd={() => {
+              finishEditingInteraction();
+              handleResizeEnd();
+            }}
           />
 
           {/* Connection handles on all 4 sides (both source and target) */}
