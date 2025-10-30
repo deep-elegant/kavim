@@ -45,6 +45,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # --- Clean up any mounted volumes (macOS only)
+      - name: Cleanup mounted volumes
+        if: runner.os == 'macOS'
+        run: |
+          for volume in /Volumes/DeepElegant*; do
+            if [ -d "$volume" ]; then
+              hdiutil detach "$volume" 2>/dev/null || true
+            fi
+          done
+        continue-on-error: true
+
+
       # --- Build Electron app for specific architecture
       - name: Make release package
         run: npm run make -- --arch=${{ matrix.arch }}

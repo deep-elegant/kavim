@@ -25,7 +25,11 @@ const config: ForgeConfig = {
     new MakerWix({
         manufacturer: "DeepElegant",
         icon: "./assets/icon.ico",
-        name: 'DeepElegantKavim' // No spaces for Windows
+        name: 'DeepElegantKavim', // No spaces for Windows
+        // language: 1033, // English
+        description: 'DeepElegant Kavim Application', // Plain ASCII only
+        appUserModelId: 'com.deepelegant.kavim',
+        upgradeCode: '9bd05423-a0a9-41c9-a443-138f35c133e0', // DO-NOT Change this GUID
     }),
     new MakerDMG({
       name: 'DeepElegantKavim',
