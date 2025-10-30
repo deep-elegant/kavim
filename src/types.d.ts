@@ -142,7 +142,7 @@ declare global {
         llm: LlmContext;
         drafts: DraftContext;
         appInfo: AppInfoContext;
-        drawerPreferences?: DrawerPreferencesContext;
+        drawerPreferences: DrawerPreferencesContext;
     }
 }
 export {}

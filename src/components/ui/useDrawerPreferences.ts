@@ -7,20 +7,7 @@ type DrawerPreferencesState = {
 type Listener = () => void
 
 const listeners = new Set<Listener>()
-let store: DrawerPreferencesState = { sizes: {} }
-let hydrated = false
-
-const getDrawerPreferencesApi = () => {
-  if (typeof window === "undefined") {
-    return undefined
-  }
-
-  if (!window.drawerPreferences) {
-    return undefined
-  }
-
-  return window.drawerPreferences
-}
+let store: DrawerPreferencesState | null = null
 
 const notify = () => {
   for (const listener of listeners) {
@@ -28,34 +15,43 @@ const notify = () => {
   }
 }
 
+const getStore = (): DrawerPreferencesState => {
+  if (store === null) {
+    store = { sizes: window.drawerPreferences.getAll() }
+  }
+  return store
+}
+
 const updateStoreSize = (id: string, size: number) => {
-  if (store.sizes[id] === size) {
+  const currentStore = getStore()
+
+  if (currentStore.sizes[id] === size) {
     return
   }
 
   store = {
     sizes: {
-      ...store.sizes,
+      ...currentStore.sizes,
       [id]: size,
     },
   }
 
-  const api = getDrawerPreferencesApi()
-  api?.setSize(id, size)
+  window.drawerPreferences.setSize(id, size)
   notify()
 }
 
 const removeStoreSize = (id: string) => {
-  if (!(id in store.sizes)) {
+  const currentStore = getStore()
+
+  if (!(id in currentStore.sizes)) {
     return
   }
 
-  const updatedSizes = { ...store.sizes }
+  const updatedSizes = { ...currentStore.sizes }
   delete updatedSizes[id]
   store = { sizes: updatedSizes }
 
-  const api = getDrawerPreferencesApi()
-  api?.deleteSize(id)
+  window.drawerPreferences.deleteSize(id)
   notify()
 }
 
@@ -66,25 +62,9 @@ const subscribe = (listener: Listener) => {
   }
 }
 
-const getSnapshot = () => store
-
-const hydrate = () => {
-  if (hydrated) {
-    return
-  }
-
-  const api = getDrawerPreferencesApi()
-  if (!api) {
-    return
-  }
-
-  hydrated = true
-  const storedSizes = api.getAll()
-  store = { sizes: { ...storedSizes } }
-}
+const getSnapshot = () => getStore()
 
 export const useDrawerPreferences = () => {
-  hydrate()
   const state = React.useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 
   const persistSize = React.useCallback((id: string, size: number) => {
