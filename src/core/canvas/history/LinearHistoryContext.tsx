@@ -49,18 +49,25 @@ const LinearHistoryContext = createContext<LinearHistoryContextValue | undefined
   undefined,
 );
 
+// Traverses the graph of nodes and edges to derive a linear history from a given active node.
 const deriveLinearHistoryPath = (
   activeNodeId: string,
   nodes: Node[],
   edges: Edge<EditableEdgeData>[],
 ) => {
+  // Create a map of nodes for efficient lookup.
   const nodeMap = new Map(nodes.map((node) => [node.id, node]));
+  // A set to keep track of visited nodes to detect cycles.
   const visited = new Set<string>();
+  // The ordered list of nodes in the history path.
   const ordered: Node[] = [];
   let currentId: string | undefined = activeNodeId;
+  // A flag to indicate if a cycle was detected and the history was truncated.
   let isCycleTruncated = false;
 
+  // Traverse the graph backwards from the active node, following the incoming edges.
   while (currentId) {
+    // If we encounter a node we have already visited, we have a cycle.
     if (visited.has(currentId)) {
       isCycleTruncated = true;
       break;
@@ -73,6 +80,7 @@ const deriveLinearHistoryPath = (
     }
     ordered.push(node);
 
+    // Find the parent of the current node.
     let parentId: string | undefined;
     for (const edge of edges) {
       if (edge.target === currentId) {
@@ -81,6 +89,7 @@ const deriveLinearHistoryPath = (
       }
     }
 
+    // If there is no parent, we have reached the beginning of the path.
     if (!parentId) {
       break;
     }
@@ -88,6 +97,7 @@ const deriveLinearHistoryPath = (
     currentId = parentId;
   }
 
+  // The nodes are added in reverse order, so we reverse them back to the correct order.
   return {
     nodes: ordered.reverse(),
     isCycleTruncated,
@@ -112,6 +122,7 @@ const convertPromptToHtml = (prompt: string) =>
     .map((line) => `<p>${escapeHtml(line)}</p>`)
     .join("") || "<p></p>";
 
+// Creates a `LinearHistoryItem` from a `Node`, summarizing its content for display in the history view.
 const summarizeNodeForHistory = (node: Node): LinearHistoryItem => {
   const type = node.type;
 
@@ -194,6 +205,11 @@ const summarizeNodeForHistory = (node: Node): LinearHistoryItem => {
   }
 };
 
+/**
+ * Provides a linear history of the canvas, which is a sequence of connected nodes.
+ * It allows the user to view the history of a node, send prompts to an AI model, and update the canvas with the results.
+ * @param children - The child components to render.
+ */
 export const LinearHistoryProvider = ({
   children,
 }: {
@@ -222,6 +238,7 @@ export const LinearHistoryProvider = ({
     setState({ isOpen: false, activeNodeId: null });
   }, []);
 
+  // This effect ensures that if the active node is deleted, the history view is closed.
   useEffect(() => {
     if (!state.isOpen || !state.activeNodeId) {
       return;
@@ -233,6 +250,7 @@ export const LinearHistoryProvider = ({
     }
   }, [nodes, state.activeNodeId, state.isOpen]);
 
+  // Sends a prompt to the AI model and updates the canvas with the results.
   const sendPrompt = useCallback(
     async ({ model, prompt }: { model: AiModel; prompt: string }) => {
       const activeNodeId = state.activeNodeId;
@@ -242,8 +260,10 @@ export const LinearHistoryProvider = ({
         return;
       }
 
+      // Get the current state of the canvas.
       const flowNodes = getNodes();
       const flowEdges = getEdges();
+      // Derive the linear history path for the active node.
       const { nodes: pathNodes } = deriveLinearHistoryPath(
         activeNodeId,
         flowNodes,
@@ -254,6 +274,7 @@ export const LinearHistoryProvider = ({
         return;
       }
 
+      // The source node is the last node in the path.
       const sourceNode = pathNodes[pathNodes.length - 1]!;
       const sourceNodeData = sourceNode.data as AiNodeData | undefined;
       const sourcePromptText =
@@ -264,6 +285,7 @@ export const LinearHistoryProvider = ({
         sourceNode.type === "ai-node"
           ? (sourceNodeData?.result ?? "").trim()
           : "";
+      // If the source node is an empty AI node, we can reuse it.
       const shouldReuseActive =
         sourceNode.type === "ai-node" &&
         sourcePromptText.length === 0 &&
@@ -272,6 +294,7 @@ export const LinearHistoryProvider = ({
       const sourceWidth = Number(
         sourceNode.width ?? sourceNode.style?.width ?? AI_NODE_DEFAULT_WIDTH,
       );
+      // If we are not reusing the active node, create a new node ID.
       const targetNodeId = shouldReuseActive
         ? sourceNode.id
         : crypto.randomUUID();
@@ -280,6 +303,7 @@ export const LinearHistoryProvider = ({
       let newNode: Node<AiNodeData> | null = null;
       let newEdge: Edge<EditableEdgeData> | null = null;
 
+      // If we are not reusing the active node, create a new AI node and an edge to connect it to the source node.
       if (!shouldReuseActive) {
         newNode = {
           id: targetNodeId,
@@ -318,8 +342,10 @@ export const LinearHistoryProvider = ({
         }
       }
 
+      // Perform the action of adding the new node and edge to the canvas.
       performAction(() => {
         if (shouldReuseActive) {
+          // If we are reusing the active node, update its data.
           setNodes((existing) =>
             existing.map((node) => {
               if (node.id === targetNodeId && node.type === "ai-node") {
@@ -362,6 +388,7 @@ export const LinearHistoryProvider = ({
             }),
           );
         } else if (newNode) {
+          // If we are not reusing the active node, add the new node and edge to the canvas.
           setNodes((existing) => {
             const clearedSelection = existing.map((node) => {
               if (node.id === activeNodeId) {
@@ -420,8 +447,10 @@ export const LinearHistoryProvider = ({
         }
       }, "Workspace AI prompt");
 
+      // Set the new node as the active node.
       setState({ isOpen: true, activeNodeId: targetNodeId });
 
+      // Create the chat messages to send to the AI model.
       const textualContextEntries = pathNodes
         .map((node) => formatTextualNodeSummary(node))
         .filter((entry): entry is string => Boolean(entry));
@@ -457,19 +486,23 @@ export const LinearHistoryProvider = ({
 
       messages.push({ role: "user", content: trimmedPrompt });
 
+      // Keep track of the request ID to avoid race conditions.
       const currentRequestId = requestIdRef.current + 1;
       requestIdRef.current = currentRequestId;
 
       try {
+        // Generate the AI result.
         await generateAiResult({
           model,
           messages,
           minimumUpdateIntervalMs: 50,
           onUpdate: (fullResponse) => {
+            // If the request ID has changed, it means a new request has been sent, so we should ignore this update.
             if (requestIdRef.current !== currentRequestId) {
               return;
             }
 
+            // Update the result of the AI node as the response is being generated.
             setNodes((existing) =>
               existing.map((node) => {
                 if (node.id !== targetNodeId || node.type !== "ai-node") {
@@ -490,6 +523,7 @@ export const LinearHistoryProvider = ({
           },
         });
 
+        // When the AI result is fully generated, update the status of the node to "done".
         if (requestIdRef.current === currentRequestId) {
           setNodes((existing) =>
             existing.map((node) => {
@@ -517,6 +551,7 @@ export const LinearHistoryProvider = ({
           description: errorMessage,
         });
 
+        // If there was an error, update the status of the node to "done" and show an error message.
         if (requestIdRef.current === currentRequestId) {
           setNodes((existing) =>
             existing.map((node) => {
@@ -597,6 +632,11 @@ export const LinearHistoryProvider = ({
   );
 };
 
+/**
+ * A hook to access the linear history of the canvas.
+ * It must be used within a `LinearHistoryProvider`.
+ * @returns The linear history context.
+ */
 export const useLinearHistory = () => {
   const context = useContext(LinearHistoryContext);
   if (!context) {

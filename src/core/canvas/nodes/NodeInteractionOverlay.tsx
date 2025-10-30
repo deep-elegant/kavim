@@ -122,6 +122,7 @@ const NodeInteractionOverlay = ({
   contextMenuItems,
 }: NodeInteractionOverlayProps) => {
   const { setNodes, getNodes } = useCanvasData();
+  // The `useLinearHistory` hook provides a function to open the linear history view for a node.
   const { open: openLinearHistory } = useLinearHistory();
   // The `useCanvasUndoRedo` hook provides functions to manage undo/redo state.
   // `beginAction` is called at the start of an operation (like node resizing)
@@ -227,6 +228,8 @@ const NodeInteractionOverlay = ({
     void copyNodesToClipboard(selectedNodes);
   }, [getNodes]);
 
+  // This function is called when the user selects the "Show Linear History" context menu item.
+  // It opens the linear history view for the current node.
   const handleLinearHistorySelect = useCallback(() => {
     openLinearHistory(nodeId);
   }, [nodeId, openLinearHistory]);

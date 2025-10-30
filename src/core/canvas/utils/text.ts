@@ -5,7 +5,9 @@ import type { StickyNoteData } from "../nodes/StickyNoteNode";
 import type { ShapeNodeData } from "../nodes/ShapeNode";
 
 /**
- * Strips HTML tags to produce readable plain text from rich text content.
+ * Strips HTML tags from a string to produce readable plain text.
+ * @param value - The HTML string to convert.
+ * @returns The plain text string.
  */
 export const htmlToPlainText = (value: string): string =>
   value
@@ -17,8 +19,9 @@ export const htmlToPlainText = (value: string): string =>
 const TEXTUAL_NODE_TYPES = new Set(["text-node", "sticky-note", "shape-node"]);
 
 /**
- * Formats a summary for textual nodes so they can be referenced elsewhere
- * (AI prompts, history drawers, etc.).
+ * Formats a summary for textual nodes so they can be referenced elsewhere (e.g., in AI prompts or history drawers).
+ * @param node - The node to summarize.
+ * @returns A string summary, or null if the node is not a supported textual type.
  */
 export const formatTextualNodeSummary = (node: Node): string | null => {
   if (!TEXTUAL_NODE_TYPES.has(node.type ?? "")) {

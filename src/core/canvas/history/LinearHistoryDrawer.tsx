@@ -22,6 +22,10 @@ type LinearHistoryFormValues = {
   prompt: string;
 };
 
+/**
+ * A drawer component that displays the linear history of a node and allows the user to interact with an AI model.
+ * It displays the history as a list of items, and provides a form to send a prompt to the AI.
+ */
 const LinearHistoryDrawer = () => {
   const { isOpen, items, close, activeNodeId, isCycleTruncated, sendPrompt } =
     useLinearHistory();
@@ -41,6 +45,7 @@ const LinearHistoryDrawer = () => {
   const promptValue = watch("prompt");
   const isPromptEmpty = promptValue.trim().length === 0;
 
+  // This effect scrolls the active history item into view when the drawer is opened.
   useEffect(() => {
     if (!isOpen) {
       return;
@@ -49,6 +54,7 @@ const LinearHistoryDrawer = () => {
     activeItemRef.current?.scrollIntoView({ block: "center" });
   }, [isOpen, activeNodeId]);
 
+  // This function is called when the user submits the AI prompt form.
   const onSubmit = useCallback(
     async (values: LinearHistoryFormValues) => {
       const trimmedPrompt = values.prompt.trim();
@@ -57,7 +63,9 @@ const LinearHistoryDrawer = () => {
       }
 
       try {
+        // Send the prompt to the AI model.
         await sendPrompt({ model: values.model, prompt: trimmedPrompt });
+        // Reset the form after the prompt is sent.
         reset({ model: values.model, prompt: "" });
       } catch (error) {
         console.error("Workspace AI prompt failed", error);
@@ -78,6 +86,7 @@ const LinearHistoryDrawer = () => {
         className="border-l bg-background p-0"
       >
         <div className="flex h-full flex-col">
+          {/* Header with title and close button */}
           <div className="border-b px-4 py-3">
             <div className="flex items-center justify-between">
               <DrawerTitle className="text-left text-base font-semibold">
@@ -95,6 +104,7 @@ const LinearHistoryDrawer = () => {
             </div>
           </div>
 
+          {/* List of history items */}
           <div className="flex-1 overflow-y-auto px-4 py-4">
             {items.length === 0 ? (
               <p className="text-sm text-muted-foreground">
@@ -108,6 +118,7 @@ const LinearHistoryDrawer = () => {
                       ref={item.id === activeNodeId ? activeItemRef : undefined}
                       className={cn(
                         "rounded-lg border p-3 text-sm shadow-sm transition-colors",
+                        // Highlight the active node in the history.
                         item.id === activeNodeId
                           ? "border-primary bg-primary/10"
                           : "border-border bg-background",
@@ -147,6 +158,7 @@ const LinearHistoryDrawer = () => {
               </ol>
             )}
 
+            {/* Show a message if the history is truncated due to a cycle. */}
             {isCycleTruncated ? (
               <p className="mt-4 text-xs text-muted-foreground">
                 Cycle detected. History stops at the first repeated node.
@@ -154,6 +166,7 @@ const LinearHistoryDrawer = () => {
             ) : null}
           </div>
 
+          {/* AI prompt form */}
           <div className="border-t px-4 py-4">
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">

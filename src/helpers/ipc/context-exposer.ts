@@ -15,5 +15,6 @@ export default function exposeContexts() {
   exposeLlmContext();
   exposeDraftContext();
   exposeAppContext();
+  // Expose the drawer preferences context to the renderer process.
   exposeDrawerPreferencesContext();
 }

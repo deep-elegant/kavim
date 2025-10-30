@@ -36,6 +36,14 @@ const DrawerOverlay = React.forwardRef<
 ))
 DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName
 
+/**
+ * Props for the `DrawerContent` component.
+ * @param side - The side of the screen from which the drawer will appear.
+ * @param showHandle - Whether to show the drag handle.
+ * @param adjustable - Whether the drawer is resizable.
+ * @param drawerId - A unique identifier for the drawer, used for persisting its size.
+ * @param defaultSize - The default size of the drawer.
+ */
 export type DrawerContentProps = React.ComponentPropsWithoutRef<
   typeof DrawerPrimitive.Content
 > & {
@@ -64,18 +72,28 @@ const DrawerContent = React.forwardRef<
     },
     ref,
   ) => {
+    // Determines if the drawer is horizontal (left/right) or vertical (top/bottom).
     const isHorizontal = side === "left" || side === "right"
+    // Determines whether to show the drag handle based on props and orientation.
     const shouldShowHandle = showHandle ?? (!adjustable && side === "bottom")
+    // Ref to store the drag event handlers.
     const dragHandlers = React.useRef<{ move?: (event: MouseEvent) => void; up?: () => void }>({})
 
+    // Retrieves persisted drawer sizes and the function to update them.
     const { sizes, setSize: persistSize } = useDrawerPreferences()
+    // Gets the persisted size for the current drawer, if available.
     const persistedSize = drawerId ? sizes[drawerId] : undefined
+    // State for the drawer's size, initialized to the persisted size or a default.
     const [size, setSize] = React.useState(() => persistedSize ?? defaultSize)
+    // Ref to track the previous drawerId to detect changes.
     const previousDrawerId = React.useRef<string | undefined>(drawerId)
+    // Ref to track the last synced size to avoid redundant updates.
     const lastSyncedSizeRef = React.useRef<number | undefined>(
       typeof persistedSize === "number" ? persistedSize : undefined,
     )
 
+    // This effect synchronizes the drawer's size with the persisted size from storage.
+    // It resets the size to default if the drawerId is removed or if the persisted size is cleared.
     React.useEffect(() => {
       if (!drawerId) {
         lastSyncedSizeRef.current = undefined
@@ -98,6 +116,8 @@ const DrawerContent = React.forwardRef<
       setSize(persistedSize)
     }, [defaultSize, drawerId, persistedSize, size])
 
+    // This effect handles changes to the drawerId.
+    // When the drawerId changes, it updates the size to the new persisted size or the default size.
     React.useEffect(() => {
       if (drawerId === previousDrawerId.current) {
         return
@@ -120,6 +140,8 @@ const DrawerContent = React.forwardRef<
       }
     }, [drawerId, defaultSize, persistedSize])
 
+    // This effect persists the drawer's size when it is adjusted by the user.
+    // It only runs when the drawer is adjustable and has a drawerId.
     React.useEffect(() => {
       if (!adjustable || !drawerId) {
         return
@@ -133,6 +155,7 @@ const DrawerContent = React.forwardRef<
       persistSize(drawerId, size)
     }, [adjustable, drawerId, persistSize, size])
 
+    // This effect cleans up the mouse move and mouse up event listeners when the component unmounts.
     React.useEffect(() => () => {
       if (dragHandlers.current.move) {
         document.removeEventListener("mousemove", dragHandlers.current.move)
@@ -142,6 +165,8 @@ const DrawerContent = React.forwardRef<
       }
     }, [])
 
+    // This function handles the mouse down event on the drag handle.
+    // It initiates the drag-to-resize functionality.
     const handleMouseDown = React.useCallback(
       (event: React.MouseEvent<HTMLDivElement>) => {
         event.preventDefault()

@@ -104,6 +104,10 @@ interface AppInfoContext {
   get: () => Promise<AppMetadata>;
 }
 
+/**
+ * Defines the shape of the drawer preferences context that is exposed to the renderer process.
+ * This allows the renderer process to get, set, and delete drawer sizes.
+ */
 interface DrawerPreferencesContext {
   getSize: (id: string) => number | undefined;
   setSize: (id: string, size: number) => void;

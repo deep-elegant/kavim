@@ -296,6 +296,8 @@ const CanvasInner = () => {
     [performAction, setEdges],
   );
 
+  // The `onEdgeUpdate` handler has been removed.
+  // Edge updates are now handled by the `LinearHistoryProvider` to support undo/redo.
   const edgeTypes = useMemo(() => ({ editable: EditableEdge }), []);
 
   // Calculates center of visible canvas (for placing nodes without mouse position)
@@ -696,6 +698,7 @@ const CanvasInner = () => {
 };
 
 // The CanvasInner component is wrapped in the ReactFlowProvider and supporting providers.
+// The `LinearHistoryProvider` provides the context for the linear history feature.
 const Flow = () => (
   <ReactFlowProvider>
     <CanvasUndoRedoProvider>
