@@ -3,6 +3,11 @@ import type { Node } from "@xyflow/react";
 import type { TextNodeData } from "../nodes/TextNode";
 import type { StickyNoteData } from "../nodes/StickyNoteNode";
 import type { ShapeNodeData } from "../nodes/ShapeNode";
+import type { AiContentBlock } from "@/core/llm/aiContentBlocks";
+import {
+  blocksFromLegacyResult,
+  blocksToPlainText,
+} from "@/core/llm/aiContentBlocks";
 
 /**
  * Strips HTML tags from a string to produce readable plain text.
@@ -24,6 +29,21 @@ const TEXTUAL_NODE_TYPES = new Set(["text-node", "sticky-note", "shape-node"]);
  * @returns A string summary, or null if the node is not a supported textual type.
  */
 export const formatTextualNodeSummary = (node: Node): string | null => {
+  if (node.type === "ai-node") {
+    const data =
+      (node.data as
+        | {
+            responseBlocks?: AiContentBlock[];
+            result?: string;
+          }
+        | undefined) ?? {};
+    const responseText = blocksToPlainText(
+      data.responseBlocks ?? blocksFromLegacyResult(data.result),
+    ).trim();
+
+    return responseText || null;
+  }
+
   if (!TEXTUAL_NODE_TYPES.has(node.type ?? "")) {
     return null;
   }

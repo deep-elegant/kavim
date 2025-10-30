@@ -16,7 +16,7 @@ import {
   createDefaultEditableEdgeData,
   type EditableEdgeData,
 } from "../edges/EditableEdge";
-import type { AiNodeData } from "../nodes/AINode";
+import { getAiResponseBlocks, type AiNodeData } from "../nodes/AINode";
 import type { TextNodeData } from "../nodes/TextNode";
 import type { StickyNoteData } from "../nodes/StickyNoteNode";
 import type { ShapeNodeData } from "../nodes/ShapeNode";
@@ -25,6 +25,10 @@ import type { YouTubeNodeData } from "../nodes/YouTubeNode";
 import { formatTextualNodeSummary, htmlToPlainText } from "../utils/text";
 import type { AiModel } from "@/core/llm/aiModels";
 import { generateAiResult, type ChatMessage } from "@/core/llm/generateAiResult";
+import {
+  blocksFromLegacyResult,
+  blocksToPlainText,
+} from "@/core/llm/aiContentBlocks";
 
 export type LinearHistoryItem = {
   id: string;
@@ -130,7 +134,7 @@ const summarizeNodeForHistory = (node: Node): LinearHistoryItem => {
     case "ai-node": {
       const data = (node.data as Partial<AiNodeData> | undefined) ?? {};
       const prompt = htmlToPlainText(data.label ?? "");
-      const response = (data.result ?? "").trim();
+      const response = blocksToPlainText(getAiResponseBlocks(data)).trim();
       const modelLabel = data.model ? `AI (${data.model})` : "AI Node";
 
       return {
@@ -283,7 +287,7 @@ export const LinearHistoryProvider = ({
           : "";
       const sourceResponseText =
         sourceNode.type === "ai-node"
-          ? (sourceNodeData?.result ?? "").trim()
+          ? blocksToPlainText(getAiResponseBlocks(sourceNodeData)).trim()
           : "";
       // If the source node is an empty AI node, we can reuse it.
       const shouldReuseActive =
@@ -317,6 +321,7 @@ export const LinearHistoryProvider = ({
             model,
             status: "in-progress",
             result: "",
+            responseBlocks: [],
             isTyping: false,
           },
           width: AI_NODE_DEFAULT_WIDTH,
@@ -359,6 +364,7 @@ export const LinearHistoryProvider = ({
                     model,
                     status: "in-progress",
                     result: "",
+                    responseBlocks: [],
                     isTyping: false,
                   },
                   selected: true,
@@ -473,7 +479,9 @@ export const LinearHistoryProvider = ({
 
         const nodeData = node.data as AiNodeData | undefined;
         const promptText = htmlToPlainText(nodeData?.label ?? "");
-        const responseText = (nodeData?.result ?? "").trim();
+        const responseText = blocksToPlainText(
+          getAiResponseBlocks(nodeData),
+        ).trim();
 
         if (promptText) {
           messages.push({ role: "user", content: promptText });
@@ -516,6 +524,7 @@ export const LinearHistoryProvider = ({
                   data: {
                     ...nodeData,
                     result: fullResponse,
+                    responseBlocks: blocksFromLegacyResult(fullResponse),
                   },
                 };
               }),
@@ -561,16 +570,18 @@ export const LinearHistoryProvider = ({
 
               const nodeData = node.data as AiNodeData;
               const existingResult = nodeData.result ?? "";
+              const fallbackMessage =
+                existingResult.trim().length > 0
+                  ? existingResult
+                  : "Unable to generate a response. Please verify your API configuration and try again.";
 
               return {
                 ...node,
                 data: {
                   ...nodeData,
                   status: "done",
-                  result:
-                    existingResult.trim().length > 0
-                      ? existingResult
-                      : "Unable to generate a response. Please verify your API configuration and try again.",
+                  result: fallbackMessage,
+                  responseBlocks: blocksFromLegacyResult(fallbackMessage),
                 },
               };
             }),

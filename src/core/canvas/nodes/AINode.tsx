@@ -40,6 +40,11 @@ import {
 import { createDefaultEditableEdgeData } from "../edges/EditableEdge";
 import { useCanvasData } from "../CanvasDataContext";
 import { formatTextualNodeSummary, htmlToPlainText } from "../utils/text";
+import {
+  type AiContentBlock,
+  blocksFromLegacyResult,
+  blocksToPlainText,
+} from "@/core/llm/aiContentBlocks";
 
 export type AiStatus = "not-started" | "in-progress" | "done";
 
@@ -50,7 +55,18 @@ export type AiNodeData = {
   model?: AiModel;
   status?: AiStatus;
   result?: string; // AI-generated response
+  responseBlocks?: AiContentBlock[];
   fontSize?: FontSizeSetting;
+};
+
+export const getAiResponseBlocks = (
+  data: Pick<AiNodeData, "responseBlocks" | "result"> | undefined,
+): AiContentBlock[] => {
+  if (!data) {
+    return [];
+  }
+
+  return data.responseBlocks ?? blocksFromLegacyResult(data.result);
 };
 
 export type AiNodeType = Node<AiNodeData, "ai-node">;
@@ -102,6 +118,7 @@ export const aiNodeDrawable: DrawableNode<AiNodeType> = {
       model: "deepseek",
       status: "not-started",
       result: "",
+      responseBlocks: [],
       fontSize: "auto",
     },
     width: MIN_WIDTH,
@@ -204,7 +221,13 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     [model],
   );
   const status = data.status ?? "not-started";
-  const result = data.result ?? "";
+  const responseBlocks = getAiResponseBlocks(data);
+  const markdownSegments = responseBlocks
+    .map((block) => (block.type === "markdown" ? block.markdown : ""))
+    .filter((segment) => segment.length > 0);
+  const responseMarkdown = markdownSegments.join("\n\n");
+  const resultMarkdown = responseMarkdown || (data.result ?? "");
+  const responsePlainText = blocksToPlainText(responseBlocks);
   const label = data.label ?? "";
 
   const promptHasContent = useMemo(
@@ -296,7 +319,9 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
         const nodeData = node.data as AiNodeData | undefined;
         const promptText = htmlToPlainText(nodeData?.label ?? "");
-        const resultText = (nodeData?.result ?? "").trim();
+        const resultText = blocksToPlainText(
+          getAiResponseBlocks(nodeData),
+        ).trim();
 
         // Add this node's messages (user prompt, then assistant response)
         const messages: ChatMessage[] = [];
@@ -379,6 +404,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       model: currentNodeData?.model ?? model, // Inherit model choice
       status: "not-started",
       result: "",
+      responseBlocks: [],
     };
 
     setNodes((existing) => {
@@ -469,14 +495,22 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       const promptText = htmlToPlainText(prompt);
       if (!promptText) {
         lastPromptRef.current = prompt;
-        updateNodeData({ status: "not-started", result: "" });
+        updateNodeData({
+          status: "not-started",
+          result: "",
+          responseBlocks: [],
+        });
         return;
       }
 
       // Increment request ID to invalidate any in-flight requests
       const currentRequestId = requestIdRef.current + 1;
       requestIdRef.current = currentRequestId;
-      updateNodeData({ status: "in-progress", result: "" });
+      updateNodeData({
+        status: "in-progress",
+        result: "",
+        responseBlocks: [],
+      });
 
       try {
         const messages = buildChatHistory(prompt);
@@ -496,6 +530,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                       data: {
                         ...n.data,
                         result: fullResponse,
+                        responseBlocks: blocksFromLegacyResult(fullResponse),
                       },
                     };
                   }
@@ -523,6 +558,9 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
             status: "done",
             result:
               "Unable to generate a response. Please verify your API configuration and try again.",
+            responseBlocks: blocksFromLegacyResult(
+              "Unable to generate a response. Please verify your API configuration and try again.",
+            ),
           });
           lastPromptRef.current = prompt;
         }
@@ -570,21 +608,21 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       }
       return nodes;
     });
-  }, [id, setNodes, result]);
+  }, [id, resultMarkdown, setNodes]);
 
   // Convert markdown response to HTML for display
   const resultHtml = useMemo(() => {
-    const response = marked.parse(result || "");
+    const response = marked.parse(resultMarkdown || "");
     return response;
-  }, [result]);
+  }, [resultMarkdown]);
 
   /**
    * Copies the AI-generated response to the clipboard.
    * Displays a toast notification to confirm success or failure.
    */
   const handleCopyAiResponse = useCallback(async () => {
-    const plainText = result;
-    if (!plainText) {
+    const contentToCopy = resultMarkdown || responsePlainText;
+    if (!contentToCopy) {
       toast.info("No AI response to copy yet.");
       return;
     }
@@ -595,13 +633,13 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     }
 
     try {
-      await navigator.clipboard.writeText(plainText);
+      await navigator.clipboard.writeText(contentToCopy);
       toast.success("AI response copied to clipboard.");
     } catch (error) {
       console.error("Failed to copy AI response", error);
       toast.error("Failed to copy AI response.");
     }
-  }, [resultHtml]);
+  }, [responsePlainText, resultMarkdown]);
 
   /**
    * Custom blur handler to prevent exiting edit mode when interacting with:
@@ -787,7 +825,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
               <div
                 className={cn(
                   "min-h-[120px] w-full rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm",
-                  result ? "text-slate-900" : "text-slate-500",
+                  resultMarkdown ? "text-slate-900" : "text-slate-500",
                 )}
               >
                 <div dangerouslySetInnerHTML={{ __html: resultHtml }} />
