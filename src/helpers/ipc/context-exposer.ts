@@ -5,6 +5,7 @@ import { exposeSettingsContext } from "./settings-store/settings-context";
 import { exposeLlmContext } from "./llm/llm-context";
 import { exposeDraftContext } from "./drafts/draft-context";
 import { exposeAppContext } from "./app/app-context";
+import { exposeDrawerPreferencesContext } from "./drawer-preferences";
 
 export default function exposeContexts() {
   exposeWindowContext();
@@ -14,4 +15,6 @@ export default function exposeContexts() {
   exposeLlmContext();
   exposeDraftContext();
   exposeAppContext();
+  // Expose the drawer preferences context to the renderer process.
+  exposeDrawerPreferencesContext();
 }

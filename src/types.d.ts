@@ -104,6 +104,17 @@ interface AppInfoContext {
   get: () => Promise<AppMetadata>;
 }
 
+/**
+ * Defines the shape of the drawer preferences context that is exposed to the renderer process.
+ * This allows the renderer process to get, set, and delete drawer sizes.
+ */
+interface DrawerPreferencesContext {
+  getSize: (id: string) => number | undefined;
+  setSize: (id: string, size: number) => void;
+  deleteSize: (id: string) => void;
+  getAll: () => Record<string, number>;
+}
+
 declare global {
     const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
     const MAIN_WINDOW_VITE_NAME: string;
@@ -135,6 +146,7 @@ declare global {
         llm: LlmContext;
         drafts: DraftContext;
         appInfo: AppInfoContext;
+        drawerPreferences: DrawerPreferencesContext;
     }
 }
 export {}
