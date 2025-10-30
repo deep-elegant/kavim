@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo, useRef } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { type NodeProps, type Node } from "@xyflow/react";
 
 import { cn } from "@/utils/tailwind";
@@ -126,8 +126,9 @@ const ShapeNodeComponent = memo(
       editor,
       isTyping,
       handleDoubleClick,
-      handleBlur,
+      handleBlur: handleEditorBlur,
       updateNodeData,
+      setTypingState,
       fontSizeSetting,
       resolvedFontSize,
     } = useNodeAsEditor({ id, data });
@@ -139,6 +140,130 @@ const ShapeNodeComponent = memo(
 
     // Hidden measurement element for calculating optimal font size
     const measurementRef = useRef<HTMLDivElement>(null);
+    // Tracks temporary blur events triggered by drag/resize interactions while editing.
+    const editingInteractionGuardRef = useRef(false);
+
+    // Clear the blur guard whenever we leave typing mode.
+    useEffect(() => {
+      if (!isTyping) {
+        editingInteractionGuardRef.current = false;
+      }
+    }, [isTyping]);
+
+    // Exit typing when the shape is deselected so Delete removes the node.
+    useEffect(() => {
+      if (!selected && isTyping) {
+        setTypingState(false);
+      }
+    }, [isTyping, selected, setTypingState]);
+
+    // Ignore blur events triggered by drag/resize while we are mid-interaction.
+    const handleBlur = useCallback(
+      (event: React.FocusEvent<HTMLDivElement>) => {
+        if (editingInteractionGuardRef.current) {
+          return;
+        }
+        handleEditorBlur(event);
+      },
+      [handleEditorBlur],
+    );
+
+    // Mark the shape as "temporarily leaving focus" for drag/resize operations.
+    const handleEditingInteractionStart = useCallback(() => {
+      if (!isTyping) {
+        return;
+      }
+      editingInteractionGuardRef.current = true;
+    }, [isTyping]);
+
+    // Restore focus to the editor once the pointer is released after a move/resize.
+    const handleEditingInteractionEnd = useCallback(() => {
+      if (!editingInteractionGuardRef.current) {
+        return;
+      }
+
+      editingInteractionGuardRef.current = false;
+      if (!isTyping) {
+        return;
+      }
+
+      requestAnimationFrame(() => {
+        if (!editor) {
+          return;
+        }
+        editor.commands.focus(undefined, { scrollIntoView: false });
+      });
+    }, [editor, isTyping]);
+
+    // Switch into typing mode from a key press and replace any existing content.
+    const startTypingFromKey = useCallback(
+      (initialText: string | null) => {
+        setTypingState(true);
+        editingInteractionGuardRef.current = false;
+
+        requestAnimationFrame(() => {
+          if (!editor) {
+            return;
+          }
+
+          editor.commands.setContent("", true);
+          const chain = editor.chain().focus(undefined, {
+            scrollIntoView: false,
+          });
+
+          if (initialText) {
+            chain.insertContent(initialText);
+          }
+
+          chain.run();
+        });
+      },
+      [editor, setTypingState],
+    );
+
+    // When selected but not typing, capture printable keys and restart the editor fresh.
+    useEffect(() => {
+      if (!selected || isTyping) {
+        return;
+      }
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        const target = event.target as HTMLElement | null;
+        if (
+          target?.closest("input, textarea, select, [contenteditable='true']")
+        ) {
+          return;
+        }
+
+        if (event.defaultPrevented) {
+          return;
+        }
+
+        if (event.metaKey || event.ctrlKey) {
+          return;
+        }
+
+        const { key } = event;
+
+        const isCharacterKey = key.length === 1;
+        const isEnter = key === "Enter";
+
+        if (!isCharacterKey && !isEnter) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const initialText = isEnter ? null : key;
+        startTypingFromKey(initialText);
+      };
+
+      window.addEventListener("keydown", handleKeyDown, { capture: false });
+      return () => {
+        window.removeEventListener("keydown", handleKeyDown);
+      };
+    }, [isTyping, selected, startTypingFromKey]);
 
     const displayHtml = useMemo(
       () => label || "<p>Click to add text</p>",
@@ -197,6 +322,9 @@ const ShapeNodeComponent = memo(
         editor={editor}
         toolbarItems={toolbarItems}
         contextMenuItems={undefined}
+        allowInteractionsWhileEditing
+        onEditingInteractionStart={handleEditingInteractionStart}
+        onEditingInteractionEnd={handleEditingInteractionEnd}
       >
         <div
           className={cn(
