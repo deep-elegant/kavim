@@ -80,13 +80,19 @@ export interface FileRequestMessage {
   displayName?: string;
 }
 
+export interface FilePendingMessage {
+  type: "file-pending";
+  assetPath: string;
+}
+
 export type FileTransferControlMessage =
   | FileInitMessage
   | FileAckMessage
   | FileCompleteMessage
   | FileErrorMessage
   | FileResendMessage
-  | FileRequestMessage;
+  | FileRequestMessage
+  | FilePendingMessage;
 
 export const FILE_CHUNK_FRAME_TYPE = 0x1;
 export const FILE_CHUNK_HEADER_SIZE = 2 + 4; // frame type + id length + sequence

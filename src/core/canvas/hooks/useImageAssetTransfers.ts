@@ -16,16 +16,21 @@ const extractAssetPath = (src?: string | null) => {
 
 const defaultErrorMessage = "Failed to download image asset";
 
+type ConcreteAssetStatus = Exclude<ImageNodeData["assetStatus"], undefined>;
+
 type UseImageAssetTransfersParams = {
   nodes: Node[];
   setNodes: Dispatch<SetStateAction<Node[]>>;
   requestAsset: (assetPath: string, displayName?: string) => boolean;
   releaseAssetRequest: (assetPath: string) => void;
+  activeTransfers: FileTransfer[];
   completedTransfers: FileTransfer[];
   failedTransfers: FileTransfer[];
+  pendingRequestedAssets: Set<string>;
+  notifyAssetReady?: (assetPath: string) => void | Promise<void>;
   pakAssets: Pick<
     UsePakAssetsReturn,
-    "hasAsset" | "registerAssetAtPath" | "isReady"
+    "hasAsset" | "registerAssetAtPath" | "isReady" | "refreshAssets"
   >;
 };
 
@@ -34,19 +39,25 @@ const useImageAssetTransfers = ({
   setNodes,
   requestAsset,
   releaseAssetRequest,
+  activeTransfers,
   completedTransfers,
   failedTransfers,
+  pendingRequestedAssets,
+  notifyAssetReady,
   pakAssets,
 }: UseImageAssetTransfersParams) => {
   const requestedAssetsRef = useRef<Set<string>>(new Set());
   const processedCompletedRef = useRef<Set<string>>(new Set());
   const processedFailedRef = useRef<Set<string>>(new Set());
-  const { hasAsset, registerAssetAtPath, isReady } = pakAssets;
+  const pendingLocalAssetsRef = useRef<Set<string>>(new Set());
+  const pendingRemoteAssetsRef = useRef<Set<string>>(new Set());
+  const readyNotifiedRef = useRef<Set<string>>(new Set());
+  const { hasAsset, registerAssetAtPath, isReady, refreshAssets } = pakAssets;
 
-  const setAssetStatus = useCallback(
+  const updateAssetStatus = useCallback(
     (
       assetPath: string,
-      status: "downloading" | "error",
+      status: ConcreteAssetStatus | null,
       errorMessage?: string,
     ) => {
       let changed = false;
@@ -63,9 +74,26 @@ const useImageAssetTransfers = ({
             return node;
           }
 
+          if (status === null) {
+            if (data.assetStatus === undefined && data.assetError === undefined) {
+              return node;
+            }
+
+            const nextData: ImageNodeData = { ...data };
+            delete (nextData as Partial<ImageNodeData>).assetStatus;
+            delete (nextData as Partial<ImageNodeData>).assetError;
+            delete (nextData as Partial<ImageNodeData>).assetOrigin;
+            mutated = true;
+
+            return {
+              ...node,
+              data: nextData,
+            };
+          }
+
           const desiredError =
             status === "error"
-              ? (errorMessage ?? defaultErrorMessage)
+              ? errorMessage ?? defaultErrorMessage
               : undefined;
 
           if (data.assetStatus === status && data.assetError === desiredError) {
@@ -108,20 +136,50 @@ const useImageAssetTransfers = ({
         return current;
       });
 
-      if (changed) {
-        console.info("[ImageAssetTransfers] set asset status", {
-          assetPath,
-          status,
-          errorMessage,
-        });
+      if (!changed) {
+        return;
       }
+
+      if (status === null) {
+        console.info("[ImageAssetTransfers] cleared asset status", {
+          assetPath,
+        });
+        return;
+      }
+
+      console.info("[ImageAssetTransfers] set asset status", {
+        assetPath,
+        status,
+        errorMessage,
+      });
     },
     [setNodes],
   );
 
+  const setAssetStatus = useCallback(
+    (
+      assetPath: string,
+      status: ConcreteAssetStatus,
+      errorMessage?: string,
+    ) => {
+      updateAssetStatus(assetPath, status, errorMessage);
+      if (status !== "ready") {
+        readyNotifiedRef.current.delete(assetPath);
+      }
+    },
+    [updateAssetStatus],
+  );
+
   const clearAssetStatus = useCallback(
     (assetPath: string) => {
-      let changed = false;
+      updateAssetStatus(assetPath, null);
+      readyNotifiedRef.current.delete(assetPath);
+    },
+    [updateAssetStatus],
+  );
+
+  const setAssetOrigin = useCallback(
+    (assetPath: string, origin?: ImageNodeData["assetOrigin"]) => {
       setNodes((current) => {
         let mutated = false;
         const next = current.map((node) => {
@@ -135,36 +193,67 @@ const useImageAssetTransfers = ({
             return node;
           }
 
-          if (data.assetStatus === undefined && data.assetError === undefined) {
+          if (origin === undefined) {
+            if (data.assetOrigin === undefined) {
+              return node;
+            }
+
+            const nextData: ImageNodeData = { ...data };
+            delete (nextData as Partial<ImageNodeData>).assetOrigin;
+            mutated = true;
+            return {
+              ...node,
+              data: nextData,
+            };
+          }
+
+          if (data.assetOrigin === origin) {
             return node;
           }
 
-          const nextData: ImageNodeData = { ...data };
-          delete (nextData as Partial<ImageNodeData>).assetStatus;
-          delete (nextData as Partial<ImageNodeData>).assetError;
+          const nextData: ImageNodeData = {
+            ...data,
+            assetOrigin: origin,
+          };
           mutated = true;
-
           return {
             ...node,
             data: nextData,
           };
         });
 
-        if (mutated) {
-          changed = true;
-          return next;
-        }
-
-        return current;
+        return mutated ? next : current;
       });
-
-      if (changed) {
-        console.info("[ImageAssetTransfers] cleared asset status", {
-          assetPath,
-        });
-      }
     },
     [setNodes],
+  );
+
+  const queueRemoteRequest = useCallback(
+    (assetPath: string, displayName: string) => {
+      pendingLocalAssetsRef.current.delete(assetPath);
+      if (requestedAssetsRef.current.has(assetPath)) {
+        return;
+      }
+
+      const requested = requestAsset(assetPath, displayName);
+      if (requested) {
+        requestedAssetsRef.current.add(assetPath);
+        setAssetStatus(assetPath, "downloading");
+        setAssetOrigin(assetPath, "remote");
+        console.info("[ImageAssetTransfers] requested remote asset", {
+          assetPath,
+          displayName,
+        });
+        return;
+      }
+
+      console.warn("[ImageAssetTransfers] failed to request remote asset", {
+        assetPath,
+        displayName,
+      });
+      setAssetStatus(assetPath, "error");
+    },
+    [requestAsset, setAssetStatus, setAssetOrigin],
   );
 
   useEffect(() => {
@@ -173,6 +262,7 @@ const useImageAssetTransfers = ({
     }
 
     const referencedPaths = new Set<string>();
+    const generatingAssets: Array<{ assetPath: string; displayName: string }> = [];
 
     for (const node of nodes) {
       if (node.type !== "image-node") {
@@ -187,11 +277,17 @@ const useImageAssetTransfers = ({
 
       referencedPaths.add(assetPath);
 
-      if (hasAsset(assetPath)) {
-        requestedAssetsRef.current.delete(assetPath);
-        clearAssetStatus(assetPath);
-        continue;
-      }
+        if (hasAsset(assetPath)) {
+          requestedAssetsRef.current.delete(assetPath);
+          pendingLocalAssetsRef.current.delete(assetPath);
+          releaseAssetRequest(assetPath);
+          setAssetStatus(assetPath, "ready");
+          if (!readyNotifiedRef.current.has(assetPath)) {
+            readyNotifiedRef.current.add(assetPath);
+            void notifyAssetReady?.(assetPath);
+          }
+          continue;
+        }
 
       const displayName =
         data.fileName ??
@@ -199,21 +295,12 @@ const useImageAssetTransfers = ({
         assetPath.split("/").pop() ??
         "image asset";
 
-      const requested = requestAsset(assetPath, displayName);
-      if (requested) {
-        requestedAssetsRef.current.add(assetPath);
-        setAssetStatus(assetPath, "downloading");
-        console.info("[ImageAssetTransfers] requested remote asset", {
-          assetPath,
-          displayName,
-        });
-      } else if (!requestedAssetsRef.current.has(assetPath)) {
-        console.warn("[ImageAssetTransfers] failed to request remote asset", {
-          assetPath,
-          displayName,
-        });
-        setAssetStatus(assetPath, "error");
+      if (data.assetStatus === "generating") {
+        generatingAssets.push({ assetPath, displayName });
+        continue;
       }
+
+      queueRemoteRequest(assetPath, displayName);
     }
 
     Array.from(requestedAssetsRef.current).forEach((assetPath) => {
@@ -222,20 +309,90 @@ const useImageAssetTransfers = ({
       }
 
       requestedAssetsRef.current.delete(assetPath);
+      pendingLocalAssetsRef.current.delete(assetPath);
       releaseAssetRequest(assetPath);
       clearAssetStatus(assetPath);
       console.info("[ImageAssetTransfers] released unreferenced asset", {
         assetPath,
       });
     });
+ 
+    generatingAssets.forEach(({ assetPath, displayName }) => {
+      if (pendingLocalAssetsRef.current.has(assetPath)) {
+        return;
+      }
+
+      pendingLocalAssetsRef.current.add(assetPath);
+
+      void (async () => {
+        try {
+          await refreshAssets();
+        } catch (error) {
+          console.error("[ImageAssetTransfers] failed to refresh pak assets", {
+            assetPath,
+            error,
+          });
+        }
+
+        if (hasAsset(assetPath)) {
+          requestedAssetsRef.current.delete(assetPath);
+          pendingLocalAssetsRef.current.delete(assetPath);
+          releaseAssetRequest(assetPath);
+          setAssetStatus(assetPath, "ready");
+          if (!readyNotifiedRef.current.has(assetPath)) {
+            readyNotifiedRef.current.add(assetPath);
+            void notifyAssetReady?.(assetPath);
+          }
+          return;
+        }
+
+        pendingLocalAssetsRef.current.delete(assetPath);
+
+        queueRemoteRequest(assetPath, displayName);
+      })();
+    });
   }, [
     nodes,
     isReady,
     hasAsset,
-    requestAsset,
+    refreshAssets,
+    queueRemoteRequest,
     releaseAssetRequest,
     clearAssetStatus,
     setAssetStatus,
+    setAssetOrigin,
+    notifyAssetReady,
+  ]);
+
+  useEffect(() => {
+    const current = pendingRequestedAssets
+      ? new Set(pendingRequestedAssets)
+      : new Set<string>();
+
+    current.forEach((assetPath) => {
+      if (!pendingRemoteAssetsRef.current.has(assetPath)) {
+        setAssetStatus(assetPath, "generating");
+        setAssetOrigin(assetPath, "remote");
+      }
+    });
+
+    pendingRemoteAssetsRef.current.forEach((assetPath) => {
+      if (current.has(assetPath)) {
+        return;
+      }
+
+      if (!hasAsset(assetPath) && requestedAssetsRef.current.has(assetPath)) {
+        setAssetStatus(assetPath, "downloading");
+        setAssetOrigin(assetPath, "remote");
+      }
+    });
+
+    pendingRemoteAssetsRef.current = current;
+  }, [
+    pendingRequestedAssets,
+    hasAsset,
+    setAssetStatus,
+    setAssetOrigin,
   ]);
 
   useEffect(() => {
@@ -272,8 +429,13 @@ const useImageAssetTransfers = ({
             mimeType: transfer.mimeType,
           });
           requestedAssetsRef.current.delete(assetPath);
+          pendingLocalAssetsRef.current.delete(assetPath);
           releaseAssetRequest(assetPath);
-          clearAssetStatus(assetPath);
+          setAssetStatus(assetPath, "ready");
+          if (!readyNotifiedRef.current.has(assetPath)) {
+            readyNotifiedRef.current.add(assetPath);
+            void notifyAssetReady?.(assetPath);
+          }
           console.info("[ImageAssetTransfers] asset registration complete", {
             transferId: transfer.id,
             assetPath,
@@ -285,6 +447,7 @@ const useImageAssetTransfers = ({
             error,
           });
           requestedAssetsRef.current.delete(assetPath);
+          pendingLocalAssetsRef.current.delete(assetPath);
           releaseAssetRequest(assetPath);
           setAssetStatus(
             assetPath,
@@ -297,7 +460,6 @@ const useImageAssetTransfers = ({
   }, [
     completedTransfers,
     registerAssetAtPath,
-    clearAssetStatus,
     releaseAssetRequest,
     setAssetStatus,
   ]);
@@ -318,6 +480,7 @@ const useImageAssetTransfers = ({
 
       processedFailedRef.current.add(transfer.id);
       requestedAssetsRef.current.delete(transfer.assetPath);
+      pendingLocalAssetsRef.current.delete(transfer.assetPath);
       releaseAssetRequest(transfer.assetPath);
       console.error("[ImageAssetTransfers] transfer failed", {
         assetPath: transfer.assetPath,
@@ -331,6 +494,21 @@ const useImageAssetTransfers = ({
       );
     });
   }, [failedTransfers, releaseAssetRequest, setAssetStatus]);
+
+  useEffect(() => {
+    activeTransfers.forEach((transfer) => {
+      if (
+        transfer.direction !== "incoming" ||
+        !transfer.assetPath ||
+        (transfer.status !== "pending" && transfer.status !== "in-progress")
+      ) {
+        return;
+      }
+
+      setAssetStatus(transfer.assetPath, "downloading");
+      setAssetOrigin(transfer.assetPath, "remote");
+    });
+  }, [activeTransfers, setAssetOrigin, setAssetStatus]);
 };
 
 export default useImageAssetTransfers;

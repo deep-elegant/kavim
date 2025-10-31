@@ -159,7 +159,7 @@ export const usePakAssets = () => {
       const bytes = toUint8Array(input);
       const extensionHint =
         options?.extension ?? options?.mimeType?.split("/")?.[1];
-      const { displayFileName } = ensureFileMetadata(
+      const { displayFileName } = ensureAssetFileMetadata(
         options?.fileName,
         extensionHint,
       );

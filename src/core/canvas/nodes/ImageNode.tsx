@@ -13,7 +13,9 @@ export type ImageNodeData = {
   naturalWidth?: number;
   naturalHeight?: number;
   /** Local-only status for asset availability */
-  assetStatus?: "downloading" | "ready" | "error";
+  assetStatus?: "generating" | "downloading" | "ready" | "error";
+  /** Hint about where the asset originated (local vs. remote) */
+  assetOrigin?: "local" | "remote";
   assetError?: string;
 };
 
@@ -30,10 +32,13 @@ export const IMAGE_NODE_MIN_HEIGHT = 120;
  */
 const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeType>) => {
   const { src, alt, fileName, assetStatus, assetError } = data;
+  const isGenerating = assetStatus === "generating";
   const isDownloading = assetStatus === "downloading";
   const hasError = assetStatus === "error";
-  const shouldShowImage = Boolean(src) && !isDownloading && !hasError;
-  const shouldShowPlaceholder = !src && !isDownloading && !hasError;
+  const shouldShowImage =
+    Boolean(src) && !isGenerating && !isDownloading && !hasError;
+  const shouldShowPlaceholder =
+    !src && !isGenerating && !isDownloading && !hasError;
 
   return (
     <NodeInteractionOverlay
@@ -55,6 +60,18 @@ const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeType>) => {
         ) : shouldShowPlaceholder ? (
           <div className="text-muted-foreground flex h-full w-full items-center justify-center text-sm">
             No image
+          </div>
+        ) : null}
+
+        {isGenerating ? (
+          <div className="bg-background/80 absolute inset-0 flex flex-col items-center justify-center gap-2 text-center">
+            <Loader2
+              className="text-muted-foreground h-6 w-6 animate-spin"
+              aria-hidden="true"
+            />
+            <span className="text-muted-foreground text-xs font-medium">
+              Generating image…
+            </span>
           </div>
         ) : null}
 

@@ -14,7 +14,6 @@ import {
   Background,
   addEdge,
   type Connection,
-  type Edge,
   type EdgeChange,
   type XYPosition,
   useReactFlow,
@@ -177,10 +176,13 @@ const CanvasInner = () => {
     broadcastTyping,
   } = useCanvasCollaboration();
   const {
+    activeTransfers,
     completedTransfers,
     failedTransfers,
     requestAsset: requestRemoteAsset,
     releaseAssetRequest: releaseRemoteAssetRequest,
+    pendingRequestedAssets,
+    notifyAssetReady,
   } = useWebRTC();
 
   const selectionMode = useMemo(() => {
@@ -383,12 +385,16 @@ const CanvasInner = () => {
     setNodes,
     requestAsset: requestRemoteAsset,
     releaseAssetRequest: releaseRemoteAssetRequest,
+    activeTransfers,
     completedTransfers,
     failedTransfers,
+    pendingRequestedAssets,
+    notifyAssetReady,
     pakAssets: {
       hasAsset: pakAssets.hasAsset,
       registerAssetAtPath: pakAssets.registerAssetAtPath,
       isReady: pakAssets.isReady,
+      refreshAssets: pakAssets.refreshAssets,
     },
   });
 

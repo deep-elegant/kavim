@@ -11,7 +11,7 @@ import { type NodeProps, type Node, type Edge } from "@xyflow/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Copy, Split } from "lucide-react";
+import { Split } from "lucide-react";
 import { marked } from "marked";
 import { toast } from "sonner";
 import { ContextMenuItem } from "@/components/ui/context-menu";
@@ -596,7 +596,8 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                     fileName: block.asset.fileName,
                     naturalWidth,
                     naturalHeight,
-                    assetStatus: "ready",
+                    assetStatus: "generating",
+                    assetOrigin: "local",
                   },
                   width,
                   height,

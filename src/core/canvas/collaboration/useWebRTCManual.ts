@@ -21,7 +21,10 @@ import {
 import { usePresenceSync } from "./manual-webrtc/usePresenceSync";
 import { useYjsSync } from "./manual-webrtc/useYjsSync";
 import { useStatsForNerds } from "../../diagnostics/StatsForNerdsContext";
-import type { FileRequestMessage } from "./manual-webrtc/file-transfer/types";
+import type {
+  FilePendingMessage,
+  FileRequestMessage,
+} from "./manual-webrtc/file-transfer/types";
 import {
   useFileTransferChannel,
   type UseFileTransferChannelResult,
@@ -84,9 +87,22 @@ export function useWebRTCManual(doc: Y.Doc) {
   );
   const inflightAssetRequestsRef = useRef<Set<string>>(new Set());
   const servingAssetRequestsRef = useRef<Set<string>>(new Set());
+  const pendingGeneratedQueueRef = useRef<
+    Map<string, FileRequestMessage[]>
+  >(new Map());
+  const pendingRequestedAssetsRef = useRef<Set<string>>(new Set());
   const sendFileRef = useRef<UseFileTransferChannelResult["sendFile"]>(
     async () => null,
   );
+  const sendFilePendingRef = useRef<
+    UseFileTransferChannelResult["sendFilePending"]
+  >(() => false);
+  const [pendingGeneratedAssets, setPendingGeneratedAssets] = useState<
+    Set<string>
+  >(new Set());
+  const [pendingRequestedAssets, setPendingRequestedAssets] = useState<
+    Set<string>
+  >(new Set());
   const [fileTransferChannel, setFileTransferChannel] =
     useState<RTCDataChannel | null>(null);
   const [incomingNewBoard, setIncomingNewBoard] =
@@ -374,8 +390,59 @@ export function useWebRTCManual(doc: Y.Doc) {
     setupDataChannel,
   );
 
+  const updatePendingGeneratedState = useCallback(() => {
+    setPendingGeneratedAssets(
+      new Set(pendingGeneratedQueueRef.current.keys()),
+    );
+  }, []);
+
+  const enqueuePendingGeneratedRequest = useCallback(
+    (assetPath: string, message: FileRequestMessage) => {
+      const existing = pendingGeneratedQueueRef.current.get(assetPath);
+      if (existing) {
+        existing.push(message);
+      } else {
+        pendingGeneratedQueueRef.current.set(assetPath, [message]);
+      }
+      updatePendingGeneratedState();
+      return existing === undefined;
+    },
+    [updatePendingGeneratedState],
+  );
+
+  const takePendingGeneratedRequests = useCallback((assetPath: string) => {
+    const queued = pendingGeneratedQueueRef.current.get(assetPath);
+    if (!queued || queued.length === 0) {
+      pendingGeneratedQueueRef.current.delete(assetPath);
+      updatePendingGeneratedState();
+      return [] as FileRequestMessage[];
+    }
+
+    pendingGeneratedQueueRef.current.delete(assetPath);
+    updatePendingGeneratedState();
+    return queued;
+  }, [updatePendingGeneratedState]);
+
+  const addPendingRequestedAsset = useCallback((assetPath: string) => {
+    if (pendingRequestedAssetsRef.current.has(assetPath)) {
+      return;
+    }
+
+    pendingRequestedAssetsRef.current.add(assetPath);
+    setPendingRequestedAssets(new Set(pendingRequestedAssetsRef.current));
+  }, []);
+
+  const removePendingRequestedAsset = useCallback((assetPath: string) => {
+    if (!pendingRequestedAssetsRef.current.has(assetPath)) {
+      return;
+    }
+
+    pendingRequestedAssetsRef.current.delete(assetPath);
+    setPendingRequestedAssets(new Set(pendingRequestedAssetsRef.current));
+  }, []);
+
   const handleRemoteFileRequest = useCallback(
-    async (message: FileRequestMessage) => {
+    async (message: FileRequestMessage, { fromQueue = false } = {}) => {
       const assetPath = stripPakProtocol(message.assetPath);
       if (!assetPath) {
         console.warn(
@@ -398,7 +465,26 @@ export function useWebRTCManual(doc: Y.Doc) {
 
         const assetData = await window.projectPak.getAssetData(assetPath);
         if (!assetData) {
-          throw new Error(`Asset not found in active pak: ${assetPath}`);
+          servingAssetRequestsRef.current.delete(assetPath);
+          enqueuePendingGeneratedRequest(assetPath, message);
+
+          if (!fromQueue) {
+            const sent = sendFilePendingRef.current(assetPath);
+            if (!sent) {
+              console.warn(
+                "[WebRTCManual] failed to acknowledge pending asset",
+                {
+                  assetPath,
+                },
+              );
+            } else {
+              console.info("[WebRTCManual] deferred asset transfer", {
+                assetPath,
+              });
+            }
+          }
+
+          return;
         }
 
         const fileBytes = assetData.data;
@@ -440,7 +526,46 @@ export function useWebRTCManual(doc: Y.Doc) {
         });
       }
     },
-    [],
+    [enqueuePendingGeneratedRequest],
+  );
+
+  const notifyAssetReady = useCallback(
+    async (assetPath: string) => {
+      const normalized = stripPakProtocol(assetPath);
+      if (!normalized) {
+        return;
+      }
+
+      const queued = takePendingGeneratedRequests(normalized);
+      if (!queued.length) {
+        return;
+      }
+
+      console.info("[WebRTCManual] resuming queued asset transfers", {
+        assetPath: normalized,
+        count: queued.length,
+      });
+
+      for (const message of queued) {
+        await handleRemoteFileRequest(message, { fromQueue: true });
+      }
+    },
+    [handleRemoteFileRequest, takePendingGeneratedRequests],
+  );
+
+  const handleRemoteAssetPending = useCallback(
+    (message: FilePendingMessage) => {
+      const assetPath = stripPakProtocol(message.assetPath);
+      if (!assetPath) {
+        return;
+      }
+
+      addPendingRequestedAsset(assetPath);
+      console.info("[WebRTCManual] remote asset generation pending", {
+        assetPath,
+      });
+    },
+    [addPendingRequestedAsset],
   );
 
   const {
@@ -450,15 +575,31 @@ export function useWebRTCManual(doc: Y.Doc) {
     sendFile,
     cancelTransfer,
     requestFile,
+    sendFilePending,
   } = useFileTransferChannel({
     channelRef: fileTransferChannelRef,
     channel: fileTransferChannel,
     onFileRequest: handleRemoteFileRequest,
+    onAssetPending: handleRemoteAssetPending,
   });
 
   useEffect(() => {
     sendFileRef.current = sendFile;
   }, [sendFile]);
+
+  useEffect(() => {
+    sendFilePendingRef.current = sendFilePending;
+  }, [sendFilePending]);
+
+  useEffect(() => {
+    for (const transfer of activeTransfers) {
+      if (transfer.direction !== "incoming" || !transfer.assetPath) {
+        continue;
+      }
+
+      removePendingRequestedAsset(transfer.assetPath);
+    }
+  }, [activeTransfers, removePendingRequestedAsset]);
 
   const flushPendingAssetRequests = useCallback(() => {
     if (pendingAssetRequestsRef.current.size === 0) {
@@ -567,26 +708,29 @@ export function useWebRTCManual(doc: Y.Doc) {
     const normalized = stripPakProtocol(trimmed) || trimmed;
     pendingAssetRequestsRef.current.delete(normalized);
     inflightAssetRequestsRef.current.delete(normalized);
+    removePendingRequestedAsset(normalized);
     console.info("[WebRTCManual] released asset request", {
       assetPath: normalized,
     });
-  }, []);
+  }, [removePendingRequestedAsset]);
 
   useEffect(() => {
     completedTransfers.forEach((transfer) => {
       if (transfer.direction === "incoming" && transfer.assetPath) {
         inflightAssetRequestsRef.current.delete(transfer.assetPath);
+        removePendingRequestedAsset(transfer.assetPath);
       }
     });
-  }, [completedTransfers]);
+  }, [completedTransfers, removePendingRequestedAsset]);
 
   useEffect(() => {
     failedTransfers.forEach((transfer) => {
       if (transfer.direction === "incoming" && transfer.assetPath) {
         inflightAssetRequestsRef.current.delete(transfer.assetPath);
+        removePendingRequestedAsset(transfer.assetPath);
       }
     });
-  }, [failedTransfers]);
+  }, [failedTransfers, removePendingRequestedAsset]);
 
   /**
    * Listen for local Yjs document changes and queue for sync.
@@ -743,6 +887,9 @@ export function useWebRTCManual(doc: Y.Doc) {
     cancelTransfer,
     requestAsset,
     releaseAssetRequest,
+    pendingGeneratedAssets,
+    pendingRequestedAssets,
+    notifyAssetReady,
     broadcastNewBoard,
     incomingNewBoard,
     clearIncomingNewBoard,

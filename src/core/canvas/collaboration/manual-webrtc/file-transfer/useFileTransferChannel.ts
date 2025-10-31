@@ -33,6 +33,7 @@ import {
   FileCompleteMessage,
   FileErrorMessage,
   FileInitMessage,
+  FilePendingMessage,
   FileRequestMessage,
   FileResendMessage,
   FileTransfer,
@@ -44,6 +45,7 @@ import type { PendingChunkPacket } from "./sendQueue";
 
 const LOGGABLE_CONTROL_TYPES: FileTransferControlMessage["type"][] = [
   "file-request",
+  "file-pending",
   "file-init",
   "file-complete",
   "file-error",
@@ -53,6 +55,7 @@ interface UseFileTransferChannelParams {
   channelRef: MutableRefObject<RTCDataChannel | null>;
   channel?: RTCDataChannel | null;
   onFileRequest?: (message: FileRequestMessage) => void;
+  onAssetPending?: (message: FilePendingMessage) => void;
 }
 
 type SendFileOptions = {
@@ -83,6 +86,7 @@ export interface UseFileTransferChannelResult {
   failedTransfers: FileTransfer[];
   sendFile: (file: File, options?: SendFileOptions) => Promise<string | null>;
   requestFile: (payload: Omit<FileRequestMessage, "type">) => boolean;
+  sendFilePending: (assetPath: string) => boolean;
   cancelTransfer: (id: string) => void;
 }
 
@@ -90,6 +94,7 @@ export const useFileTransferChannel = ({
   channelRef,
   channel,
   onFileRequest,
+  onAssetPending,
 }: UseFileTransferChannelParams): UseFileTransferChannelResult => {
   const {
     activeTransfers,
@@ -516,6 +521,9 @@ export const useFileTransferChannel = ({
         case "file-request":
           onFileRequest?.(message);
           break;
+        case "file-pending":
+          onAssetPending?.(message);
+          break;
         default: {
           const neverType: never = message;
           void neverType;
@@ -528,6 +536,7 @@ export const useFileTransferChannel = ({
       handleErrorMessage,
       handleInitMessage,
       handleResendMessage,
+      onAssetPending,
       onFileRequest,
     ],
   );
@@ -807,6 +816,20 @@ export const useFileTransferChannel = ({
     [sendControlMessage],
   );
 
+  const sendFilePending = useCallback(
+    (assetPath: string) => {
+      if (!assetPath) {
+        return false;
+      }
+
+      return sendControlMessage({
+        type: "file-pending",
+        assetPath,
+      });
+    },
+    [sendControlMessage],
+  );
+
   useEffect(() => {
     return () => {
       outgoingTransfersRef.current.forEach((state) => {
@@ -822,6 +845,7 @@ export const useFileTransferChannel = ({
       failedTransfers,
       sendFile,
       requestFile,
+      sendFilePending,
       cancelTransfer,
     }),
     [
@@ -829,6 +853,7 @@ export const useFileTransferChannel = ({
       cancelTransfer,
       completedTransfers,
       failedTransfers,
+      sendFilePending,
       requestFile,
       sendFile,
     ],
