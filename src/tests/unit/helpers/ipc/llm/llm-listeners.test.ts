@@ -118,8 +118,26 @@ describe("addLlmEventListeners", () => {
       "Use cinematic lighting.",
     );
 
+    const placeholderCall = sendMock.mock.calls.find(
+      ([channel, message]) =>
+        channel === LLM_STREAM_CHUNK_CHANNEL &&
+        (message as { type?: string }).type === "image-placeholder",
+    );
+    expect(placeholderCall).toBeTruthy();
+    expect(placeholderCall?.[1]).toEqual({
+      requestId: payload.requestId,
+      type: "image-placeholder",
+      asset: {
+        path: "assets/ai-image.png",
+        uri: "pak://assets/ai-image.png",
+        fileName: "ai-image.png",
+      },
+    });
+
     const chunkCall = sendMock.mock.calls.find(
-      ([channel]) => channel === LLM_STREAM_CHUNK_CHANNEL,
+      ([channel, message]) =>
+        channel === LLM_STREAM_CHUNK_CHANNEL &&
+        (message as { type?: string }).type === "image",
     );
     expect(chunkCall).toBeTruthy();
     expect(chunkCall?.[1]).toEqual({

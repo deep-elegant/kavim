@@ -44,6 +44,7 @@ import AiNode, { aiNodeDrawable } from "./nodes/AINode";
 import ShapeNodeComponent, { shapeDrawable } from "./nodes/ShapeNode";
 import TextNodeComponent, { textDrawable } from "./nodes/TextNode";
 import ImageNode from "./nodes/ImageNode";
+import LlmFilePlaceholderNode from "./nodes/LlmFilePlaceholderNode";
 import YouTubeNode from "./nodes/YouTubeNode";
 import { type DrawableNode } from "./nodes/DrawableNode";
 import YouTubeEmbedDialog from "./components/YouTubeEmbedDialog"; // Dialog for embedding YouTube videos
@@ -121,6 +122,7 @@ const nodeTypes = {
   "shape-node": ShapeNodeComponent,
   "text-node": TextNodeComponent,
   "ai-node": AiNode,
+  "llm-file-placeholder": LlmFilePlaceholderNode,
   "image-node": ImageNode,
   "youtube-node": YouTubeNode,
 };
@@ -181,9 +183,8 @@ const CanvasInner = () => {
     failedTransfers,
     requestAsset: requestRemoteAsset,
     releaseAssetRequest: releaseRemoteAssetRequest,
-    pendingRequestedAssets,
-    notifyAssetReady,
   } = useWebRTC();
+  const isCollaborationActive = dataChannelState === "open";
 
   const selectionMode = useMemo(() => {
     return 'partial' as SelectionMode
@@ -388,14 +389,13 @@ const CanvasInner = () => {
     activeTransfers,
     completedTransfers,
     failedTransfers,
-    pendingRequestedAssets,
-    notifyAssetReady,
     pakAssets: {
       hasAsset: pakAssets.hasAsset,
       registerAssetAtPath: pakAssets.registerAssetAtPath,
       isReady: pakAssets.isReady,
       refreshAssets: pakAssets.refreshAssets,
     },
+    isCollaborationActive,
   });
 
   // Drawing tools toggle active state

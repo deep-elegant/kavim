@@ -260,8 +260,7 @@ export const addLlmEventListeners = () => {
           const genAI = new GoogleGenAI({ apiKey });
           const pak = ensureActivePak();
           const usedPaths = new Set(Object.keys(pak.files));
-          const persistImageChunk = (
-            base64Data: string,
+          const reserveImageAsset = (
             mimeType?: string,
             alt?: string,
           ) => {
@@ -272,19 +271,33 @@ export const addLlmEventListeners = () => {
               extensionHint,
             );
             const assetPath = reserveAssetPath(usedPaths, assetFileName);
-
-            upsertPakAsset({
+            usedPaths.add(assetPath);
+            const asset = {
               path: assetPath,
-              data: Buffer.from(base64Data, "base64"),
+              uri: buildPakUri(assetPath),
+              fileName: displayFileName,
+            } as const;
+
+            event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
+              requestId: payload.requestId,
+              type: "image-placeholder",
+              asset,
             });
 
             return {
-              asset: {
-                path: assetPath,
-                uri: buildPakUri(assetPath),
-                fileName: displayFileName,
-              },
+              asset,
               alt: trimmedAlt,
+              persist: (base64Data: string) => {
+                upsertPakAsset({
+                  path: assetPath,
+                  data: Buffer.from(base64Data, "base64"),
+                });
+
+                return {
+                  asset,
+                  alt: trimmedAlt,
+                } as const;
+              },
             } as const;
           };
 
@@ -308,11 +321,11 @@ export const addLlmEventListeners = () => {
               const altCandidate =
                 generatedImage.enhancedPrompt?.trim() || lastUserPrompt;
 
-              const { asset, alt } = persistImageChunk(
-                imageBytes,
+              const reservation = reserveImageAsset(
                 image?.mimeType,
                 altCandidate,
               );
+              const { asset, alt } = reservation.persist(imageBytes);
 
               event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
                 requestId: payload.requestId,
@@ -362,10 +375,12 @@ export const addLlmEventListeners = () => {
                 emittedImages.add(signature);
 
                 const alt = part.altText ?? part.text;
-                const { asset, alt: resolvedAlt } = persistImageChunk(
-                  inlineData.data,
+                const reservation = reserveImageAsset(
                   inlineData.mimeType,
                   alt,
+                );
+                const { asset, alt: resolvedAlt } = reservation.persist(
+                  inlineData.data,
                 );
 
                 event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {

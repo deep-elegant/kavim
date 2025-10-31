@@ -22,6 +22,7 @@ export const TRANSIENT_NODE_DATA_KEYS = new Set([
   "assetStatus",
   "assetError",
   "assetOrigin",
+  "owner",
 ]);
 
 /**

@@ -18,7 +18,12 @@ import { ContextMenuItem } from "@/components/ui/context-menu";
 
 import NodeInteractionOverlay from "./NodeInteractionOverlay";
 import { type DrawableNode } from "./DrawableNode";
-import { type ImageNodeType } from "./ImageNode";
+import {
+  IMAGE_NODE_MIN_HEIGHT,
+  IMAGE_NODE_MIN_WIDTH,
+  type ImageNodeType,
+} from "./ImageNode";
+import { type LlmFilePlaceholderNodeType } from "./LlmFilePlaceholderNode";
 import { MinimalTiptap } from "@/components/ui/minimal-tiptap";
 import { cn } from "@/utils/tailwind";
 import { useNodeAsEditor } from "@/helpers/useNodeAsEditor";
@@ -186,13 +191,13 @@ const STATUS_STYLES: Record<AiStatus, string> = {
  * - Supports creating "split" nodes for exploring multiple conversation branches
  */
 const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
-  const { setNodes, setEdges, getNodes, getEdges } = useCanvasData();
+  const { setNodes, setEdges, getNodes, getEdges, doc } = useCanvasData();
   const contentRef = useRef<HTMLDivElement>(null);
   const promptContainerRef = useRef<HTMLDivElement>(null);
   const promptMeasurementRef = useRef<HTMLDivElement>(null);
-  const processedImagePathsRef = useRef<Set<string>>(new Set());
+  const assetNodeIdRef = useRef<Map<string, string>>(new Map());
+  const imageAssetOrderRef = useRef<string[]>([]);
   const imageProcessingQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const nextImageOffsetRef = useRef(0);
   const {
     editor,
     isTyping,
@@ -522,12 +527,134 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
       try {
         if (isImageOnlyModel) {
-          processedImagePathsRef.current = new Set();
+          assetNodeIdRef.current = new Map();
+          imageAssetOrderRef.current = [];
           imageProcessingQueueRef.current = Promise.resolve();
-          nextImageOffsetRef.current = 0;
         }
 
-        const enqueueImageBlock = (block: {
+        const repositionGeneratedNodes = (nodes: Node[]): Node[] => {
+          const sourceNode = nodes.find(
+            (node): node is AiNodeType => node.id === id && node.type === "ai-node",
+          );
+
+          if (!sourceNode) {
+            return nodes;
+          }
+
+          const sourceWidth = Math.max(
+            MIN_WIDTH,
+            Number(sourceNode.style?.width ?? sourceNode.width ?? MIN_WIDTH),
+          );
+
+          let yOffset = 0;
+          const targetPositions = new Map<string, { x: number; y: number }>();
+
+          for (const assetPath of imageAssetOrderRef.current) {
+            const nodeId = assetNodeIdRef.current.get(assetPath);
+            if (!nodeId) {
+              continue;
+            }
+
+            const targetNode = nodes.find((node) => node.id === nodeId);
+            if (!targetNode) {
+              continue;
+            }
+
+            const height = Math.max(
+              IMAGE_NODE_MIN_HEIGHT,
+              Number(
+                targetNode.style?.height ??
+                  targetNode.height ??
+                  IMAGE_NODE_MIN_HEIGHT,
+              ),
+            );
+
+            targetPositions.set(nodeId, {
+              x: sourceNode.position.x + sourceWidth + NODE_HORIZONTAL_GAP,
+              y: sourceNode.position.y + yOffset,
+            });
+
+            yOffset += height + AI_IMAGE_VERTICAL_GAP;
+          }
+
+          if (targetPositions.size === 0) {
+            return nodes;
+          }
+
+          return nodes.map((node) => {
+            const newPosition = targetPositions.get(node.id);
+            if (!newPosition) {
+              return node;
+            }
+
+            if (
+              node.position.x === newPosition.x &&
+              node.position.y === newPosition.y
+            ) {
+              return node;
+            }
+
+            return {
+              ...node,
+              position: newPosition,
+            };
+          });
+        };
+
+        const handlePlaceholderBlock = (block: {
+          type: "image-placeholder";
+          asset: {
+            path: string;
+            uri: string;
+            fileName: string;
+          };
+        }) => {
+          if (!isImageOnlyModel) {
+            return;
+          }
+
+          if (assetNodeIdRef.current.has(block.asset.path)) {
+            return;
+          }
+
+          const nodeId = crypto.randomUUID();
+          assetNodeIdRef.current.set(block.asset.path, nodeId);
+          imageAssetOrderRef.current = [
+            ...imageAssetOrderRef.current,
+            block.asset.path,
+          ];
+
+          const owner = String(doc.clientID);
+
+          setNodes((nodes) => {
+            if (requestIdRef.current !== currentRequestId) {
+              return nodes;
+            }
+
+            const placeholderNode: LlmFilePlaceholderNodeType = {
+              id: nodeId,
+              type: "llm-file-placeholder",
+              position: { x: 0, y: 0 },
+              data: {
+                assetPath: block.asset.path,
+                fileName: block.asset.fileName,
+                owner,
+              },
+              width: IMAGE_NODE_MIN_WIDTH,
+              height: IMAGE_NODE_MIN_HEIGHT,
+              style: {
+                width: IMAGE_NODE_MIN_WIDTH,
+                height: IMAGE_NODE_MIN_HEIGHT,
+              },
+              selected: false,
+            };
+
+            const nextNodes = [...nodes, placeholderNode];
+            return repositionGeneratedNodes(nextNodes);
+          });
+        };
+
+        const handleImageBlock = (block: {
           type: "image";
           asset: {
             path: string;
@@ -540,11 +667,10 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
             return;
           }
 
-          if (processedImagePathsRef.current.has(block.asset.path)) {
+          const nodeId = assetNodeIdRef.current.get(block.asset.path);
+          if (!nodeId) {
             return;
           }
-
-          processedImagePathsRef.current.add(block.asset.path);
 
           const processImage = async () => {
             if (requestIdRef.current !== currentRequestId) {
@@ -559,78 +685,73 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                 return;
               }
 
-              const yOffset = nextImageOffsetRef.current;
-              nextImageOffsetRef.current += height + AI_IMAGE_VERTICAL_GAP;
-
-              const imageNodeId = crypto.randomUUID();
-
               setNodes((nodes) => {
                 if (requestIdRef.current !== currentRequestId) {
                   return nodes;
                 }
 
-                const sourceNode = nodes.find(
-                  (node): node is AiNodeType =>
-                    node.id === id && node.type === "ai-node",
-                );
+                const nextNodes = nodes.map((node) => {
+                  if (node.id !== nodeId) {
+                    return node;
+                  }
 
-                if (!sourceNode) {
-                  return nodes;
-                }
+                  const imageNode: ImageNodeType = {
+                    id: nodeId,
+                    type: "image-node",
+                    position: node.position,
+                    data: {
+                      src: block.asset.uri,
+                      alt: block.alt ?? undefined,
+                      fileName: block.asset.fileName,
+                      naturalWidth,
+                      naturalHeight,
+                      assetOrigin: "local",
+                    },
+                    width,
+                    height,
+                    style: { width, height },
+                    selected: false,
+                  };
 
-                const sourceWidth = Math.max(
-                  MIN_WIDTH,
-                  Number(sourceNode.style?.width ?? sourceNode.width ?? MIN_WIDTH),
-                );
+                  return imageNode;
+                });
 
-                const newNode: ImageNodeType = {
-                  id: imageNodeId,
-                  type: "image-node",
-                  position: {
-                    x: sourceNode.position.x + sourceWidth + NODE_HORIZONTAL_GAP,
-                    y: sourceNode.position.y + yOffset,
-                  },
-                  data: {
-                    src: block.asset.uri,
-                    alt: block.alt ?? undefined,
-                    fileName: block.asset.fileName,
-                    naturalWidth,
-                    naturalHeight,
-                    assetStatus: "generating",
-                    assetOrigin: "local",
-                  },
-                  width,
-                  height,
-                  style: { width, height },
-                  selected: false,
-                };
-
-                return [...nodes, newNode];
+                return repositionGeneratedNodes(nextNodes);
               });
 
               if (requestIdRef.current !== currentRequestId) {
                 return;
               }
 
-              setEdges((edges) => [
-                ...edges,
-                {
-                  id: crypto.randomUUID(),
-                  source: id,
-                  sourceHandle: "right-source",
-                  target: imageNodeId,
-                  targetHandle: "left-target",
-                  type: "editable",
-                  data: {
-                    ...createDefaultEditableEdgeData(),
-                    targetMarker: "arrow",
-                    metadata: {
-                      generatedByNodeId: id,
-                      generatedFromPrompt: promptText,
+              setEdges((edges) => {
+                const hasEdge = edges.some(
+                  (edge) => edge.source === id && edge.target === nodeId,
+                );
+
+                if (hasEdge) {
+                  return edges;
+                }
+
+                return [
+                  ...edges,
+                  {
+                    id: crypto.randomUUID(),
+                    source: id,
+                    sourceHandle: "right-source",
+                    target: nodeId,
+                    targetHandle: "left-target",
+                    type: "editable",
+                    data: {
+                      ...createDefaultEditableEdgeData(),
+                      targetMarker: "arrow",
+                      metadata: {
+                        generatedByNodeId: id,
+                        generatedFromPrompt: promptText,
+                      },
                     },
                   },
-                },
-              ]);
+                ];
+              });
             } catch (error) {
               console.error("Failed to process AI image chunk", error);
               toast.error("Failed to render AI image", {
@@ -642,13 +763,13 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
           imageProcessingQueueRef.current = imageProcessingQueueRef.current
             .then(() => processImage())
-              .catch((error) => {
-                console.error("Failed to process AI image chunk", error);
-                toast.error("Failed to render AI image", {
-                  description:
-                    error instanceof Error ? error.message : String(error),
-                });
+            .catch((error) => {
+              console.error("Failed to process AI image chunk", error);
+              toast.error("Failed to render AI image", {
+                description:
+                  error instanceof Error ? error.message : String(error),
               });
+            });
         };
 
         const messages = buildChatHistory(prompt);
@@ -663,17 +784,13 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
             }
 
             if (isImageOnlyModel) {
-              newBlocks
-                .filter(
-                  (
-                    block,
-                  ): block is {
-                    type: "image";
-                    asset: { path: string; uri: string; fileName: string };
-                    alt?: string;
-                  } => block.type === "image",
-                )
-                .forEach((block) => enqueueImageBlock(block));
+              for (const block of newBlocks) {
+                if (block.type === "image-placeholder") {
+                  handlePlaceholderBlock(block);
+                } else if (block.type === "image") {
+                  handleImageBlock(block);
+                }
+              }
               return;
             }
 

@@ -249,6 +249,14 @@ export const generateAiResult = async ({
         return;
       }
 
+      if (payload.type === "image-placeholder") {
+        onProgress?.({
+          aggregatedText: aggregatedResponse,
+          newBlocks: [payload],
+        });
+        return;
+      }
+
       if (payload.type === "image") {
         onProgress?.({
           aggregatedText: aggregatedResponse,

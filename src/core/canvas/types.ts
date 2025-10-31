@@ -3,6 +3,7 @@ import type { ShapeNode } from "./nodes/ShapeNode";
 import type { TextNode } from "./nodes/TextNode";
 import type { AiNodeType } from "./nodes/AINode";
 import type { ImageNodeType } from "./nodes/ImageNode";
+import type { LlmFilePlaceholderNodeType } from "./nodes/LlmFilePlaceholderNode";
 import type { YouTubeNodeType } from "./nodes/YouTubeNode"; // Type for YouTube video nodes
 
 export type ToolId =
@@ -19,5 +20,6 @@ export type CanvasNode =
   | ShapeNode
   | TextNode
   | AiNodeType
+  | LlmFilePlaceholderNodeType
   | ImageNodeType
   | YouTubeNodeType; // Represents a YouTube video node

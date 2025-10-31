@@ -223,12 +223,28 @@ describe("generateAiResult", () => {
 
     chunkListener({
       requestId: payload.requestId,
+      type: "image-placeholder",
+      asset: firstAsset,
+    });
+
+    expect(onProgress).toHaveBeenNthCalledWith(2, {
+      aggregatedText: "Hello",
+      newBlocks: [
+        {
+          type: "image-placeholder",
+          asset: firstAsset,
+        },
+      ],
+    });
+
+    chunkListener({
+      requestId: payload.requestId,
       type: "image",
       asset: firstAsset,
       alt: "a description",
     });
 
-    expect(onProgress).toHaveBeenNthCalledWith(2, {
+    expect(onProgress).toHaveBeenNthCalledWith(3, {
       aggregatedText: "Hello",
       newBlocks: [
         {
@@ -275,13 +291,30 @@ describe("generateAiResult", () => {
 
     chunkListener({
       requestId: payload.requestId,
+      type: "image-placeholder",
+      asset: secondAsset,
+    });
+
+    expect(onProgress).toHaveBeenCalledTimes(1);
+    expect(onProgress).toHaveBeenNthCalledWith(1, {
+      aggregatedText: "",
+      newBlocks: [
+        {
+          type: "image-placeholder",
+          asset: secondAsset,
+        },
+      ],
+    });
+
+    chunkListener({
+      requestId: payload.requestId,
       type: "image",
       asset: secondAsset,
       alt: "prompt alt",
     });
 
-    expect(onProgress).toHaveBeenCalledTimes(1);
-    expect(onProgress).toHaveBeenNthCalledWith(1, {
+    expect(onProgress).toHaveBeenCalledTimes(2);
+    expect(onProgress).toHaveBeenNthCalledWith(2, {
       aggregatedText: "",
       newBlocks: [
         {

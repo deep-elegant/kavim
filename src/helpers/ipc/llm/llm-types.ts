@@ -27,6 +27,7 @@ export type LlmImageAsset = {
 
 export type LlmChunkContent =
   | { type: "text"; delta: string }
+  | { type: "image-placeholder"; asset: LlmImageAsset }
   | { type: "image"; asset: LlmImageAsset; alt?: string };
 
 export type LlmChunkPayload = { requestId: string } & LlmChunkContent;
