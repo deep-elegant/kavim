@@ -161,19 +161,6 @@ const mergeSnapshotNodes = (
       snapshotData.result = existingData.result;
     }
 
-    if (existingData && "responseBlocks" in existingData) {
-      if (!snapshotData) {
-        return {
-          ...snapshotNode,
-          data: {
-            responseBlocks: existingData.responseBlocks,
-          } as Node["data"],
-        };
-      }
-
-      snapshotData.responseBlocks = existingData.responseBlocks;
-    }
-
     return {
       ...snapshotNode,
       data: snapshotData as Node["data"],

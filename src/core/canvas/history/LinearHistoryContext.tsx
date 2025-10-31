@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import type { Edge, Node } from "@xyflow/react";
 import { toast } from "sonner";
+import { marked } from "marked";
 
 import { useCanvasData } from "../CanvasDataContext";
 import { useCanvasUndoRedo } from "../undo";
@@ -16,19 +17,19 @@ import {
   createDefaultEditableEdgeData,
   type EditableEdgeData,
 } from "../edges/EditableEdge";
-import { getAiResponseBlocks, type AiNodeData } from "../nodes/AINode";
+import type { AiNodeData } from "../nodes/AINode";
 import type { TextNodeData } from "../nodes/TextNode";
 import type { StickyNoteData } from "../nodes/StickyNoteNode";
 import type { ShapeNodeData } from "../nodes/ShapeNode";
-import type { ImageNodeData } from "../nodes/ImageNode";
+import type { ImageNodeData, ImageNodeType } from "../nodes/ImageNode";
 import type { YouTubeNodeData } from "../nodes/YouTubeNode";
 import { formatTextualNodeSummary, htmlToPlainText } from "../utils/text";
-import type { AiModel } from "@/core/llm/aiModels";
+import { AI_MODELS, type AiModel } from "@/core/llm/aiModels";
 import { generateAiResult, type ChatMessage } from "@/core/llm/generateAiResult";
 import {
-  blocksFromLegacyResult,
-  blocksToPlainText,
-} from "@/core/llm/aiContentBlocks";
+  AI_IMAGE_VERTICAL_GAP,
+  computeImageDisplaySize,
+} from "../nodes/aiImageUtils";
 
 export type LinearHistoryItem = {
   id: string;
@@ -134,7 +135,10 @@ const summarizeNodeForHistory = (node: Node): LinearHistoryItem => {
     case "ai-node": {
       const data = (node.data as Partial<AiNodeData> | undefined) ?? {};
       const prompt = htmlToPlainText(data.label ?? "");
-      const response = blocksToPlainText(getAiResponseBlocks(data)).trim();
+      const responseMarkdown = data.result ?? "";
+      const responsePlainText = responseMarkdown
+        ? htmlToPlainText(marked.parse(responseMarkdown))
+        : "";
       const modelLabel = data.model ? `AI (${data.model})` : "AI Node";
 
       return {
@@ -143,7 +147,7 @@ const summarizeNodeForHistory = (node: Node): LinearHistoryItem => {
         title: modelLabel,
         summary: null,
         prompt: prompt || null,
-        response: response || null,
+        response: responsePlainText || null,
       } satisfies LinearHistoryItem;
     }
     case "text-node": {
@@ -259,6 +263,9 @@ export const LinearHistoryProvider = ({
     async ({ model, prompt }: { model: AiModel; prompt: string }) => {
       const activeNodeId = state.activeNodeId;
       const trimmedPrompt = prompt.trim();
+      const resolvedModel = AI_MODELS.find((option) => option.value === model);
+      const isImageOnlyModel =
+        resolvedModel?.capabilities?.output === "image";
 
       if (!activeNodeId || trimmedPrompt.length === 0) {
         return;
@@ -287,7 +294,7 @@ export const LinearHistoryProvider = ({
           : "";
       const sourceResponseText =
         sourceNode.type === "ai-node"
-          ? blocksToPlainText(getAiResponseBlocks(sourceNodeData)).trim()
+          ? (sourceNodeData?.result ?? "").trim()
           : "";
       // If the source node is an empty AI node, we can reuse it.
       const shouldReuseActive =
@@ -321,7 +328,6 @@ export const LinearHistoryProvider = ({
             model,
             status: "in-progress",
             result: "",
-            responseBlocks: [],
             isTyping: false,
           },
           width: AI_NODE_DEFAULT_WIDTH,
@@ -364,7 +370,6 @@ export const LinearHistoryProvider = ({
                     model,
                     status: "in-progress",
                     result: "",
-                    responseBlocks: [],
                     isTyping: false,
                   },
                   selected: true,
@@ -479,9 +484,10 @@ export const LinearHistoryProvider = ({
 
         const nodeData = node.data as AiNodeData | undefined;
         const promptText = htmlToPlainText(nodeData?.label ?? "");
-        const responseText = blocksToPlainText(
-          getAiResponseBlocks(nodeData),
-        ).trim();
+        const responseMarkdown = nodeData?.result ?? "";
+        const responseText = responseMarkdown
+          ? htmlToPlainText(marked.parse(responseMarkdown))
+          : "";
 
         if (promptText) {
           messages.push({ role: "user", content: promptText });
@@ -499,14 +505,186 @@ export const LinearHistoryProvider = ({
       requestIdRef.current = currentRequestId;
 
       try {
+        const processedImagePaths = new Set<string>();
+        let imageProcessingQueue: Promise<void> = Promise.resolve();
+        let nextImageOffset = 0;
+
+        const enqueueImageBlock = (block: {
+          type: "image";
+          asset: { path: string; uri: string; fileName: string };
+          alt?: string;
+        }) => {
+          if (!isImageOnlyModel) {
+            return;
+          }
+
+          if (processedImagePaths.has(block.asset.path)) {
+            return;
+          }
+
+          processedImagePaths.add(block.asset.path);
+
+          const processImage = async () => {
+            if (requestIdRef.current !== currentRequestId) {
+              return;
+            }
+
+            try {
+              const { width, height, naturalWidth, naturalHeight } =
+                await computeImageDisplaySize(block.asset.uri);
+
+              if (requestIdRef.current !== currentRequestId) {
+                return;
+              }
+
+              const yOffset = nextImageOffset;
+              nextImageOffset += height + AI_IMAGE_VERTICAL_GAP;
+
+              const imageNodeId = crypto.randomUUID();
+
+              setNodes((existing) => {
+                if (requestIdRef.current !== currentRequestId) {
+                  return existing;
+                }
+
+                const targetNode = existing.find(
+                  (node): node is Node<AiNodeData> =>
+                    node.id === targetNodeId && node.type === "ai-node",
+                );
+
+                if (!targetNode) {
+                  return existing;
+                }
+
+                const targetWidth = Math.max(
+                  AI_NODE_DEFAULT_WIDTH,
+                  Number(
+                    targetNode.style?.width ??
+                      targetNode.width ??
+                      AI_NODE_DEFAULT_WIDTH,
+                  ),
+                );
+
+                const newImageNode: ImageNodeType = {
+                  id: imageNodeId,
+                  type: "image-node",
+                  position: {
+                    x:
+                      targetNode.position.x +
+                      targetWidth +
+                      AI_NODE_HORIZONTAL_GAP,
+                    y: targetNode.position.y + yOffset,
+                  },
+                  data: {
+                    src: block.asset.uri,
+                    alt: block.alt ?? undefined,
+                    fileName: block.asset.fileName,
+                    naturalWidth,
+                    naturalHeight,
+                    assetStatus: "ready",
+                  },
+                  width,
+                  height,
+                  style: { width, height },
+                  selected: false,
+                };
+
+                return [...existing, newImageNode];
+              });
+
+              if (requestIdRef.current !== currentRequestId) {
+                return;
+              }
+
+              setEdges((existingEdges) => [
+                ...existingEdges,
+                {
+                  id: crypto.randomUUID(),
+                  source: targetNodeId,
+                  sourceHandle: "right-source",
+                  target: imageNodeId,
+                  targetHandle: "left-target",
+                  type: "editable",
+                  data: {
+                    ...createDefaultEditableEdgeData(),
+                    targetMarker: "arrow",
+                    metadata: {
+                      generatedByNodeId: targetNodeId,
+                      generatedFromPrompt: trimmedPrompt,
+                    },
+                  },
+                },
+              ]);
+            } catch (error) {
+              console.error("Failed to process AI image chunk", error);
+              toast.error("Failed to render AI image", {
+                description:
+                  error instanceof Error ? error.message : String(error),
+              });
+            }
+          };
+
+        imageProcessingQueue = imageProcessingQueue
+          .then(() => processImage())
+          .catch((error) => {
+            console.error("Failed to process AI image chunk", error);
+            toast.error("Failed to render AI image", {
+              description:
+                error instanceof Error ? error.message : String(error),
+            });
+          });
+        };
+
         // Generate the AI result.
         await generateAiResult({
           model,
           messages,
           minimumUpdateIntervalMs: 50,
+          onProgress: ({ aggregatedText, newBlocks }) => {
+            if (requestIdRef.current !== currentRequestId) {
+              return;
+            }
+
+            if (isImageOnlyModel) {
+              newBlocks
+                .filter(
+                  (
+                    block,
+                  ): block is {
+                    type: "image";
+                    asset: { path: string; uri: string; fileName: string };
+                    alt?: string;
+                  } => block.type === "image",
+                )
+                .forEach((block) => enqueueImageBlock(block));
+              return;
+            }
+
+            setNodes((existing) =>
+              existing.map((node) => {
+                if (node.id !== targetNodeId || node.type !== "ai-node") {
+                  return node;
+                }
+
+                const nodeData = node.data as AiNodeData;
+
+                return {
+                  ...node,
+                  data: {
+                    ...nodeData,
+                    result: aggregatedText,
+                  },
+                };
+              }),
+            );
+          },
           onUpdate: (fullResponse) => {
             // If the request ID has changed, it means a new request has been sent, so we should ignore this update.
             if (requestIdRef.current !== currentRequestId) {
+              return;
+            }
+
+            if (isImageOnlyModel) {
               return;
             }
 
@@ -524,7 +702,6 @@ export const LinearHistoryProvider = ({
                   data: {
                     ...nodeData,
                     result: fullResponse,
-                    responseBlocks: blocksFromLegacyResult(fullResponse),
                   },
                 };
               }),
@@ -581,7 +758,6 @@ export const LinearHistoryProvider = ({
                   ...nodeData,
                   status: "done",
                   result: fallbackMessage,
-                  responseBlocks: blocksFromLegacyResult(fallbackMessage),
                 },
               };
             }),

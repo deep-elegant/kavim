@@ -3,11 +3,7 @@ import type { Node } from "@xyflow/react";
 import type { TextNodeData } from "../nodes/TextNode";
 import type { StickyNoteData } from "../nodes/StickyNoteNode";
 import type { ShapeNodeData } from "../nodes/ShapeNode";
-import type { AiContentBlock } from "@/core/llm/aiContentBlocks";
-import {
-  blocksFromLegacyResult,
-  blocksToPlainText,
-} from "@/core/llm/aiContentBlocks";
+import { marked } from "marked";
 
 /**
  * Strips HTML tags from a string to produce readable plain text.
@@ -30,16 +26,11 @@ const TEXTUAL_NODE_TYPES = new Set(["text-node", "sticky-note", "shape-node"]);
  */
 export const formatTextualNodeSummary = (node: Node): string | null => {
   if (node.type === "ai-node") {
-    const data =
-      (node.data as
-        | {
-            responseBlocks?: AiContentBlock[];
-            result?: string;
-          }
-        | undefined) ?? {};
-    const responseText = blocksToPlainText(
-      data.responseBlocks ?? blocksFromLegacyResult(data.result),
-    ).trim();
+    const data = (node.data as { result?: string } | undefined) ?? {};
+    const responseMarkdown = data.result ?? "";
+    const responseText = responseMarkdown
+      ? htmlToPlainText(marked.parse(responseMarkdown))
+      : "";
 
     return responseText || null;
   }

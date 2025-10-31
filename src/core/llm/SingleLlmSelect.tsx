@@ -69,11 +69,19 @@ export const SingleLlmSelect = ({
     [refreshState],
   );
 
-  const { unrestricted, restricted } = React.useMemo(() => {
+  const { imageGenerators, unrestricted, restricted } = React.useMemo(() => {
+    const imageGeneratorEntries: AvailabilityEntry[] = [];
     const unrestrictedEntries: AvailabilityEntry[] = [];
     const restrictedEntries: AvailabilityEntry[] = [];
 
     for (const entry of availability) {
+      const capability = entry.model.capabilities?.output ?? "text";
+
+      if (capability === "image") {
+        imageGeneratorEntries.push(entry);
+        continue;
+      }
+
       if (entry.model.requiresOrganizationVerification) {
         restrictedEntries.push(entry);
       } else {
@@ -82,6 +90,7 @@ export const SingleLlmSelect = ({
     }
 
     return {
+      imageGenerators: reorderByAvailability(imageGeneratorEntries),
       unrestricted: reorderByAvailability(unrestrictedEntries),
       restricted: reorderByAvailability(restrictedEntries),
     };
@@ -128,11 +137,22 @@ export const SingleLlmSelect = ({
         </SelectTrigger>
       </FormControl>
       <SelectContent>
+        {imageGenerators.length > 0 ? (
+          <>
+            <SelectGroup>
+              <SelectLabel>Image Generator</SelectLabel>
+              {imageGenerators.map(renderOption)}
+            </SelectGroup>
+            {(unrestricted.length > 0 || restricted.length > 0) && (
+              <SelectSeparator />
+            )}
+          </>
+        ) : null}
         {unrestricted.map(renderOption)}
         {/* Visually separate restricted models to set clear expectations */}
         {restricted.length > 0 && (
           <>
-            <SelectSeparator />
+            {unrestricted.length > 0 && <SelectSeparator />}
             <SelectGroup>
               <SelectLabel>Requires organization verification</SelectLabel>
               {restricted.map(renderOption)}

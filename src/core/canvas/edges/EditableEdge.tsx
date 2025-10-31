@@ -40,6 +40,10 @@ export type EditableEdgeData = {
   targetMarker?: EdgeMarkerType;
   styleType?: EdgeLineStyle;
   color?: string;
+  metadata?: {
+    generatedByNodeId?: string;
+    generatedFromPrompt?: string;
+  };
 };
 
 type EditableEdgeProps = EdgeProps<EditableEdgeData>;
@@ -68,6 +72,7 @@ export const createDefaultEditableEdgeData = (): EditableEdgeData => ({
   targetMarker: DEFAULT_TARGET_MARKER,
   styleType: DEFAULT_STYLE_TYPE,
   color: DEFAULT_STROKE,
+  metadata: undefined,
 });
 
 /** Euclidean distance between two points */

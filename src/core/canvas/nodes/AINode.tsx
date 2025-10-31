@@ -11,13 +11,14 @@ import { type NodeProps, type Node, type Edge } from "@xyflow/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Split } from "lucide-react";
+import { Copy, Split } from "lucide-react";
 import { marked } from "marked";
 import { toast } from "sonner";
 import { ContextMenuItem } from "@/components/ui/context-menu";
 
 import NodeInteractionOverlay from "./NodeInteractionOverlay";
 import { type DrawableNode } from "./DrawableNode";
+import { type ImageNodeType } from "./ImageNode";
 import { MinimalTiptap } from "@/components/ui/minimal-tiptap";
 import { cn } from "@/utils/tailwind";
 import { useNodeAsEditor } from "@/helpers/useNodeAsEditor";
@@ -41,10 +42,9 @@ import { createDefaultEditableEdgeData } from "../edges/EditableEdge";
 import { useCanvasData } from "../CanvasDataContext";
 import { formatTextualNodeSummary, htmlToPlainText } from "../utils/text";
 import {
-  type AiContentBlock,
-  blocksFromLegacyResult,
-  blocksToPlainText,
-} from "@/core/llm/aiContentBlocks";
+  AI_IMAGE_VERTICAL_GAP,
+  computeImageDisplaySize,
+} from "./aiImageUtils";
 
 export type AiStatus = "not-started" | "in-progress" | "done";
 
@@ -55,18 +55,7 @@ export type AiNodeData = {
   model?: AiModel;
   status?: AiStatus;
   result?: string; // AI-generated response
-  responseBlocks?: AiContentBlock[];
   fontSize?: FontSizeSetting;
-};
-
-export const getAiResponseBlocks = (
-  data: Pick<AiNodeData, "responseBlocks" | "result"> | undefined,
-): AiContentBlock[] => {
-  if (!data) {
-    return [];
-  }
-
-  return data.responseBlocks ?? blocksFromLegacyResult(data.result);
 };
 
 export type AiNodeType = Node<AiNodeData, "ai-node">;
@@ -112,15 +101,14 @@ export const aiNodeDrawable: DrawableNode<AiNodeType> = {
     id,
     type: "ai-node",
     position,
-    data: {
-      label: "",
-      isTyping: false,
-      model: "deepseek",
-      status: "not-started",
-      result: "",
-      responseBlocks: [],
-      fontSize: "auto",
-    },
+      data: {
+        label: "",
+        isTyping: false,
+        model: "deepseek",
+        status: "not-started",
+        result: "",
+        fontSize: "auto",
+      },
     width: MIN_WIDTH,
     height: MIN_HEIGHT,
     style: { width: MIN_WIDTH, height: MIN_HEIGHT },
@@ -202,6 +190,9 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const promptContainerRef = useRef<HTMLDivElement>(null);
   const promptMeasurementRef = useRef<HTMLDivElement>(null);
+  const processedImagePathsRef = useRef<Set<string>>(new Set());
+  const imageProcessingQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const nextImageOffsetRef = useRef(0);
   const {
     editor,
     isTyping,
@@ -216,18 +207,37 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     data,
   });
   const model = data.model ?? "deepseek";
-  const modelLabel = useMemo(
-    () => AI_MODELS.find((option) => option.value === model)?.label ?? model,
+  const resolvedModel = useMemo(
+    () => AI_MODELS.find((option) => option.value === model),
     [model],
   );
+  const modelLabel = resolvedModel?.label ?? model;
+  const isImageOnlyModel =
+    resolvedModel?.capabilities?.output === "image";
   const status = data.status ?? "not-started";
-  const responseBlocks = getAiResponseBlocks(data);
-  const markdownSegments = responseBlocks
-    .map((block) => (block.type === "markdown" ? block.markdown : ""))
-    .filter((segment) => segment.length > 0);
-  const responseMarkdown = markdownSegments.join("\n\n");
-  const resultMarkdown = responseMarkdown || (data.result ?? "");
-  const responsePlainText = blocksToPlainText(responseBlocks);
+  const resultMarkdown = data.result ?? "";
+  const resultHtml = useMemo(
+    () => marked.parse(resultMarkdown || ""),
+    [resultMarkdown],
+  );
+  const resultPlainText = useMemo(
+    () => htmlToPlainText(resultHtml),
+    [resultHtml],
+  );
+  const hasTextResponse = resultPlainText.trim().length > 0;
+  const imageOnlyResultText = resultMarkdown.trim();
+  const imageOnlyHasErrorText = isImageOnlyModel && imageOnlyResultText.length > 0;
+  const imageOnlyStatusText =
+    status === "done"
+      ? "Generated images have been added to the canvas."
+      : "Generating images…";
+  const responseResizeSignature = useMemo(() => {
+    if (isImageOnlyModel) {
+      return `image-only-${status}`;
+    }
+
+    return resultMarkdown;
+  }, [isImageOnlyModel, resultMarkdown, status]);
   const label = data.label ?? "";
 
   const promptHasContent = useMemo(
@@ -319,9 +329,10 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
         const nodeData = node.data as AiNodeData | undefined;
         const promptText = htmlToPlainText(nodeData?.label ?? "");
-        const resultText = blocksToPlainText(
-          getAiResponseBlocks(nodeData),
-        ).trim();
+        const resultMarkdown = nodeData?.result ?? "";
+        const resultText = resultMarkdown
+          ? htmlToPlainText(marked.parse(resultMarkdown))
+          : "";
 
         // Add this node's messages (user prompt, then assistant response)
         const messages: ChatMessage[] = [];
@@ -404,7 +415,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       model: currentNodeData?.model ?? model, // Inherit model choice
       status: "not-started",
       result: "",
-      responseBlocks: [],
     };
 
     setNodes((existing) => {
@@ -498,7 +508,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
         updateNodeData({
           status: "not-started",
           result: "",
-          responseBlocks: [],
         });
         return;
       }
@@ -509,32 +518,204 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       updateNodeData({
         status: "in-progress",
         result: "",
-        responseBlocks: [],
       });
 
       try {
+        if (isImageOnlyModel) {
+          processedImagePathsRef.current = new Set();
+          imageProcessingQueueRef.current = Promise.resolve();
+          nextImageOffsetRef.current = 0;
+        }
+
+        const enqueueImageBlock = (block: {
+          type: "image";
+          asset: {
+            path: string;
+            uri: string;
+            fileName: string;
+          };
+          alt?: string;
+        }) => {
+          if (!isImageOnlyModel) {
+            return;
+          }
+
+          if (processedImagePathsRef.current.has(block.asset.path)) {
+            return;
+          }
+
+          processedImagePathsRef.current.add(block.asset.path);
+
+          const processImage = async () => {
+            if (requestIdRef.current !== currentRequestId) {
+              return;
+            }
+
+            try {
+              const { width, height, naturalWidth, naturalHeight } =
+                await computeImageDisplaySize(block.asset.uri);
+
+              if (requestIdRef.current !== currentRequestId) {
+                return;
+              }
+
+              const yOffset = nextImageOffsetRef.current;
+              nextImageOffsetRef.current += height + AI_IMAGE_VERTICAL_GAP;
+
+              const imageNodeId = crypto.randomUUID();
+
+              setNodes((nodes) => {
+                if (requestIdRef.current !== currentRequestId) {
+                  return nodes;
+                }
+
+                const sourceNode = nodes.find(
+                  (node): node is AiNodeType =>
+                    node.id === id && node.type === "ai-node",
+                );
+
+                if (!sourceNode) {
+                  return nodes;
+                }
+
+                const sourceWidth = Math.max(
+                  MIN_WIDTH,
+                  Number(sourceNode.style?.width ?? sourceNode.width ?? MIN_WIDTH),
+                );
+
+                const newNode: ImageNodeType = {
+                  id: imageNodeId,
+                  type: "image-node",
+                  position: {
+                    x: sourceNode.position.x + sourceWidth + NODE_HORIZONTAL_GAP,
+                    y: sourceNode.position.y + yOffset,
+                  },
+                  data: {
+                    src: block.asset.uri,
+                    alt: block.alt ?? undefined,
+                    fileName: block.asset.fileName,
+                    naturalWidth,
+                    naturalHeight,
+                    assetStatus: "ready",
+                  },
+                  width,
+                  height,
+                  style: { width, height },
+                  selected: false,
+                };
+
+                return [...nodes, newNode];
+              });
+
+              if (requestIdRef.current !== currentRequestId) {
+                return;
+              }
+
+              setEdges((edges) => [
+                ...edges,
+                {
+                  id: crypto.randomUUID(),
+                  source: id,
+                  sourceHandle: "right-source",
+                  target: imageNodeId,
+                  targetHandle: "left-target",
+                  type: "editable",
+                  data: {
+                    ...createDefaultEditableEdgeData(),
+                    targetMarker: "arrow",
+                    metadata: {
+                      generatedByNodeId: id,
+                      generatedFromPrompt: promptText,
+                    },
+                  },
+                },
+              ]);
+            } catch (error) {
+              console.error("Failed to process AI image chunk", error);
+              toast.error("Failed to render AI image", {
+                description:
+                  error instanceof Error ? error.message : String(error),
+              });
+            }
+          };
+
+          imageProcessingQueueRef.current = imageProcessingQueueRef.current
+            .then(() => processImage())
+              .catch((error) => {
+                console.error("Failed to process AI image chunk", error);
+                toast.error("Failed to render AI image", {
+                  description:
+                    error instanceof Error ? error.message : String(error),
+                });
+              });
+        };
+
         const messages = buildChatHistory(prompt);
 
         await generateAiResult({
           model,
           messages,
           minimumUpdateIntervalMs: 50,
+          onProgress: ({ aggregatedText, newBlocks }) => {
+            if (requestIdRef.current !== currentRequestId) {
+              return;
+            }
+
+            if (isImageOnlyModel) {
+              newBlocks
+                .filter(
+                  (
+                    block,
+                  ): block is {
+                    type: "image";
+                    asset: { path: string; uri: string; fileName: string };
+                    alt?: string;
+                  } => block.type === "image",
+                )
+                .forEach((block) => enqueueImageBlock(block));
+              return;
+            }
+
+            setNodes((nodes) =>
+              nodes.map((n) => {
+                if (n.id !== id) {
+                  return n;
+                }
+
+                const nodeData = n.data as AiNodeData;
+
+                return {
+                  ...n,
+                  data: {
+                    ...nodeData,
+                    result: aggregatedText,
+                  },
+                } satisfies AiNodeType;
+              }),
+            );
+          },
           onUpdate: (fullResponse) => {
             // Only update if this is still the current request (user hasn't changed prompt)
             if (requestIdRef.current === currentRequestId) {
+              if (isImageOnlyModel) {
+                return;
+              }
+
               setNodes((nodes) =>
                 nodes.map((n) => {
-                  if (n.id === id) {
-                    return {
-                      ...n,
-                      data: {
-                        ...n.data,
-                        result: fullResponse,
-                        responseBlocks: blocksFromLegacyResult(fullResponse),
-                      },
-                    };
+                  if (n.id !== id) {
+                    return n;
                   }
-                  return n;
+
+                  const nodeData = n.data as AiNodeData;
+
+                  return {
+                    ...n,
+                    data: {
+                      ...nodeData,
+                      result: fullResponse,
+                    },
+                  } satisfies AiNodeType;
                 }),
               );
             }
@@ -558,15 +739,21 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
             status: "done",
             result:
               "Unable to generate a response. Please verify your API configuration and try again.",
-            responseBlocks: blocksFromLegacyResult(
-              "Unable to generate a response. Please verify your API configuration and try again.",
-            ),
           });
           lastPromptRef.current = prompt;
         }
       }
     },
-    [buildChatHistory, id, model, modelLabel, setNodes, updateNodeData],
+    [
+      buildChatHistory,
+      id,
+      isImageOnlyModel,
+      model,
+      modelLabel,
+      setEdges,
+      setNodes,
+      updateNodeData,
+    ],
   );
 
   // Auto-run prompt when user finishes typing (detects typing -> not typing transition)
@@ -582,7 +769,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
   // Auto-expand node height when response content grows beyond current height
   useEffect(() => {
-    if (!contentRef.current) {
+    if (isImageOnlyModel || !contentRef.current) {
       return;
     }
 
@@ -608,20 +795,11 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       }
       return nodes;
     });
-  }, [id, resultMarkdown, setNodes]);
+  }, [id, isImageOnlyModel, responseResizeSignature, setNodes]);
 
-  // Convert markdown response to HTML for display
-  const resultHtml = useMemo(() => {
-    const response = marked.parse(resultMarkdown || "");
-    return response;
-  }, [resultMarkdown]);
+  const handleCopyTextResponse = useCallback(async () => {
+    const contentToCopy = resultMarkdown || resultPlainText;
 
-  /**
-   * Copies the AI-generated response to the clipboard.
-   * Displays a toast notification to confirm success or failure.
-   */
-  const handleCopyAiResponse = useCallback(async () => {
-    const contentToCopy = resultMarkdown || responsePlainText;
     if (!contentToCopy) {
       toast.info("No AI response to copy yet.");
       return;
@@ -639,7 +817,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       console.error("Failed to copy AI response", error);
       toast.error("Failed to copy AI response.");
     }
-  }, [responsePlainText, resultMarkdown]);
+  }, [resultMarkdown, resultPlainText]);
 
   /**
    * Custom blur handler to prevent exiting edit mode when interacting with:
@@ -699,9 +877,13 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       className="text-slate-900"
       editor={editor}
       contextMenuItems={
-        <ContextMenuItem onSelect={() => void handleCopyAiResponse()}>
-          Copy AI Response
-        </ContextMenuItem>
+        isImageOnlyModel || !hasTextResponse
+          ? undefined
+          : (
+              <ContextMenuItem onSelect={() => void handleCopyTextResponse()}>
+                Copy AI Response
+              </ContextMenuItem>
+            )
       }
     >
       <button
@@ -825,10 +1007,28 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
               <div
                 className={cn(
                   "min-h-[120px] w-full rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm",
-                  resultMarkdown ? "text-slate-900" : "text-slate-500",
+                  hasTextResponse ? "text-slate-900" : "text-slate-500",
                 )}
               >
-                <div dangerouslySetInnerHTML={{ __html: resultHtml }} />
+                {isImageOnlyModel ? (
+                  <p
+                    className={cn(
+                      "text-sm",
+                      imageOnlyHasErrorText ? "text-destructive" : "text-slate-500",
+                    )}
+                  >
+                    {imageOnlyHasErrorText
+                      ? imageOnlyResultText
+                      : imageOnlyStatusText}
+                  </p>
+                ) : hasTextResponse ? (
+                  <div
+                    className="prose prose-sm max-w-none text-slate-900"
+                    dangerouslySetInnerHTML={{ __html: resultHtml }}
+                  />
+                ) : (
+                  <p className="text-sm text-slate-500">No AI response yet.</p>
+                )}
               </div>
             </div>
           </div>

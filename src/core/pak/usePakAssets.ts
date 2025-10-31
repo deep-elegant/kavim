@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Buffer } from "buffer";
 
+import {
+  buildPakUri,
+  ensureAssetFileMetadata,
+  reserveAssetPath,
+} from "./assetPaths";
+
 export type PakAssetRegistration = {
   /** Internal pak-relative path (e.g., assets/image.png) */
   path: string;
@@ -16,51 +22,11 @@ type RegisterBytesOptions = {
   mimeType?: string;
 };
 
-const DEFAULT_FILE_NAME = "image";
-const DEFAULT_EXTENSION = "png";
-
-const stripDirectories = (value: string) => {
-  const segments = value.split(/[\\/]/);
-  return segments[segments.length - 1] ?? value;
-};
-
-const sanitizeBaseName = (base: string) =>
-  base
-    .replace(/[^a-zA-Z0-9]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .toLowerCase();
-
-const ensureFileMetadata = (fileName?: string, extensionHint?: string) => {
-  const extracted = fileName ? stripDirectories(fileName.trim()) : "";
-  const lastDotIndex = extracted.lastIndexOf(".");
-  const basePart =
-    lastDotIndex > 0 ? extracted.slice(0, lastDotIndex) : extracted;
-  const extensionPart =
-    lastDotIndex > 0 ? extracted.slice(lastDotIndex + 1) : "";
-  const extension = (extensionPart || extensionHint || DEFAULT_EXTENSION)
-    .replace(/^\./, "")
-    .toLowerCase();
-  const sanitizedBase = sanitizeBaseName(basePart);
-  const base = sanitizedBase || DEFAULT_FILE_NAME;
-  const assetFileName = `${base}.${extension}`;
-  const displayFileName = extracted || `${DEFAULT_FILE_NAME}.${extension}`;
-
-  return {
-    assetFileName,
-    base,
-    extension,
-    displayFileName,
-  };
-};
-
 const toUint8Array = (input: ArrayBuffer | Uint8Array) =>
   input instanceof Uint8Array ? new Uint8Array(input) : new Uint8Array(input);
 
 const base64ToUint8Array = (base64: string) =>
   new Uint8Array(Buffer.from(base64, "base64"));
-
-const buildPakUri = (assetPath: string) => `pak://${assetPath}`;
 
 export const usePakAssets = () => {
   const usedPathsRef = useRef<Set<string>>(new Set());
@@ -117,31 +83,6 @@ export const usePakAssets = () => {
     };
   }, [ensureInitialized]);
 
-  const reserveAssetPath = useCallback((assetFileName: string) => {
-    const usedPaths = usedPathsRef.current;
-
-    const lastDotIndex = assetFileName.lastIndexOf(".");
-    const base =
-      lastDotIndex >= 0 ? assetFileName.slice(0, lastDotIndex) : assetFileName;
-    const extension =
-      lastDotIndex >= 0
-        ? assetFileName.slice(lastDotIndex + 1)
-        : DEFAULT_EXTENSION;
-
-    let counter = 0;
-    while (true) {
-      const suffix = counter === 0 ? "" : `-${counter}`;
-      const candidateFileName = `${base}${suffix}.${extension}`;
-      const candidatePath = `assets/${candidateFileName}`;
-      if (!usedPaths.has(candidatePath)) {
-        usedPaths.add(candidatePath);
-        return candidatePath;
-      }
-
-      counter += 1;
-    }
-  }, []);
-
   const registerAssetFromBytes = useCallback(
     async (
       input: ArrayBuffer | Uint8Array,
@@ -152,11 +93,14 @@ export const usePakAssets = () => {
       const bytes = toUint8Array(input);
       const extensionHint =
         options?.extension ?? options?.mimeType?.split("/")?.[1];
-      const { assetFileName, displayFileName } = ensureFileMetadata(
+      const { assetFileName, displayFileName } = ensureAssetFileMetadata(
         options?.fileName,
         extensionHint,
       );
-      const reservedPath = reserveAssetPath(assetFileName);
+      const reservedPath = reserveAssetPath(
+        usedPathsRef.current,
+        assetFileName,
+      );
 
       try {
         await window.projectPak.addAsset({ path: reservedPath, data: bytes });
@@ -173,7 +117,7 @@ export const usePakAssets = () => {
       };
       return registration;
     },
-    [ensureInitialized, reserveAssetPath],
+    [ensureInitialized],
   );
 
   const registerAssetFromFilePath = useCallback(

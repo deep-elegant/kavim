@@ -1,3 +1,4 @@
+import { Buffer } from "buffer";
 import { ipcMain } from "electron";
 import { ChatOpenAI } from "@langchain/openai";
 import { GoogleGenAI } from "@google/genai";
@@ -17,6 +18,79 @@ import {
   LLM_STREAM_ERROR_CHANNEL,
 } from "./llm-channels";
 import type { LlmStreamRequestPayload } from "./llm-types";
+import { ensureActivePak, upsertPakAsset } from "@/core/pak/pak-manager";
+import {
+  buildPakUri,
+  ensureAssetFileMetadata,
+  reserveAssetPath,
+} from "@/core/pak/assetPaths";
+
+type GeminiInlineData = {
+  mimeType?: string;
+  data?: string;
+};
+
+type GeminiInlineDataPart = {
+  inlineData: GeminiInlineData;
+  altText?: string;
+  text?: string;
+};
+
+type GeminiCandidate = {
+  content?: {
+    parts?: unknown[];
+  };
+};
+
+const isGeminiInlineDataPart = (value: unknown): value is GeminiInlineDataPart => {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const inlineData = (value as { inlineData?: GeminiInlineData }).inlineData;
+
+  return (
+    !!inlineData &&
+    typeof inlineData === "object" &&
+    typeof inlineData.data === "string" &&
+    inlineData.data.length > 0
+  );
+};
+
+const extractGeminiInlineImages = (chunk: unknown): GeminiInlineDataPart[] => {
+  if (!chunk || typeof chunk !== "object") {
+    return [];
+  }
+
+  const candidates = (chunk as { candidates?: unknown[] }).candidates;
+
+  if (!Array.isArray(candidates)) {
+    return [];
+  }
+
+  const inlineParts: GeminiInlineDataPart[] = [];
+
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== "object") {
+      continue;
+    }
+
+    const content = (candidate as GeminiCandidate).content;
+    const parts = content?.parts;
+
+    if (!Array.isArray(parts)) {
+      continue;
+    }
+
+    for (const part of parts) {
+      if (isGeminiInlineDataPart(part)) {
+        inlineParts.push(part);
+      }
+    }
+  }
+
+  return inlineParts;
+};
 
 const extractMessageContent = (message: AIMessage | AIMessageChunk): string => {
   const { content } = message;
@@ -98,6 +172,41 @@ const buildGeminiRequest = (
   return { contents, systemInstruction };
 };
 
+const buildGeminiImagePrompt = (
+  messages: LlmStreamRequestPayload["messages"],
+) => {
+  const systemSegments: string[] = [];
+  const userSegments: string[] = [];
+  let lastUserPrompt: string | undefined;
+
+  for (const message of messages) {
+    const trimmed = message.content.trim();
+
+    if (!trimmed) {
+      continue;
+    }
+
+    if (message.role === "system") {
+      systemSegments.push(trimmed);
+      continue;
+    }
+
+    if (message.role === "user") {
+      userSegments.push(trimmed);
+      lastUserPrompt = trimmed;
+    }
+  }
+
+  if (userSegments.length === 0) {
+    throw new Error("Image generation requires at least one user prompt");
+  }
+
+  return {
+    prompt: [...systemSegments, ...userSegments].join("\n\n"),
+    lastUserPrompt,
+  };
+};
+
 const createOpenAiChatClient = (payload: LlmStreamRequestPayload) => {
   const { provider, apiKey, modelName, baseURL, headers } = payload;
 
@@ -149,27 +258,127 @@ export const addLlmEventListeners = () => {
           }
 
           const genAI = new GoogleGenAI({ apiKey });
-          const { contents, systemInstruction } = buildGeminiRequest(messages);
-          const response = await genAI.models.generateContentStream({
-            model: modelName,
-            contents,
-            ...(systemInstruction ? { systemInstruction } : {}),
-          });
+          const pak = ensureActivePak();
+          const usedPaths = new Set(Object.keys(pak.files));
+          const persistImageChunk = (
+            base64Data: string,
+            mimeType?: string,
+            alt?: string,
+          ) => {
+            const trimmedAlt = alt?.trim() || undefined;
+            const extensionHint = mimeType?.split("/")?.[1];
+            const { assetFileName, displayFileName } = ensureAssetFileMetadata(
+              trimmedAlt,
+              extensionHint,
+            );
+            const assetPath = reserveAssetPath(usedPaths, assetFileName);
 
-          for await (const chunk of response) {
-            const chunkText = chunk.text;
+            upsertPakAsset({
+              path: assetPath,
+              data: Buffer.from(base64Data, "base64"),
+            });
 
-            if (!chunkText) {
-              continue;
+            return {
+              asset: {
+                path: assetPath,
+                uri: buildPakUri(assetPath),
+                fileName: displayFileName,
+              },
+              alt: trimmedAlt,
+            } as const;
+          };
+
+          if (payload.capabilities.output === "image") {
+            const { prompt, lastUserPrompt } = buildGeminiImagePrompt(messages);
+            const response = await genAI.models.generateImages({
+              model: modelName,
+              prompt,
+            });
+
+            const generatedImages = response.generatedImages ?? [];
+
+            for (const generatedImage of generatedImages) {
+              const image = generatedImage.image;
+              const imageBytes = image?.imageBytes;
+
+              if (!imageBytes) {
+                continue;
+              }
+
+              const altCandidate =
+                generatedImage.enhancedPrompt?.trim() || lastUserPrompt;
+
+              const { asset, alt } = persistImageChunk(
+                imageBytes,
+                image?.mimeType,
+                altCandidate,
+              );
+
+              event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
+                requestId: payload.requestId,
+                type: "image",
+                asset,
+                ...(alt ? { alt } : {}),
+              });
+            }
+          } else {
+            const { contents, systemInstruction } =
+              buildGeminiRequest(messages);
+            const response = await genAI.models.generateContentStream({
+              model: modelName,
+              contents,
+              ...(systemInstruction ? { systemInstruction } : {}),
+            });
+
+            const supportsImageOutput =
+              payload.capabilities.output === "text+image";
+            const emittedImages = new Set<string>();
+
+            for await (const chunk of response) {
+              const chunkText = chunk.text;
+
+              if (chunkText) {
+                event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
+                  requestId: payload.requestId,
+                  type: "text",
+                  delta: chunkText,
+                });
+              }
+
+              if (!supportsImageOutput) {
+                continue;
+              }
+
+              const imageParts = extractGeminiInlineImages(chunk);
+
+              for (const part of imageParts) {
+                const inlineData = part.inlineData;
+                const signature = inlineData.data;
+
+                if (!signature || emittedImages.has(signature)) {
+                  continue;
+                }
+
+                emittedImages.add(signature);
+
+                const alt = part.altText ?? part.text;
+                const { asset, alt: resolvedAlt } = persistImageChunk(
+                  inlineData.data,
+                  inlineData.mimeType,
+                  alt,
+                );
+
+                event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
+                  requestId: payload.requestId,
+                  type: "image",
+                  asset,
+                  ...(resolvedAlt ? { alt: resolvedAlt } : {}),
+                });
+              }
             }
 
-            event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
-              requestId: payload.requestId,
-              content: chunkText,
-            });
+            await response;
           }
-
-          await response;
         } else if (provider === "anthropic") {
           const llm = new ChatAnthropic({
             apiKey,
@@ -186,7 +395,8 @@ export const addLlmEventListeners = () => {
 
             event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
               requestId: payload.requestId,
-              content,
+              type: "text",
+              delta: content,
             });
           }
         } else if (provider === "grok") {
@@ -207,7 +417,8 @@ export const addLlmEventListeners = () => {
 
             event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
               requestId: payload.requestId,
-              content,
+              type: "text",
+              delta: content,
             });
           }
         } else if (
@@ -226,7 +437,8 @@ export const addLlmEventListeners = () => {
 
             event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
               requestId: payload.requestId,
-              content,
+              type: "text",
+              delta: content,
             });
           }
         } else {

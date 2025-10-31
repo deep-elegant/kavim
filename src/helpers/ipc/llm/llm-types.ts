@@ -10,12 +10,26 @@ export type LlmStreamRequestPayload = {
   apiKey: string;
   messages: ChatMessage[];
   headers?: Record<string, string>;
+  capabilities: LlmModelCapabilities;
 };
 
-export type LlmChunkPayload = {
-  requestId: string;
-  content: string;
+export type LlmModelOutputCapability = "text" | "text+image" | "image";
+
+export type LlmModelCapabilities = {
+  output: LlmModelOutputCapability;
 };
+
+export type LlmImageAsset = {
+  path: string;
+  uri: string;
+  fileName: string;
+};
+
+export type LlmChunkContent =
+  | { type: "text"; delta: string }
+  | { type: "image"; asset: LlmImageAsset; alt?: string };
+
+export type LlmChunkPayload = { requestId: string } & LlmChunkContent;
 
 export type LlmErrorPayload = {
   requestId: string;

@@ -5,12 +5,15 @@ import {
   type AiGateway,
   type AiModel,
   type AiProvider,
+  type ModelCapabilities,
 } from "@/core/llm/aiModels";
 import type { ChatMessage } from "@/core/llm/chatTypes";
 import type {
+  LlmChunkContent,
   LlmChunkPayload,
   LlmCompletePayload,
   LlmErrorPayload,
+  LlmModelCapabilities,
   LlmStreamRequestPayload,
 } from "@/helpers/ipc/llm/llm-types";
 
@@ -27,6 +30,12 @@ type ModelSettings = ProviderSettings & {
   modelName: string;
   provider: AiProvider;
   gatewayModelOverrides?: Partial<Record<AiGateway, string>>;
+  capabilities: ModelCapabilities;
+};
+
+type StreamProgressUpdate = {
+  aggregatedText: string;
+  newBlocks: LlmChunkContent[];
 };
 
 /** Build lookup map from provider value to its configuration */
@@ -61,6 +70,9 @@ const MODEL_SETTINGS: Record<AiModel, ModelSettings> = AI_MODELS.reduce(
       baseURL: model.baseURL ?? providerSettings.baseURL,
       provider: model.provider,
       gatewayModelOverrides: model.gatewayModelOverrides,
+      capabilities: {
+        output: model.capabilities?.output ?? "text",
+      },
     };
 
     return accumulator;
@@ -82,6 +94,7 @@ const buildStreamPayload = ({
   messages,
   requestId,
   headers,
+  capabilities,
 }: {
   provider: AiProvider | AiGateway;
   resolvedProvider: AiProvider;
@@ -91,6 +104,7 @@ const buildStreamPayload = ({
   messages: ChatMessage[];
   requestId: string;
   headers?: Record<string, string>;
+  capabilities: LlmModelCapabilities;
 }): LlmStreamRequestPayload => ({
   requestId,
   provider,
@@ -100,6 +114,7 @@ const buildStreamPayload = ({
   apiKey,
   messages,
   headers,
+  capabilities,
 });
 
 /**
@@ -130,11 +145,13 @@ export const generateAiResult = async ({
   model,
   messages,
   onUpdate,
+  onProgress,
   minimumUpdateIntervalMs = 50,
 }: {
   model: AiModel;
   messages: ChatMessage[];
   onUpdate: (chunk: string) => void;
+  onProgress?: (update: StreamProgressUpdate) => void;
   minimumUpdateIntervalMs?: number;
 }): Promise<void> => {
   const settings = MODEL_SETTINGS[model];
@@ -151,7 +168,7 @@ export const generateAiResult = async ({
   const storedPreprompt = window.settingsStore.getPreprompt();
   const trimmedPreprompt = storedPreprompt.trim();
   const messagesWithPreprompt =
-    trimmedPreprompt.length > 0
+    trimmedPreprompt.length > 0 && settings.capabilities.output === "text"
       ? ([{ role: "system", content: trimmedPreprompt }, ...messages] as ChatMessage[])
       : messages;
 
@@ -198,21 +215,52 @@ export const generateAiResult = async ({
         return;
       }
 
-      aggregatedResponse += payload.content;
+      if (payload.type === "text") {
+        aggregatedResponse += payload.delta;
 
-      const now = performance.now();
-      if (now - lastEmitTime >= minimumUpdateIntervalMs) {
-        flushBuffer();
+        onProgress?.({
+          aggregatedText: aggregatedResponse,
+          newBlocks: [
+            {
+              type: "text",
+              delta: payload.delta,
+            },
+          ],
+        });
+
+        if (payload.delta.length === 0) {
+          return;
+        }
+
+        const now = performance.now();
+        if (now - lastEmitTime >= minimumUpdateIntervalMs) {
+          flushBuffer();
+          return;
+        }
+
+        clearPendingTimeout();
+
+        const delay = Math.max(0, minimumUpdateIntervalMs - (now - lastEmitTime));
+        pendingTimeout = window.setTimeout(() => {
+          pendingTimeout = null;
+          flushBuffer();
+        }, delay);
+
         return;
       }
 
-      clearPendingTimeout();
-
-      const delay = Math.max(0, minimumUpdateIntervalMs - (now - lastEmitTime));
-      pendingTimeout = window.setTimeout(() => {
-        pendingTimeout = null;
-        flushBuffer();
-      }, delay);
+      if (payload.type === "image") {
+        onProgress?.({
+          aggregatedText: aggregatedResponse,
+          newBlocks: [
+            {
+              type: "image",
+              asset: payload.asset,
+              ...(payload.alt ? { alt: payload.alt } : {}),
+            },
+          ],
+        });
+      }
     };
 
     const handleError = (payload: LlmErrorPayload) => {
@@ -298,6 +346,7 @@ export const generateAiResult = async ({
         messages: messagesWithPreprompt,
         requestId,
         headers,
+        capabilities: settings.capabilities,
       });
       window.llm.stream(payload);
     } catch (error) {
