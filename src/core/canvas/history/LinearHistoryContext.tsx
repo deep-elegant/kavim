@@ -38,6 +38,8 @@ export type LinearHistoryItem = {
   summary?: string | null;
   prompt?: string | null;
   response?: string | null;
+  imageSrc?: string | null;
+  imageAlt?: string | null;
 };
 
 type LinearHistoryContextValue = {
@@ -186,11 +188,15 @@ const summarizeNodeForHistory = (node: Node): LinearHistoryItem => {
     case "image-node": {
       const data = (node.data as Partial<ImageNodeData> | undefined) ?? {};
       const descriptor = data.fileName ?? data.alt ?? data.src ?? "";
+      const imageSrc = data.src ?? null;
+      const imageAlt = data.alt ?? data.fileName ?? null;
       return {
         id: node.id,
         type,
         title: "Image",
         summary: descriptor || null,
+        imageSrc,
+        imageAlt,
       } satisfies LinearHistoryItem;
     }
     case "youtube-node": {
