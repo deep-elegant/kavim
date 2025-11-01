@@ -241,13 +241,31 @@ describe("generateAiResult", () => {
 
     chunkListener({
       requestId: payload.requestId,
+      type: "text",
+      delta: "\nA description",
+    });
+
+    expect(onProgress).toHaveBeenNthCalledWith(3, {
+      aggregatedText: "Hello\nA description",
+      newBlocks: [
+        {
+          type: "text",
+          delta: "\nA description",
+        },
+      ],
+    });
+    expect(onUpdate).toHaveBeenCalledTimes(2);
+    expect(onUpdate).toHaveBeenNthCalledWith(2, "Hello\nA description");
+
+    chunkListener({
+      requestId: payload.requestId,
       type: "image",
       asset: firstAsset,
       alt: "a description",
     });
 
-    expect(onProgress).toHaveBeenNthCalledWith(3, {
-      aggregatedText: "Hello",
+    expect(onProgress).toHaveBeenNthCalledWith(4, {
+      aggregatedText: "Hello\nA description",
       newBlocks: [
         {
           type: "image",
@@ -256,7 +274,7 @@ describe("generateAiResult", () => {
         },
       ],
     });
-    expect(onUpdate).toHaveBeenCalledTimes(1);
+    expect(onUpdate).toHaveBeenCalledTimes(2);
 
     const completeListener = getCompleteListener();
     currentTime = 5;
@@ -264,8 +282,8 @@ describe("generateAiResult", () => {
 
     await expect(resultPromise).resolves.toBeUndefined();
 
-    expect(onUpdate).toHaveBeenCalledTimes(2);
-    expect(onUpdate).toHaveBeenNthCalledWith(2, "Hello");
+    expect(onUpdate).toHaveBeenCalledTimes(3);
+    expect(onUpdate).toHaveBeenNthCalledWith(3, "Hello\nA description");
   });
 
   it("supports image-only models while keeping aggregated text empty", async () => {

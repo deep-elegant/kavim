@@ -378,6 +378,8 @@ export const addLlmEventListeners = () => {
             outputCapabilities.includes("image") &&
             outputCapabilities.includes("text");
           const emittedImages = new Set<string>();
+          const emittedTextSnippets = new Set<string>();
+          let hasEmittedTextChunk = false;
 
           for await (const chunk of response) {
             const chunkText = chunk.text;
@@ -388,6 +390,7 @@ export const addLlmEventListeners = () => {
                 type: "text",
                 delta: chunkText,
               });
+              hasEmittedTextChunk = true;
             }
 
             if (!supportsImageOutput) {
@@ -399,6 +402,27 @@ export const addLlmEventListeners = () => {
             for (const part of imageParts) {
               const inlineData = part.inlineData;
               const signature = inlineData.data;
+
+              const description = (part.altText ?? part.text)?.trim();
+
+              if (
+                description &&
+                !emittedTextSnippets.has(description)
+              ) {
+                emittedTextSnippets.add(description);
+
+                const delta = hasEmittedTextChunk
+                  ? `\n${description}`
+                  : description;
+
+                event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
+                  requestId: payload.requestId,
+                  type: "text",
+                  delta,
+                });
+
+                hasEmittedTextChunk = true;
+              }
 
               if (!signature || emittedImages.has(signature)) {
                 continue;
