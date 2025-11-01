@@ -170,7 +170,7 @@ export const generateAiResult = async ({
   const trimmedPreprompt = storedPreprompt.trim();
   const messagesWithPreprompt =
     trimmedPreprompt.length > 0 &&
-    settings.capabilities.output.includes("text")
+    !settings.capabilities.output.includes("image") // Add system prompt only for text only response
       ? ([
           {
             role: "system",
