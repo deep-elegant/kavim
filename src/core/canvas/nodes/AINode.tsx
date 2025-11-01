@@ -7,7 +7,7 @@ import React, {
   useState,
   type FocusEvent,
 } from "react";
-import { type NodeProps, type Node, type Edge } from "@xyflow/react";
+import { type NodeProps, type Node } from "@xyflow/react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -21,6 +21,7 @@ import { type DrawableNode } from "./DrawableNode";
 import {
   IMAGE_NODE_MIN_HEIGHT,
   IMAGE_NODE_MIN_WIDTH,
+  type ImageNodeData,
   type ImageNodeType,
 } from "./ImageNode";
 import { type LlmFilePlaceholderNodeType } from "./LlmFilePlaceholderNode";
@@ -30,11 +31,12 @@ import { useNodeAsEditor } from "@/helpers/useNodeAsEditor";
 import { type FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
 import { useAutoFontSizeObserver } from "./useAutoFontSizeObserver";
 import { AI_MODELS, type AiModel } from "../../llm/aiModels";
-import {
-  generateAiResult,
-  type ChatMessage,
-} from "@/core/llm/generateAiResult";
+import { generateAiResult } from "@/core/llm/generateAiResult";
 import { SingleLlmSelect } from "@/core/llm/SingleLlmSelect";
+import {
+  buildCanvasChatMessages,
+  type BuildCanvasChatMessagesResult,
+} from "@/core/llm/buildCanvasChatMessages";
 import {
   Form,
   FormControl,
@@ -217,8 +219,14 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     [model],
   );
   const modelLabel = resolvedModel?.label ?? model;
+  const modelInputCapabilities = resolvedModel?.capabilities?.input ?? ["text"];
+  const modelOutputCapabilities =
+    resolvedModel?.capabilities?.output ?? ["text"];
+  const supportsTextInput = modelInputCapabilities.includes("text");
+  const supportsImageInput = modelInputCapabilities.includes("image");
   const isImageOnlyModel =
-    resolvedModel?.capabilities?.output === "image";
+    modelOutputCapabilities.includes("image") &&
+    !modelOutputCapabilities.includes("text");
   const status = data.status ?? "not-started";
   const resultMarkdown = data.result ?? "";
   const resultHtml = useMemo(
@@ -284,109 +292,27 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
    * - Enables contextual conversations where each node builds on previous ones
    */
   const buildChatHistory = useCallback(
-    (promptHtml: string): ChatMessage[] => {
+    (promptHtml: string): BuildCanvasChatMessagesResult => {
       const flowNodes = getNodes();
       const flowEdges = getEdges();
-
-      const nodeMap = new Map(
-        flowNodes.map((node) => [node.id, node] as const),
-      );
-
-      // Build reverse lookup: target node ID -> incoming edges
-      const incomingMap = new Map<string, Edge[]>();
-      flowEdges.forEach((edge) => {
-        if (!edge.target) {
-          return;
-        }
-        const existing = incomingMap.get(edge.target);
-        if (existing) {
-          existing.push(edge);
-        } else {
-          incomingMap.set(edge.target, [edge]);
-        }
-      });
-
-      const visited = new Set<string>();
-
-      // Recursively collect chat messages from a node and its ancestors
-      const collectFromNode = (nodeId: string): ChatMessage[] => {
-        if (visited.has(nodeId)) {
-          return []; // Prevent infinite loops in cyclic graphs
-        }
-
-        visited.add(nodeId);
-        const node = nodeMap.get(nodeId);
-        if (!node || node.type !== "ai-node") {
-          return []; // Only collect from AI nodes
-        }
-
-        // First, collect messages from parent nodes (depth-first traversal)
-        const messagesBefore = (incomingMap.get(nodeId) ?? []).flatMap(
-          (incomingEdge) => {
-            const sourceId = incomingEdge.source;
-            if (typeof sourceId !== "string") {
-              return [];
-            }
-
-            return collectFromNode(sourceId);
-          },
-        );
-
-        const nodeData = node.data as AiNodeData | undefined;
-        const promptText = htmlToPlainText(nodeData?.label ?? "");
-        const resultMarkdown = nodeData?.result ?? "";
-        const resultText = resultMarkdown
-          ? htmlToPlainText(marked.parse(resultMarkdown))
-          : "";
-
-        // Add this node's messages (user prompt, then assistant response)
-        const messages: ChatMessage[] = [];
-        if (promptText) {
-          messages.push({ role: "user", content: promptText });
-        }
-        if (resultText) {
-          messages.push({ role: "assistant", content: resultText });
-        }
-
-        return [...messagesBefore, ...messages];
-      };
-
-      const textualContextEntries = flowNodes
-        .map((node) => formatTextualNodeSummary(node))
-        .filter((entry): entry is string => Boolean(entry));
-
-      const history: ChatMessage[] = [];
-
-      if (textualContextEntries.length > 0) {
-        history.push({
-          role: "system",
-          content: `Canvas context:\n${textualContextEntries
-            .map((entry) => `- ${entry}`)
-            .join("\n")}`,
-        });
-      }
-
-      // Collect history from all parent AI nodes connected to this one
-      const aiHistory = (incomingMap.get(id) ?? []).flatMap((edge) => {
-        const sourceId = edge.source;
-        if (typeof sourceId !== "string") {
-          return [];
-        }
-
-        return collectFromNode(sourceId);
-      });
-
-      history.push(...aiHistory);
-
-      // Add current prompt as the final user message
       const promptText = htmlToPlainText(promptHtml);
-      if (promptText) {
-        history.push({ role: "user", content: promptText });
-      }
 
-      return history;
+      return buildCanvasChatMessages({
+        nodes: flowNodes,
+        edges: flowEdges,
+        targetNodeId: id,
+        promptText,
+        supportsTextInput,
+        supportsImageInput,
+      });
     },
-    [getEdges, getNodes, id],
+    [
+      getEdges,
+      getNodes,
+      id,
+      supportsImageInput,
+      supportsTextInput,
+    ],
   );
 
   /**
@@ -508,7 +434,9 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   const runPrompt = useCallback(
     async (prompt: string) => {
       const promptText = htmlToPlainText(prompt);
-      if (!promptText) {
+      const { messages, hasUsableInput } = buildChatHistory(prompt);
+
+      if (!hasUsableInput) {
         lastPromptRef.current = prompt;
         updateNodeData({
           status: "not-started",
@@ -771,8 +699,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
               });
             });
         };
-
-        const messages = buildChatHistory(prompt);
 
         await generateAiResult({
           model,

@@ -1,7 +1,7 @@
 import { Buffer } from "buffer";
 import { ipcMain } from "electron";
 import { ChatOpenAI } from "@langchain/openai";
-import { GoogleGenAI } from "@google/genai";
+import { ContentReferenceImage, GoogleGenAI } from "@google/genai";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatXAI } from "@langchain/xai";
 import {
@@ -19,6 +19,7 @@ import {
 } from "./llm-channels";
 import type { LlmStreamRequestPayload } from "./llm-types";
 import { ensureActivePak, upsertPakAsset } from "@/core/pak/pak-manager";
+import { PakAssetDataResult, getAssetData as resolvePakAssetData } from "@/helpers/ipc/pak/pak-listeners";
 import {
   buildPakUri,
   ensureAssetFileMetadata,
@@ -122,26 +123,82 @@ const extractMessageContent = (message: AIMessage | AIMessageChunk): string => {
   return "";
 };
 
+const assetDataToBase64 = (assetData: PakAssetDataResult): string => {
+  return Buffer.from(assetData.data).toString("base64");
+};
+
 const mapMessagesToLangChain = (
   messages: LlmStreamRequestPayload["messages"],
-): BaseMessage[] =>
-  messages.map((message) => {
+): BaseMessage[] => {
+  return messages.map((message) => {
+    const structuredParts: (
+      | { type: "text"; text: string }
+      | { type: "image_url"; image_url: { url: string } }
+    )[] = [];
+    let includesImage = false;
+    const textSegments: string[] = [];
+
+    for (const part of message.content) {
+      if (part.type === "text") {
+        structuredParts.push({ type: "text", text: part.text });
+        textSegments.push(part.text);
+        continue;
+      }
+
+      const asset = resolvePakAssetData(part.assetPath);
+      if (!asset) {
+        continue;
+      }
+
+      includesImage = true;
+      structuredParts.push({
+        type: "image_url",
+        image_url: {
+          url: `data:${asset.mimeType};base64,${assetDataToBase64(asset)}`,
+        },
+      });
+    }
+
+    let content:
+      | string
+      | Array<
+          { type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }
+        >;
+
+    if (includesImage) {
+      const filtered = structuredParts.filter((part) => {
+        if (part.type === "image_url") {
+          return true;
+        }
+
+        return part.text.trim().length > 0;
+      });
+
+      content = filtered.length > 0 ? filtered : "";
+    } else {
+      const mergedText = textSegments.map((segment) => segment).join("\n\n");
+      content = mergedText;
+    }
+
     switch (message.role) {
       case "user":
-        return new HumanMessage({ content: message.content });
+        return new HumanMessage({ content });
       case "assistant":
-        return new AIMessage({ content: message.content });
+        return new AIMessage({ content });
       case "system":
-        return new SystemMessage({ content: message.content });
+        return new SystemMessage({ content });
       default:
-        return new HumanMessage({ content: message.content });
+        return new HumanMessage({ content });
     }
   });
+};
 
 type GeminiTextPart = { text: string };
+type GeminiInlinePart = { inlineData: GeminiInlineData; altText?: string };
+type GeminiPart = GeminiTextPart | GeminiInlinePart;
 type GeminiContent = {
   role?: "user" | "model" | "system";
-  parts: GeminiTextPart[];
+  parts: GeminiPart[];
 };
 
 const buildGeminiRequest = (
@@ -149,18 +206,57 @@ const buildGeminiRequest = (
 ) => {
   const contents: GeminiContent[] = [];
   const systemParts: GeminiTextPart[] = [];
+  let lastUserPrompt: string | undefined;
 
   messages.forEach((message) => {
     if (message.role === "system") {
-      if (message.content.trim()) {
-        systemParts.push({ text: message.content });
-      }
+      message.content.forEach((part) => {
+        if (part.type === "text" && part.text.trim()) {
+          systemParts.push({ text: part.text });
+        }
+      });
       return;
+    }
+
+    const parts: GeminiPart[] = [];
+    const textSegments: string[] = [];
+
+    message.content.forEach((part) => {
+      if (part.type === "text") {
+        if (part.text.trim().length === 0) {
+          return;
+        }
+
+        parts.push({ text: part.text });
+        textSegments.push(part.text);
+        return;
+      }
+
+      const asset = resolvePakAssetData(part.assetPath);
+      if (!asset) {
+        return;
+      }
+
+      parts.push({
+        inlineData: { mimeType: asset.mimeType, data: assetDataToBase64(asset) },
+        ...(part.alt ? { altText: part.alt } : {}),
+      });
+    });
+
+    if (parts.length === 0) {
+      return;
+    }
+
+    if (message.role === "user") {
+      const currentPrompt = textSegments.join("\n\n");
+      if (currentPrompt) {
+        lastUserPrompt = currentPrompt;
+      }
     }
 
     contents.push({
       role: message.role === "user" ? "user" : "model",
-      parts: [{ text: message.content }],
+      parts,
     });
   });
 
@@ -169,42 +265,7 @@ const buildGeminiRequest = (
       ? ({ role: "system", parts: systemParts } satisfies GeminiContent)
       : undefined;
 
-  return { contents, systemInstruction };
-};
-
-const buildGeminiImagePrompt = (
-  messages: LlmStreamRequestPayload["messages"],
-) => {
-  const systemSegments: string[] = [];
-  const userSegments: string[] = [];
-  let lastUserPrompt: string | undefined;
-
-  for (const message of messages) {
-    const trimmed = message.content.trim();
-
-    if (!trimmed) {
-      continue;
-    }
-
-    if (message.role === "system") {
-      systemSegments.push(trimmed);
-      continue;
-    }
-
-    if (message.role === "user") {
-      userSegments.push(trimmed);
-      lastUserPrompt = trimmed;
-    }
-  }
-
-  if (userSegments.length === 0) {
-    throw new Error("Image generation requires at least one user prompt");
-  }
-
-  return {
-    prompt: [...systemSegments, ...userSegments].join("\n\n"),
-    lastUserPrompt,
-  };
+  return { contents, systemInstruction, lastUserPrompt };
 };
 
 const createOpenAiChatClient = (payload: LlmStreamRequestPayload) => {
@@ -257,7 +318,9 @@ export const addLlmEventListeners = () => {
             );
           }
 
-          const genAI = new GoogleGenAI({ apiKey });
+          const genAI = new GoogleGenAI({
+            apiKey,
+          });
           const pak = ensureActivePak();
           const usedPaths = new Set(Object.keys(pak.files));
           const reserveImageAsset = (
@@ -301,99 +364,69 @@ export const addLlmEventListeners = () => {
             } as const;
           };
 
-          if (payload.capabilities.output === "image") {
-            const { prompt, lastUserPrompt } = buildGeminiImagePrompt(messages);
-            const response = await genAI.models.generateImages({
-              model: modelName,
-              prompt,
-            });
+          const outputCapabilities = payload.capabilities.output;
+          const { contents, systemInstruction } = (
+            buildGeminiRequest(messages)
+          );
+          const response = await genAI.models.generateContentStream({
+            model: modelName,
+            contents,
+            ...(systemInstruction ? { systemInstruction } : {}),
+          });
 
-            const generatedImages = response.generatedImages ?? [];
+          const supportsImageOutput =
+            outputCapabilities.includes("image") &&
+            outputCapabilities.includes("text");
+          const emittedImages = new Set<string>();
 
-            for (const generatedImage of generatedImages) {
-              const image = generatedImage.image;
-              const imageBytes = image?.imageBytes;
+          for await (const chunk of response) {
+            const chunkText = chunk.text;
 
-              if (!imageBytes) {
+            if (chunkText) {
+              event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
+                requestId: payload.requestId,
+                type: "text",
+                delta: chunkText,
+              });
+            }
+
+            if (!supportsImageOutput) {
+              continue;
+            }
+
+            const imageParts = extractGeminiInlineImages(chunk);
+
+            for (const part of imageParts) {
+              const inlineData = part.inlineData;
+              const signature = inlineData.data;
+
+              if (!signature || emittedImages.has(signature)) {
                 continue;
               }
 
-              const altCandidate =
-                generatedImage.enhancedPrompt?.trim() || lastUserPrompt;
+              emittedImages.add(signature);
 
+              const alt = part.altText ?? part.text;
               const reservation = reserveImageAsset(
-                image?.mimeType,
-                altCandidate,
+                inlineData.mimeType,
+                alt,
               );
-              const { asset, alt } = reservation.persist(imageBytes);
+              const { asset, alt: resolvedAlt } = reservation.persist(
+                inlineData.data!,
+              );
 
               event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
                 requestId: payload.requestId,
                 type: "image",
                 asset,
-                ...(alt ? { alt } : {}),
+                ...(resolvedAlt ? { alt: resolvedAlt } : {}),
               });
             }
-          } else {
-            const { contents, systemInstruction } =
-              buildGeminiRequest(messages);
-            const response = await genAI.models.generateContentStream({
-              model: modelName,
-              contents,
-              ...(systemInstruction ? { systemInstruction } : {}),
-            });
-
-            const supportsImageOutput =
-              payload.capabilities.output === "text+image";
-            const emittedImages = new Set<string>();
-
-            for await (const chunk of response) {
-              const chunkText = chunk.text;
-
-              if (chunkText) {
-                event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
-                  requestId: payload.requestId,
-                  type: "text",
-                  delta: chunkText,
-                });
-              }
-
-              if (!supportsImageOutput) {
-                continue;
-              }
-
-              const imageParts = extractGeminiInlineImages(chunk);
-
-              for (const part of imageParts) {
-                const inlineData = part.inlineData;
-                const signature = inlineData.data;
-
-                if (!signature || emittedImages.has(signature)) {
-                  continue;
-                }
-
-                emittedImages.add(signature);
-
-                const alt = part.altText ?? part.text;
-                const reservation = reserveImageAsset(
-                  inlineData.mimeType,
-                  alt,
-                );
-                const { asset, alt: resolvedAlt } = reservation.persist(
-                  inlineData.data,
-                );
-
-                event.sender.send(LLM_STREAM_CHUNK_CHANNEL, {
-                  requestId: payload.requestId,
-                  type: "image",
-                  asset,
-                  ...(resolvedAlt ? { alt: resolvedAlt } : {}),
-                });
-              }
-            }
-
-            await response;
           }
+
+          await response;
+
+
         } else if (provider === "anthropic") {
           const llm = new ChatAnthropic({
             apiKey,

@@ -31,11 +31,12 @@ import type { LlmFilePlaceholderNodeType } from "../nodes/LlmFilePlaceholderNode
 import type { YouTubeNodeData } from "../nodes/YouTubeNode";
 import { formatTextualNodeSummary, htmlToPlainText } from "../utils/text";
 import { AI_MODELS, type AiModel } from "@/core/llm/aiModels";
-import { generateAiResult, type ChatMessage } from "@/core/llm/generateAiResult";
+import { generateAiResult } from "@/core/llm/generateAiResult";
 import {
   AI_IMAGE_VERTICAL_GAP,
   computeImageDisplaySize,
 } from "../nodes/aiImageUtils";
+import { buildCanvasChatMessages } from "@/core/llm/buildCanvasChatMessages";
 
 export type LinearHistoryItem = {
   id: string;
@@ -276,10 +277,18 @@ export const LinearHistoryProvider = ({
       const activeNodeId = state.activeNodeId;
       const trimmedPrompt = prompt.trim();
       const resolvedModel = AI_MODELS.find((option) => option.value === model);
+      const modelInputCapabilities = resolvedModel?.capabilities?.input ?? [
+        "text",
+      ];
+      const modelOutputCapabilities =
+        resolvedModel?.capabilities?.output ?? ["text"];
+      const supportsTextInput = modelInputCapabilities.includes("text");
+      const supportsImageInput = modelInputCapabilities.includes("image");
       const isImageOnlyModel =
-        resolvedModel?.capabilities?.output === "image";
+        modelOutputCapabilities.includes("image") &&
+        !modelOutputCapabilities.includes("text");
 
-      if (!activeNodeId || trimmedPrompt.length === 0) {
+      if (!activeNodeId || (!supportsImageInput && trimmedPrompt.length === 0)) {
         return;
       }
 
@@ -473,44 +482,46 @@ export const LinearHistoryProvider = ({
       // Set the new node as the active node.
       setState({ isOpen: true, activeNodeId: targetNodeId });
 
-      // Create the chat messages to send to the AI model.
-      const textualContextEntries = pathNodes
-        .map((node) => formatTextualNodeSummary(node))
-        .filter((entry): entry is string => Boolean(entry));
+      const allowedAncestorNodeIds = new Set(
+        pathNodes
+          .filter((node) => node.type === "ai-node")
+          .map((node) => node.id),
+      );
 
-      const messages: ChatMessage[] = [];
+      const { messages, hasUsableInput } = buildCanvasChatMessages({
+        nodes: flowNodes,
+        edges: flowEdges,
+        targetNodeId,
+        promptText: trimmedPrompt,
+        supportsTextInput,
+        supportsImageInput,
+        contextNodes: pathNodes,
+        allowedAncestorNodeIds,
+      });
 
-      if (textualContextEntries.length > 0) {
-        messages.push({
-          role: "user",
-          content: `Canvas context:\n${textualContextEntries
-            .map((entry) => `- ${entry}`)
-            .join("\n")}`,
-        });
+      if (!hasUsableInput) {
+        setNodes((existing) =>
+          existing.map((node) => {
+            if (node.id !== targetNodeId || node.type !== "ai-node") {
+              return node;
+            }
+
+            const nodeData = node.data as AiNodeData;
+
+            return {
+              ...node,
+              data: {
+                ...nodeData,
+                status: "not-started",
+                result: "",
+                isTyping: false,
+              },
+            } as Node<AiNodeData>;
+          }),
+        );
+
+        return;
       }
-
-      for (const node of pathNodes) {
-        if (node.type !== "ai-node") {
-          continue;
-        }
-
-        const nodeData = node.data as AiNodeData | undefined;
-        const promptText = htmlToPlainText(nodeData?.label ?? "");
-        const responseMarkdown = nodeData?.result ?? "";
-        const responseText = responseMarkdown
-          ? htmlToPlainText(marked.parse(responseMarkdown))
-          : "";
-
-        if (promptText) {
-          messages.push({ role: "user", content: promptText });
-        }
-
-        if (responseText) {
-          messages.push({ role: "assistant", content: responseText });
-        }
-      }
-
-      messages.push({ role: "user", content: trimmedPrompt });
 
       // Keep track of the request ID to avoid race conditions.
       const currentRequestId = requestIdRef.current + 1;

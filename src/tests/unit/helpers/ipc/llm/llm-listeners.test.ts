@@ -9,6 +9,7 @@ import type { LlmStreamRequestPayload } from "@/helpers/ipc/llm/llm-types";
 
 const ensureActivePakMock = vi.fn();
 const upsertPakAssetMock = vi.fn();
+const getAssetDataMock = vi.fn();
 const ensureAssetFileMetadataMock = vi.fn(() => ({
   assetFileName: "ai-image.png",
   displayFileName: "ai-image.png",
@@ -42,6 +43,10 @@ vi.mock("@/core/pak/pak-manager", () => ({
   upsertPakAsset: upsertPakAssetMock,
 }));
 
+vi.mock("@/helpers/ipc/pak/getAssetData", () => ({
+  getAssetData: getAssetDataMock,
+}));
+
 vi.mock("@/core/pak/assetPaths", () => ({
   ensureAssetFileMetadata: ensureAssetFileMetadataMock,
   reserveAssetPath: reserveAssetPathMock,
@@ -62,6 +67,8 @@ describe("addLlmEventListeners", () => {
     ensureActivePakMock.mockReset();
     ensureActivePakMock.mockReturnValue({ files: {} });
     upsertPakAssetMock.mockReset();
+    getAssetDataMock.mockReset();
+    getAssetDataMock.mockReturnValue(null);
     ensureAssetFileMetadataMock.mockClear();
     reserveAssetPathMock.mockClear();
     buildPakUriMock.mockClear();
@@ -92,11 +99,17 @@ describe("addLlmEventListeners", () => {
       baseURL: undefined,
       apiKey: "api-key",
       messages: [
-        { role: "system", content: "Use cinematic lighting." },
-        { role: "user", content: "A castle at sunrise" },
+        {
+          role: "system",
+          content: [{ type: "text", text: "Use cinematic lighting." }],
+        },
+        {
+          role: "user",
+          content: [{ type: "text", text: "A castle at sunrise" }],
+        },
       ],
       headers: undefined,
-      capabilities: { output: "image" },
+      capabilities: { input: ["text"], output: ["image"] },
     };
 
     handler?.(

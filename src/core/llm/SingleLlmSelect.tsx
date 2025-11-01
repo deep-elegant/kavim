@@ -75,9 +75,12 @@ export const SingleLlmSelect = ({
     const restrictedEntries: AvailabilityEntry[] = [];
 
     for (const entry of availability) {
-      const capability = entry.model.capabilities?.output ?? "text";
+      const outputCapabilities = entry.model.capabilities?.output ?? ["text"];
+      const isImageOnly =
+        outputCapabilities.includes("image") &&
+        !outputCapabilities.includes("text");
 
-      if (capability === "image") {
+      if (isImageOnly) {
         imageGeneratorEntries.push(entry);
         continue;
       }

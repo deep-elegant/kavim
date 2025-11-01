@@ -124,7 +124,8 @@ describe("generateAiResult", () => {
     });
 
     const payload = getActiveRequest();
-    expect(payload.capabilities.output).toBe("text");
+    expect(payload.capabilities.input).toEqual(["text", "image"]);
+    expect(payload.capabilities.output).toEqual(["text"]);
 
     const chunkListener = getChunkListener();
 
@@ -197,7 +198,8 @@ describe("generateAiResult", () => {
     });
 
     const payload = getActiveRequest();
-    expect(payload.capabilities.output).toBe("text+image");
+    expect(payload.capabilities.input).toEqual(["text", "image"]);
+    expect(payload.capabilities.output).toEqual(["text", "image"]);
 
     const chunkListener = getChunkListener();
 
@@ -279,7 +281,8 @@ describe("generateAiResult", () => {
     });
 
     const payload = getActiveRequest();
-    expect(payload.capabilities.output).toBe("image");
+    expect(payload.capabilities.input).toEqual(["text"]);
+    expect(payload.capabilities.output).toEqual(["image"]);
 
     const chunkListener = getChunkListener();
 

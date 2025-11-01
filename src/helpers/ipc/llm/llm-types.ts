@@ -1,4 +1,8 @@
-import type { AiGateway, AiProvider } from "@/core/llm/aiModels";
+import type {
+  AiGateway,
+  AiProvider,
+  ModelIOType,
+} from "@/core/llm/aiModels";
 import type { ChatMessage } from "@/core/llm/chatTypes";
 
 export type LlmStreamRequestPayload = {
@@ -13,10 +17,9 @@ export type LlmStreamRequestPayload = {
   capabilities: LlmModelCapabilities;
 };
 
-export type LlmModelOutputCapability = "text" | "text+image" | "image";
-
 export type LlmModelCapabilities = {
-  output: LlmModelOutputCapability;
+  input: ModelIOType[];
+  output: ModelIOType[];
 };
 
 export type LlmImageAsset = {

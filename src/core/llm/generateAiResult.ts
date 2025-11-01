@@ -71,7 +71,8 @@ const MODEL_SETTINGS: Record<AiModel, ModelSettings> = AI_MODELS.reduce(
       provider: model.provider,
       gatewayModelOverrides: model.gatewayModelOverrides,
       capabilities: {
-        output: model.capabilities?.output ?? "text",
+        input: model.capabilities?.input ?? ["text"],
+        output: model.capabilities?.output ?? ["text"],
       },
     };
 
@@ -168,8 +169,15 @@ export const generateAiResult = async ({
   const storedPreprompt = window.settingsStore.getPreprompt();
   const trimmedPreprompt = storedPreprompt.trim();
   const messagesWithPreprompt =
-    trimmedPreprompt.length > 0 && settings.capabilities.output === "text"
-      ? ([{ role: "system", content: trimmedPreprompt }, ...messages] as ChatMessage[])
+    trimmedPreprompt.length > 0 &&
+    settings.capabilities.output.includes("text")
+      ? ([
+          {
+            role: "system",
+            content: [{ type: "text", text: trimmedPreprompt }],
+          },
+          ...messages,
+        ] satisfies ChatMessage[])
       : messages;
 
   await new Promise<void>((resolve, reject) => {
@@ -252,7 +260,12 @@ export const generateAiResult = async ({
       if (payload.type === "image-placeholder") {
         onProgress?.({
           aggregatedText: aggregatedResponse,
-          newBlocks: [payload],
+          newBlocks: [
+            {
+              type: "image-placeholder",
+              asset: payload.asset,
+            },
+          ],
         });
         return;
       }
