@@ -185,27 +185,6 @@ export const AI_MODELS = [
     capabilities: { input: ["text", "image"], output: ["text", "image"] },
   },
   {
-    value: "imagen-4-0-generate-001",
-    label: "Google: Imagen 4 Standard",
-    provider: "google",
-    modelId: "imagen-4.0-generate-001",
-    capabilities: { input: ["text", "image"], output: ["image"] },
-  },
-  {
-    value: "imagen-4-0-ultra-generate-001",
-    label: "Google: Imagen 4 Ultra",
-    provider: "google",
-    modelId: "imagen-4.0-ultra-generate-001",
-    capabilities: { input: ["text", "image"], output: ["image"] },
-  },
-  {
-    value: "imagen-4-0-fast-generate-001",
-    label: "Google: Imagen 4 Fast",
-    provider: "google",
-    modelId: "imagen-4.0-fast-generate-001",
-    capabilities: { input: ["text", "image"], output: ["image"] },
-  },
-  {
     value: "claude-haiku-4-5",
     label: "Anthropic: Claude Haiku 4.5",
     provider: "anthropic",

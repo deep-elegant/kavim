@@ -76,11 +76,9 @@ export const SingleLlmSelect = ({
 
     for (const entry of availability) {
       const outputCapabilities = entry.model.capabilities?.output ?? ["text"];
-      const isImageOnly =
-        outputCapabilities.includes("image") &&
-        !outputCapabilities.includes("text");
+      const hasImageOutput = outputCapabilities.includes("image");
 
-      if (isImageOnly) {
+      if (hasImageOutput) {
         imageGeneratorEntries.push(entry);
         continue;
       }
@@ -140,18 +138,19 @@ export const SingleLlmSelect = ({
         </SelectTrigger>
       </FormControl>
       <SelectContent>
+        {unrestricted.map(renderOption)}
+        {/** Models that you use to generate Images */}
         {imageGenerators.length > 0 ? (
           <>
+            {(unrestricted.length > 0 || restricted.length > 0) && (
+              <SelectSeparator />
+            )}
             <SelectGroup>
               <SelectLabel>Image Generator</SelectLabel>
               {imageGenerators.map(renderOption)}
             </SelectGroup>
-            {(unrestricted.length > 0 || restricted.length > 0) && (
-              <SelectSeparator />
-            )}
           </>
         ) : null}
-        {unrestricted.map(renderOption)}
         {/* Visually separate restricted models to set clear expectations */}
         {restricted.length > 0 && (
           <>
