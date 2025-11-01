@@ -224,8 +224,8 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     resolvedModel?.capabilities?.output ?? ["text"];
   const supportsTextInput = modelInputCapabilities.includes("text");
   const supportsImageInput = modelInputCapabilities.includes("image");
-  const isImageOnlyModel =
-    modelOutputCapabilities.includes("image") &&
+  const supportsImageOutput = modelOutputCapabilities.includes("image");
+  const isImageOnlyModel = supportsImageOutput &&
     !modelOutputCapabilities.includes("text");
   const status = data.status ?? "not-started";
   const resultMarkdown = data.result ?? "";
@@ -454,7 +454,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       });
 
       try {
-        if (isImageOnlyModel) {
+        if (supportsImageOutput) {
           assetNodeIdRef.current = new Map();
           imageAssetOrderRef.current = [];
           imageProcessingQueueRef.current = Promise.resolve();
@@ -537,7 +537,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
             fileName: string;
           };
         }) => {
-          if (!isImageOnlyModel) {
+          if (!supportsImageOutput) {
             return;
           }
 
@@ -591,7 +591,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
           };
           alt?: string;
         }) => {
-          if (!isImageOnlyModel) {
+          if (!supportsImageOutput) {
             return;
           }
 
@@ -709,7 +709,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
               return;
             }
 
-            if (isImageOnlyModel) {
+            if (supportsImageOutput) {
               for (const block of newBlocks) {
                 if (block.type === "image-placeholder") {
                   handlePlaceholderBlock(block);
@@ -717,26 +717,27 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                   handleImageBlock(block);
                 }
               }
-              return;
             }
 
-            setNodes((nodes) =>
-              nodes.map((n) => {
-                if (n.id !== id) {
-                  return n;
-                }
+            if (!isImageOnlyModel) {
+              setNodes((nodes) =>
+                nodes.map((n) => {
+                  if (n.id !== id) {
+                    return n;
+                  }
 
-                const nodeData = n.data as AiNodeData;
+                  const nodeData = n.data as AiNodeData;
 
-                return {
-                  ...n,
-                  data: {
-                    ...nodeData,
-                    result: aggregatedText,
-                  },
-                } satisfies AiNodeType;
-              }),
-            );
+                  return {
+                    ...n,
+                    data: {
+                      ...nodeData,
+                      result: aggregatedText,
+                    },
+                  } satisfies AiNodeType;
+                }),
+              );
+            }
           },
           onUpdate: (fullResponse) => {
             // Only update if this is still the current request (user hasn't changed prompt)
@@ -792,6 +793,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       buildChatHistory,
       id,
       isImageOnlyModel,
+      supportsImageOutput,
       model,
       modelLabel,
       setEdges,
