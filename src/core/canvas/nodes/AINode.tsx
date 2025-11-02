@@ -18,13 +18,7 @@ import { ContextMenuItem } from "@/components/ui/context-menu";
 
 import NodeInteractionOverlay from "./NodeInteractionOverlay";
 import { type DrawableNode } from "./DrawableNode";
-import {
-  IMAGE_NODE_MIN_HEIGHT,
-  IMAGE_NODE_MIN_WIDTH,
-  type ImageNodeData,
-  type ImageNodeType,
-} from "./ImageNode";
-import { type LlmFilePlaceholderNodeType } from "./LlmFilePlaceholderNode";
+import { type ImageNodeData, type ImageNodeType } from "./ImageNode";
 import { MinimalTiptap } from "@/components/ui/minimal-tiptap";
 import { cn } from "@/utils/tailwind";
 import { useNodeAsEditor } from "@/helpers/useNodeAsEditor";
@@ -48,10 +42,7 @@ import {
 import { createDefaultEditableEdgeData } from "../edges/EditableEdge";
 import { useCanvasData } from "../CanvasDataContext";
 import { formatTextualNodeSummary, htmlToPlainText } from "../utils/text";
-import {
-  AI_IMAGE_VERTICAL_GAP,
-  computeImageDisplaySize,
-} from "./aiImageUtils";
+import { createAiImageGenerationManager } from "../utils/aiImageGeneration";
 
 export type AiStatus = "not-started" | "in-progress" | "done";
 
@@ -197,9 +188,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   const contentRef = useRef<HTMLDivElement>(null);
   const promptContainerRef = useRef<HTMLDivElement>(null);
   const promptMeasurementRef = useRef<HTMLDivElement>(null);
-  const assetNodeIdRef = useRef<Map<string, string>>(new Map());
-  const imageAssetOrderRef = useRef<string[]>([]);
-  const imageProcessingQueueRef = useRef<Promise<void>>(Promise.resolve());
   const {
     editor,
     isTyping,
@@ -440,251 +428,36 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       });
 
       try {
+        const owner = doc ? String(doc.clientID) : undefined;
+        const imageManager = createAiImageGenerationManager({
+          supportsImageOutput,
+          isRequestCurrent: () => requestIdRef.current === currentRequestId,
+          getAnchorNode: (nodes) =>
+            nodes.find(
+              (node): node is AiNodeType => node.id === id && node.type === "ai-node",
+            ),
+          minimumAnchorWidth: MIN_WIDTH,
+          horizontalGap: NODE_HORIZONTAL_GAP,
+          setNodes,
+          setEdges,
+          edgeSourceId: id,
+          edgeSourceHandle: "right-source",
+          buildEdgeMetadata: () => ({
+            generatedByNodeId: id,
+            generatedFromPrompt: promptText,
+          }),
+          owner,
+          onImageProcessingError: (error) => {
+            console.error("Failed to process AI image chunk", error);
+            toast.error("Failed to render AI image", {
+              description: error instanceof Error ? error.message : String(error),
+            });
+          },
+        });
+
         if (supportsImageOutput) {
-          assetNodeIdRef.current = new Map();
-          imageAssetOrderRef.current = [];
-          imageProcessingQueueRef.current = Promise.resolve();
+          imageManager.reset();
         }
-
-        const repositionGeneratedNodes = (nodes: Node[]): Node[] => {
-          const sourceNode = nodes.find(
-            (node): node is AiNodeType => node.id === id && node.type === "ai-node",
-          );
-
-          if (!sourceNode) {
-            return nodes;
-          }
-
-          const sourceWidth = Math.max(
-            MIN_WIDTH,
-            Number(sourceNode.style?.width ?? sourceNode.width ?? MIN_WIDTH),
-          );
-
-          let yOffset = 0;
-          const targetPositions = new Map<string, { x: number; y: number }>();
-
-          for (const assetPath of imageAssetOrderRef.current) {
-            const nodeId = assetNodeIdRef.current.get(assetPath);
-            if (!nodeId) {
-              continue;
-            }
-
-            const targetNode = nodes.find((node) => node.id === nodeId);
-            if (!targetNode) {
-              continue;
-            }
-
-            const height = Math.max(
-              IMAGE_NODE_MIN_HEIGHT,
-              Number(
-                targetNode.style?.height ??
-                  targetNode.height ??
-                  IMAGE_NODE_MIN_HEIGHT,
-              ),
-            );
-
-            targetPositions.set(nodeId, {
-              x: sourceNode.position.x + sourceWidth + NODE_HORIZONTAL_GAP,
-              y: sourceNode.position.y + yOffset,
-            });
-
-            yOffset += height + AI_IMAGE_VERTICAL_GAP;
-          }
-
-          if (targetPositions.size === 0) {
-            return nodes;
-          }
-
-          return nodes.map((node) => {
-            const newPosition = targetPositions.get(node.id);
-            if (!newPosition) {
-              return node;
-            }
-
-            if (
-              node.position.x === newPosition.x &&
-              node.position.y === newPosition.y
-            ) {
-              return node;
-            }
-
-            return {
-              ...node,
-              position: newPosition,
-            };
-          });
-        };
-
-        const handlePlaceholderBlock = (block: {
-          type: "image-placeholder";
-          asset: {
-            path: string;
-            uri: string;
-            fileName: string;
-          };
-        }) => {
-          if (!supportsImageOutput) {
-            return;
-          }
-
-          if (assetNodeIdRef.current.has(block.asset.path)) {
-            return;
-          }
-
-          const nodeId = crypto.randomUUID();
-          assetNodeIdRef.current.set(block.asset.path, nodeId);
-          imageAssetOrderRef.current = [
-            ...imageAssetOrderRef.current,
-            block.asset.path,
-          ];
-
-          const owner = String(doc.clientID);
-
-          setNodes((nodes) => {
-            if (requestIdRef.current !== currentRequestId) {
-              return nodes;
-            }
-
-            const placeholderNode: LlmFilePlaceholderNodeType = {
-              id: nodeId,
-              type: "llm-file-placeholder",
-              position: { x: 0, y: 0 },
-              data: {
-                assetPath: block.asset.path,
-                fileName: block.asset.fileName,
-                owner,
-              },
-              width: IMAGE_NODE_MIN_WIDTH,
-              height: IMAGE_NODE_MIN_HEIGHT,
-              style: {
-                width: IMAGE_NODE_MIN_WIDTH,
-                height: IMAGE_NODE_MIN_HEIGHT,
-              },
-              selected: false,
-            };
-
-            const nextNodes = [...nodes, placeholderNode];
-            return repositionGeneratedNodes(nextNodes);
-          });
-        };
-
-        const handleImageBlock = (block: {
-          type: "image";
-          asset: {
-            path: string;
-            uri: string;
-            fileName: string;
-          };
-          alt?: string;
-        }) => {
-          if (!supportsImageOutput) {
-            return;
-          }
-
-          const nodeId = assetNodeIdRef.current.get(block.asset.path);
-          if (!nodeId) {
-            return;
-          }
-
-          const processImage = async () => {
-            if (requestIdRef.current !== currentRequestId) {
-              return;
-            }
-
-            try {
-              const { width, height, naturalWidth, naturalHeight } =
-                await computeImageDisplaySize(block.asset.uri);
-
-              if (requestIdRef.current !== currentRequestId) {
-                return;
-              }
-
-              setNodes((nodes) => {
-                if (requestIdRef.current !== currentRequestId) {
-                  return nodes;
-                }
-
-                const nextNodes = nodes.map((node) => {
-                  if (node.id !== nodeId) {
-                    return node;
-                  }
-
-                  const imageNode: ImageNodeType = {
-                    id: nodeId,
-                    type: "image-node",
-                    position: node.position,
-                    data: {
-                      src: block.asset.uri,
-                      alt: block.alt ?? undefined,
-                      fileName: block.asset.fileName,
-                      naturalWidth,
-                      naturalHeight,
-                      assetOrigin: "local",
-                    },
-                    width,
-                    height,
-                    style: { width, height },
-                    selected: false,
-                  };
-
-                  return imageNode;
-                });
-
-                return repositionGeneratedNodes(nextNodes);
-              });
-
-              if (requestIdRef.current !== currentRequestId) {
-                return;
-              }
-
-              setEdges((edges) => {
-                const hasEdge = edges.some(
-                  (edge) => edge.source === id && edge.target === nodeId,
-                );
-
-                if (hasEdge) {
-                  return edges;
-                }
-
-                return [
-                  ...edges,
-                  {
-                    id: crypto.randomUUID(),
-                    source: id,
-                    sourceHandle: "right-source",
-                    target: nodeId,
-                    targetHandle: "left-target",
-                    type: "editable",
-                    data: {
-                      ...createDefaultEditableEdgeData(),
-                      targetMarker: "arrow",
-                      metadata: {
-                        generatedByNodeId: id,
-                        generatedFromPrompt: promptText,
-                      },
-                    },
-                  },
-                ];
-              });
-            } catch (error) {
-              console.error("Failed to process AI image chunk", error);
-              toast.error("Failed to render AI image", {
-                description:
-                  error instanceof Error ? error.message : String(error),
-              });
-            }
-          };
-
-          imageProcessingQueueRef.current = imageProcessingQueueRef.current
-            .then(() => processImage())
-            .catch((error) => {
-              console.error("Failed to process AI image chunk", error);
-              toast.error("Failed to render AI image", {
-                description:
-                  error instanceof Error ? error.message : String(error),
-              });
-            });
-        };
 
         await generateAiResult({
           model,
@@ -698,9 +471,9 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
             if (supportsImageOutput) {
               for (const block of newBlocks) {
                 if (block.type === "image-placeholder") {
-                  handlePlaceholderBlock(block);
+                  imageManager.handlePlaceholderBlock(block);
                 } else if (block.type === "image") {
-                  handleImageBlock(block);
+                  imageManager.handleImageBlock(block);
                 }
               }
             }
@@ -778,6 +551,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       setEdges,
       setNodes,
       updateNodeData,
+      doc,
     ],
   );
 
