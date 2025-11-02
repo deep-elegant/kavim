@@ -179,7 +179,7 @@ export const usePakAssets = () => {
   );
 
   const hasAsset = useCallback(
-    (path: string) => usedPathsRef.current.has(path),
+    async (path: string) => await window.projectPak.hasAsset(path),
     [],
   );
 

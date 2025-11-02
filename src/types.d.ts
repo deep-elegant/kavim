@@ -61,6 +61,7 @@ interface PakContext {
   removeAsset: (assetPath: string) => Promise<boolean>;
   listAssets: () => Promise<PakAssetSummary[]>;
   getAssetData: (assetPath: string) => Promise<PakAssetData | null>;
+  hasAsset: (assetPath: string) => Promise<boolean>;
 }
 
 type DialogFileFilter = {

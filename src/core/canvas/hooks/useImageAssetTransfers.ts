@@ -28,7 +28,7 @@ type UseImageAssetTransfersParams = {
   failedTransfers: FileTransfer[];
   pakAssets: Pick<
     UsePakAssetsReturn,
-    "hasAsset" | "registerAssetAtPath" | "isReady" | "refreshAssets"
+    "hasAsset" | "registerAssetAtPath" | "isReady"
   >;
   isCollaborationActive?: boolean;
 };
@@ -49,7 +49,7 @@ const useImageAssetTransfers = ({
   const processedFailedRef = useRef<Set<string>>(new Set());
   const pendingRefreshChecksRef = useRef<Set<string>>(new Set());
   const refreshPromiseRef = useRef<Promise<void> | null>(null);
-  const { hasAsset, registerAssetAtPath, isReady, refreshAssets } = pakAssets;
+  const { hasAsset, registerAssetAtPath, isReady } = pakAssets;
 
   const updateAssetStatus = useCallback(
     (
@@ -72,7 +72,10 @@ const useImageAssetTransfers = ({
           }
 
           if (status === null) {
-            if (data.assetStatus === undefined && data.assetError === undefined) {
+            if (
+              data.assetStatus === undefined &&
+              data.assetError === undefined
+            ) {
               return node;
             }
 
@@ -90,7 +93,7 @@ const useImageAssetTransfers = ({
 
           const desiredError =
             status === "error"
-              ? errorMessage ?? defaultErrorMessage
+              ? (errorMessage ?? defaultErrorMessage)
               : undefined;
 
           if (data.assetStatus === status && data.assetError === desiredError) {
@@ -154,11 +157,7 @@ const useImageAssetTransfers = ({
   );
 
   const setAssetStatus = useCallback(
-    (
-      assetPath: string,
-      status: ConcreteAssetStatus,
-      errorMessage?: string,
-    ) => {
+    (assetPath: string, status: ConcreteAssetStatus, errorMessage?: string) => {
       updateAssetStatus(assetPath, status, errorMessage);
     },
     [updateAssetStatus],
@@ -222,82 +221,47 @@ const useImageAssetTransfers = ({
   );
 
   useEffect(() => {
-    if (!isReady) {
-      return;
-    }
-
-    const referencedPaths = new Set<string>();
-
-    for (const node of nodes) {
-      if (node.type !== "image-node") {
-        continue;
+    const act = async () => {
+      if (!isReady) {
+        return;
       }
 
-      const data = node.data as ImageNodeData;
-      const assetPath = extractAssetPath(data.src);
-      if (!assetPath || referencedPaths.has(assetPath)) {
-        continue;
-      }
+      const referencedPaths = new Set<string>();
 
-      referencedPaths.add(assetPath);
-
-      if (hasAsset(assetPath)) {
-        pendingRefreshChecksRef.current.delete(assetPath);
-        requestedAssetsRef.current.delete(assetPath);
-        releaseAssetRequest(assetPath);
-        setAssetStatus(assetPath, "ready");
-        setAssetOrigin(assetPath, data.assetOrigin ?? "local");
-        continue;
-      }
-
-      if (
-        requestedAssetsRef.current.has(assetPath) ||
-        pendingRefreshChecksRef.current.has(assetPath)
-      ) {
-        continue;
-      }
-
-      const displayName =
-        data.fileName ??
-        data.alt ??
-        assetPath.split("/").pop() ??
-        "image asset";
-
-      pendingRefreshChecksRef.current.add(assetPath);
-
-      const ensureAssetAvailable = async () => {
-        if (!refreshPromiseRef.current) {
-          refreshPromiseRef.current = refreshAssets()
-            .catch((error) => {
-              console.error("[ImageAssetTransfers] failed to refresh pak", error);
-              throw error;
-            })
-            .finally(() => {
-              refreshPromiseRef.current = null;
-            });
+      for (const node of nodes) {
+        if (node.type !== "image-node") {
+          continue;
         }
 
-        try {
-          await refreshPromiseRef.current;
-        } catch {
-          // Error already logged; continue to attempt remote request when applicable.
+        const data = node.data as ImageNodeData;
+        const assetPath = extractAssetPath(data.src);
+        if (!assetPath || referencedPaths.has(assetPath)) {
+          continue;
         }
 
-        if (hasAsset(assetPath)) {
+        referencedPaths.add(assetPath);
+
+        if (await hasAsset(assetPath)) {
           pendingRefreshChecksRef.current.delete(assetPath);
           requestedAssetsRef.current.delete(assetPath);
           releaseAssetRequest(assetPath);
           setAssetStatus(assetPath, "ready");
           setAssetOrigin(assetPath, data.assetOrigin ?? "local");
-          return;
+          continue;
         }
 
-        if (!isCollaborationActive) {
-          pendingRefreshChecksRef.current.delete(assetPath);
-          setAssetOrigin(assetPath);
-          setAssetStatus(assetPath, "error");
-          return;
+        if (
+          requestedAssetsRef.current.has(assetPath) ||
+          pendingRefreshChecksRef.current.has(assetPath)
+        ) {
+          continue;
         }
+
+        const displayName =
+          data.fileName ??
+          data.alt ??
+          assetPath.split("/").pop() ??
+          "image asset";
 
         const requested = requestAsset(assetPath, displayName);
         if (requested) {
@@ -309,31 +273,21 @@ const useImageAssetTransfers = ({
           setAssetOrigin(assetPath);
         }
 
-        pendingRefreshChecksRef.current.delete(assetPath);
-      };
+        requestedAssetsRef.current.forEach((assetPath) => {
+          if (referencedPaths.has(assetPath)) {
+            return;
+          }
 
-      void ensureAssetAvailable().catch((error) => {
-        pendingRefreshChecksRef.current.delete(assetPath);
-        console.error("[ImageAssetTransfers] failed to ensure asset", {
-          assetPath,
-          error,
+          requestedAssetsRef.current.delete(assetPath);
+          releaseAssetRequest(assetPath);
+          clearAssetStatus(assetPath);
+          console.info("[ImageAssetTransfers] released unreferenced asset", {
+            assetPath,
+          });
         });
-      });
-    }
-
-    requestedAssetsRef.current.forEach((assetPath) => {
-      if (referencedPaths.has(assetPath)) {
-        return;
       }
-
-      requestedAssetsRef.current.delete(assetPath);
-      pendingRefreshChecksRef.current.delete(assetPath);
-      releaseAssetRequest(assetPath);
-      clearAssetStatus(assetPath);
-      console.info("[ImageAssetTransfers] released unreferenced asset", {
-        assetPath,
-      });
-    });
+    };
+    act();
   }, [
     nodes,
     isReady,
@@ -343,8 +297,6 @@ const useImageAssetTransfers = ({
     clearAssetStatus,
     setAssetOrigin,
     setAssetStatus,
-    refreshAssets,
-    isCollaborationActive,
   ]);
 
   useEffect(() => {
