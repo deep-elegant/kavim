@@ -84,31 +84,9 @@ const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeType>) => {
   const canExportImage = shouldShowImage && Boolean(src);
 
   const handleExportImage = useCallback(async () => {
-    if (!src) {
-      return;
-    }
-
-    if (!src.startsWith("pak://")) {
-      toast.error("Only pak assets can be exported.");
-      return;
-    }
-
     const assetPath = stripPakProtocol(src);
 
-    if (!assetPath) {
-      toast.error("Image asset is unavailable for export.");
-      return;
-    }
-
     try {
-      if (!window?.projectPak?.getAssetData) {
-        throw new Error("Project pak bridge is not available");
-      }
-
-      if (!window?.fileSystem?.saveFile) {
-        throw new Error("File system bridge is not available");
-      }
-
       const asset = await window.projectPak.getAssetData(assetPath);
 
       if (!asset) {
@@ -135,9 +113,7 @@ const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeType>) => {
         },
       ];
 
-      const payload = new Uint8Array(asset.data);
-
-      const savedPath = await window.fileSystem.saveFile(payload, {
+      const savedPath = await window.fileSystem.saveFile(asset.data, {
         defaultPath: defaultFileName,
         filters,
       });
