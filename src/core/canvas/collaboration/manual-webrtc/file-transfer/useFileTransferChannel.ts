@@ -83,6 +83,9 @@ export interface UseFileTransferChannelResult {
   failedTransfers: FileTransfer[];
   sendFile: (file: File, options?: SendFileOptions) => Promise<string | null>;
   requestFile: (payload: Omit<FileRequestMessage, "type">) => boolean;
+  requestFileFull: (
+    payload: Omit<FileRequestMessage, "type">,
+  ) => Promise<FileTransfer>;
   cancelTransfer: (id: string) => void;
 }
 
@@ -105,6 +108,15 @@ export const useFileTransferChannel = ({
   const incomingTransfersRef = useRef<Map<string, IncomingTransferState>>(
     new Map(),
   );
+  const pendingFileRequests = useRef<
+    Map<
+      string,
+      {
+        resolve: (t: FileTransfer) => void;
+        reject: (reason?: any) => void;
+      }
+    >
+  >(new Map());
   const configuredChannelRef = useRef<RTCDataChannel | null>(null);
   const channelCleanupRef = useRef<(() => void) | null>(null);
 
@@ -807,6 +819,63 @@ export const useFileTransferChannel = ({
     [sendControlMessage],
   );
 
+  const requestFileFull = useCallback(
+    async (
+      payload: Omit<FileRequestMessage, "type">,
+    ): Promise<FileTransfer> => {
+      const { assetPath } = payload;
+      if (!assetPath) {
+        throw new Error("assetPath is required for requestFileFull");
+      }
+
+      const existing = [...completedTransfers, ...failedTransfers].find(
+        (t) => t.assetPath === assetPath && t.direction === "incoming",
+      );
+
+      if (existing) {
+        if (existing.status === "completed") {
+          return existing;
+        } else if (existing.status === "failed") {
+          throw new Error(existing.error ?? "Transfer previously failed");
+        }
+      }
+
+      return new Promise<FileTransfer>((resolve, reject) => {
+        if (pendingFileRequests.current.has(assetPath)) {
+          return reject(
+            new Error(`Request for file ${assetPath} is already in progress`),
+          );
+        }
+
+        pendingFileRequests.current.set(assetPath, { resolve, reject });
+
+        if (!requestFile(payload)) {
+          pendingFileRequests.current.delete(assetPath);
+          return reject(new Error("Failed to send file request"));
+        }
+      });
+    },
+    [completedTransfers, failedTransfers, pendingFileRequests, requestFile],
+  );
+
+  useEffect(() => {
+    const finishedTransfers = [...completedTransfers, ...failedTransfers];
+    for (const transfer of finishedTransfers) {
+      if (
+        transfer.assetPath &&
+        pendingFileRequests.current.has(transfer.assetPath)
+      ) {
+        const promise = pendingFileRequests.current.get(transfer.assetPath)!;
+        if (transfer.status === "completed") {
+          promise.resolve(transfer);
+        } else {
+          promise.reject(transfer.error ?? "Transfer failed");
+        }
+        pendingFileRequests.current.delete(transfer.assetPath);
+      }
+    }
+  }, [completedTransfers, failedTransfers, pendingFileRequests]);
+
   useEffect(() => {
     return () => {
       outgoingTransfersRef.current.forEach((state) => {
@@ -822,6 +891,7 @@ export const useFileTransferChannel = ({
       failedTransfers,
       sendFile,
       requestFile,
+      requestFileFull,
       cancelTransfer,
     }),
     [
@@ -830,6 +900,7 @@ export const useFileTransferChannel = ({
       completedTransfers,
       failedTransfers,
       requestFile,
+      requestFileFull,
       sendFile,
     ],
   );

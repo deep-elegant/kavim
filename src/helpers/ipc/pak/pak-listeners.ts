@@ -25,6 +25,7 @@ import {
   PAK_REMOVE_ASSET_CHANNEL,
   PAK_SAVE_CHANNEL,
   PAK_GET_ASSET_CHANNEL,
+  PAK_HAS_ASSET_CHANNEL,
 } from "./pak-channels";
 import {
   buildManifest,
@@ -189,5 +190,18 @@ export const addPakEventListeners = () => {
 
   ipcMain.handle(PAK_GET_ASSET_CHANNEL, async (_event, assetPath: string) => {
     return getAssetData(assetPath);
+  });
+
+  ipcMain.handle(PAK_HAS_ASSET_CHANNEL, async (_event, assetPath: string) => {
+    const pak = ensureActivePak();
+    const normalizedPath = assetPath.startsWith("pak://")
+        ? assetPath.slice("pak://".length)
+        : assetPath;
+    const file = pak.files[normalizedPath];
+
+    if (!file) {
+        return false;
+    }
+    return true;
   });
 };
