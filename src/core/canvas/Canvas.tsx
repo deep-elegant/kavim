@@ -65,7 +65,6 @@ import useCanvasImageNodes, {
   isImageFile,
 } from "./hooks/useCanvasImageNodes";
 import useCanvasYouTubeNodes from "./hooks/useCanvasYouTubeNodes"; // Hook for managing YouTube nodes on the canvas
-import useImageAssetTransfers from "./hooks/useImageAssetTransfers";
 import type { CanvasNode, ToolId } from "./types";
 import { StatsForNerdsOverlay } from "@/components/diagnostics/StatsForNerdsOverlay";
 import { usePakAssets } from "@/core/pak/usePakAssets";
@@ -177,13 +176,6 @@ const CanvasInner = () => {
     broadcastSelection,
     broadcastTyping,
   } = useCanvasCollaboration();
-  const {
-    activeTransfers,
-    completedTransfers,
-    failedTransfers,
-    requestAsset: requestRemoteAsset,
-    releaseAssetRequest: releaseRemoteAssetRequest,
-  } = useWebRTC();
   const isCollaborationActive = dataChannelState === "open";
 
   const selectionMode = useMemo(() => {
@@ -380,22 +372,6 @@ const CanvasInner = () => {
     },
     [addYouTubeNode, setIsYouTubeDialogOpen],
   );
-
-  useImageAssetTransfers({
-    nodes,
-    setNodes,
-    requestAsset: requestRemoteAsset,
-    releaseAssetRequest: releaseRemoteAssetRequest,
-    activeTransfers,
-    completedTransfers,
-    failedTransfers,
-    pakAssets: {
-      hasAsset: pakAssets.hasAsset,
-      registerAssetAtPath: pakAssets.registerAssetAtPath,
-      isReady: pakAssets.isReady,
-    },
-    isCollaborationActive,
-  });
 
   // Drawing tools toggle active state
   const handleDrawingToolSelect = useCallback(

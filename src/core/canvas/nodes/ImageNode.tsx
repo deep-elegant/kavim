@@ -1,10 +1,11 @@
-import React, { memo, useCallback, useMemo } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { type Node, type NodeProps } from "@xyflow/react";
 import { AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import NodeInteractionOverlay from "./NodeInteractionOverlay";
 import { ContextMenuItem } from "@/components/ui/context-menu";
+import { useWebRTC } from "../collaboration/WebRTCContext";
 
 const stripPakProtocol = (value: string) =>
   value.startsWith("pak://") ? value.slice("pak://".length) : value;
@@ -76,12 +77,15 @@ export const IMAGE_NODE_MIN_HEIGHT = 120;
  * - Lazy loads images for performance with many nodes.
  */
 const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeType>) => {
+  const { requestFileFull } = useWebRTC();
   const { src, alt, fileName, assetStatus, assetError } = data;
   const isDownloading = assetStatus === "downloading";
   const hasError = assetStatus === "error";
   const shouldShowImage = Boolean(src) && !isDownloading && !hasError;
   const shouldShowPlaceholder = !src && !isDownloading && !hasError;
   const canExportImage = shouldShowImage && Boolean(src);
+  const isFileRequested = useRef(false);
+  const fileStatus = useRef("not-ready");
 
   const handleExportImage = useCallback(async () => {
     const assetPath = stripPakProtocol(src);
@@ -143,6 +147,32 @@ const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeType>) => {
     [canExportImage, handleExportImage],
   );
 
+  useEffect(() => {
+    const act = async() => {
+        if (await window.projectPak.hasAsset(src)) {
+            fileStatus.current = "ready";
+            return;
+        }
+
+        if (isFileRequested.current) {
+            return;
+        }
+
+        isFileRequested.current = true;
+        const response = await requestFileFull({
+            assetPath: stripPakProtocol(src),
+            displayName: fileName
+        })
+
+        window.projectPak.addAsset({
+            path: response.assetPath!,
+            data: await response.payload!.arrayBuffer()
+        })
+        fileStatus.current = "ready";
+    }
+    void act();
+  }, [requestFileFull, src, fileName])
+
   return (
     <NodeInteractionOverlay
       nodeId={id}
@@ -152,7 +182,7 @@ const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeType>) => {
       contextMenuItems={contextMenuItems}
     >
       <div className="border-border bg-background relative h-full w-full overflow-hidden rounded-lg border">
-        {shouldShowImage ? (
+        {fileStatus.current === "ready" ? (
           <img
             src={src}
             alt={alt ?? fileName ?? "Canvas image"}
@@ -160,21 +190,15 @@ const ImageNode = memo(({ id, data, selected }: NodeProps<ImageNodeType>) => {
             draggable={false}
             loading="lazy"
           />
-        ) : shouldShowPlaceholder ? (
-          <div className="text-muted-foreground flex h-full w-full items-center justify-center text-sm">
-            No image
-          </div>
-        ) : null}
-
-        {isDownloading ? (
-          <div className="bg-background/80 absolute inset-0 flex items-center justify-center">
+        ) : (
+            <div className="bg-background/80 absolute inset-0 flex items-center justify-center">
             <Loader2
               className="text-muted-foreground h-6 w-6 animate-spin"
               aria-hidden="true"
             />
             <span className="sr-only">Downloading image</span>
           </div>
-        ) : null}
+        )}
 
         {hasError ? (
           <div className="bg-background/90 absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center">
