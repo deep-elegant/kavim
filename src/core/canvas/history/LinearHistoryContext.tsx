@@ -688,7 +688,6 @@ export const LinearHistoryProvider = ({
                       fileName: block.asset.fileName,
                       naturalWidth,
                       naturalHeight,
-                      assetOrigin: "local",
                     },
                     width,
                     height,

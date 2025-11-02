@@ -14,8 +14,6 @@ export type ImageNodeData = {
   naturalHeight?: number;
   /** Local-only status for asset availability */
   assetStatus?: "downloading" | "ready" | "error";
-  /** Hint about where the asset originated (local vs. remote) */
-  assetOrigin?: "local" | "remote";
   assetError?: string;
 };
 

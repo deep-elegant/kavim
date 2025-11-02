@@ -79,7 +79,6 @@ const useImageAssetTransfers = ({
             const nextData: ImageNodeData = { ...data };
             delete (nextData as Partial<ImageNodeData>).assetStatus;
             delete (nextData as Partial<ImageNodeData>).assetError;
-            delete (nextData as Partial<ImageNodeData>).assetOrigin;
             mutated = true;
 
             return {
@@ -171,56 +170,6 @@ const useImageAssetTransfers = ({
     [updateAssetStatus],
   );
 
-  const setAssetOrigin = useCallback(
-    (assetPath: string, origin?: ImageNodeData["assetOrigin"]) => {
-      setNodes((current) => {
-        let mutated = false;
-        const next = current.map((node) => {
-          if (node.type !== "image-node") {
-            return node;
-          }
-
-          const data = node.data as ImageNodeData;
-          const nodeAssetPath = extractAssetPath(data.src);
-          if (nodeAssetPath !== assetPath) {
-            return node;
-          }
-
-          if (origin === undefined) {
-            if (data.assetOrigin === undefined) {
-              return node;
-            }
-
-            const nextData: ImageNodeData = { ...data };
-            delete (nextData as Partial<ImageNodeData>).assetOrigin;
-            mutated = true;
-            return {
-              ...node,
-              data: nextData,
-            };
-          }
-
-          if (data.assetOrigin === origin) {
-            return node;
-          }
-
-          const nextData: ImageNodeData = {
-            ...data,
-            assetOrigin: origin,
-          };
-          mutated = true;
-          return {
-            ...node,
-            data: nextData,
-          };
-        });
-
-        return mutated ? next : current;
-      });
-    },
-    [setNodes],
-  );
-
   useEffect(() => {
     if (!isReady) {
       return;
@@ -246,7 +195,6 @@ const useImageAssetTransfers = ({
         requestedAssetsRef.current.delete(assetPath);
         releaseAssetRequest(assetPath);
         setAssetStatus(assetPath, "ready");
-        setAssetOrigin(assetPath, data.assetOrigin ?? "local");
         continue;
       }
 
@@ -288,13 +236,11 @@ const useImageAssetTransfers = ({
           requestedAssetsRef.current.delete(assetPath);
           releaseAssetRequest(assetPath);
           setAssetStatus(assetPath, "ready");
-          setAssetOrigin(assetPath, data.assetOrigin ?? "local");
           return;
         }
 
         if (!isCollaborationActive) {
           pendingRefreshChecksRef.current.delete(assetPath);
-          setAssetOrigin(assetPath);
           setAssetStatus(assetPath, "error");
           return;
         }
@@ -303,10 +249,8 @@ const useImageAssetTransfers = ({
         if (requested) {
           requestedAssetsRef.current.add(assetPath);
           setAssetStatus(assetPath, "downloading");
-          setAssetOrigin(assetPath, "remote");
         } else {
           setAssetStatus(assetPath, "error");
-          setAssetOrigin(assetPath);
         }
 
         pendingRefreshChecksRef.current.delete(assetPath);
@@ -341,7 +285,6 @@ const useImageAssetTransfers = ({
     requestAsset,
     releaseAssetRequest,
     clearAssetStatus,
-    setAssetOrigin,
     setAssetStatus,
     refreshAssets,
     isCollaborationActive,
@@ -383,7 +326,6 @@ const useImageAssetTransfers = ({
           requestedAssetsRef.current.delete(assetPath);
           releaseAssetRequest(assetPath);
           setAssetStatus(assetPath, "ready");
-          setAssetOrigin(assetPath, "remote");
           console.info("[ImageAssetTransfers] asset registration complete", {
             transferId: transfer.id,
             assetPath,
@@ -409,7 +351,6 @@ const useImageAssetTransfers = ({
     registerAssetAtPath,
     releaseAssetRequest,
     setAssetStatus,
-    setAssetOrigin,
   ]);
 
   useEffect(() => {
@@ -453,9 +394,8 @@ const useImageAssetTransfers = ({
       }
 
       setAssetStatus(transfer.assetPath, "downloading");
-      setAssetOrigin(transfer.assetPath, "remote");
     });
-  }, [activeTransfers, setAssetOrigin, setAssetStatus]);
+  }, [activeTransfers, setAssetStatus]);
 };
 
 export default useImageAssetTransfers;

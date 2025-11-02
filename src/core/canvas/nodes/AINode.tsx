@@ -538,8 +538,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
             block.asset.path,
           ];
 
-          const owner = String(doc.clientID);
-
           setNodes((nodes) => {
             if (requestIdRef.current !== currentRequestId) {
               return nodes;
@@ -552,7 +550,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
               data: {
                 assetPath: block.asset.path,
                 fileName: block.asset.fileName,
-                owner,
               },
               width: IMAGE_NODE_MIN_WIDTH,
               height: IMAGE_NODE_MIN_HEIGHT,
@@ -619,7 +616,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                       fileName: block.asset.fileName,
                       naturalWidth,
                       naturalHeight,
-                      assetOrigin: "local",
                     },
                     width,
                     height,
