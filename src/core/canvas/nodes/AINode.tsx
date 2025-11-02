@@ -225,8 +225,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
   const supportsTextInput = modelInputCapabilities.includes("text");
   const supportsImageInput = modelInputCapabilities.includes("image");
   const supportsImageOutput = modelOutputCapabilities.includes("image");
-  const isImageOnlyModel = supportsImageOutput &&
-    !modelOutputCapabilities.includes("text");
   const status = data.status ?? "not-started";
   const resultMarkdown = data.result ?? "";
   const resultHtml = useMemo(
@@ -238,19 +236,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     [resultHtml],
   );
   const hasTextResponse = resultPlainText.trim().length > 0;
-  const imageOnlyResultText = resultMarkdown.trim();
-  const imageOnlyHasErrorText = isImageOnlyModel && imageOnlyResultText.length > 0;
-  const imageOnlyStatusText =
-    status === "done"
-      ? "Generated images have been added to the canvas."
-      : "Generating images…";
-  const responseResizeSignature = useMemo(() => {
-    if (isImageOnlyModel) {
-      return `image-only-${status}`;
-    }
-
-    return resultMarkdown;
-  }, [isImageOnlyModel, resultMarkdown, status]);
+  const responseResizeSignature = useMemo(() => resultMarkdown, [resultMarkdown]);
   const label = data.label ?? "";
 
   const promptHasContent = useMemo(
@@ -719,33 +705,27 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
               }
             }
 
-            if (!isImageOnlyModel) {
-              setNodes((nodes) =>
-                nodes.map((n) => {
-                  if (n.id !== id) {
-                    return n;
-                  }
+            setNodes((nodes) =>
+              nodes.map((n) => {
+                if (n.id !== id) {
+                  return n;
+                }
 
-                  const nodeData = n.data as AiNodeData;
+                const nodeData = n.data as AiNodeData;
 
-                  return {
-                    ...n,
-                    data: {
-                      ...nodeData,
-                      result: aggregatedText,
-                    },
-                  } satisfies AiNodeType;
-                }),
-              );
-            }
+                return {
+                  ...n,
+                  data: {
+                    ...nodeData,
+                    result: aggregatedText,
+                  },
+                } satisfies AiNodeType;
+              }),
+            );
           },
           onUpdate: (fullResponse) => {
             // Only update if this is still the current request (user hasn't changed prompt)
             if (requestIdRef.current === currentRequestId) {
-              if (isImageOnlyModel) {
-                return;
-              }
-
               setNodes((nodes) =>
                 nodes.map((n) => {
                   if (n.id !== id) {
@@ -792,7 +772,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     [
       buildChatHistory,
       id,
-      isImageOnlyModel,
       supportsImageOutput,
       model,
       modelLabel,
@@ -815,7 +794,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
   // Auto-expand node height when response content grows beyond current height
   useEffect(() => {
-    if (isImageOnlyModel || !contentRef.current) {
+    if (!contentRef.current) {
       return;
     }
 
@@ -841,7 +820,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       }
       return nodes;
     });
-  }, [id, isImageOnlyModel, responseResizeSignature, setNodes]);
+  }, [id, responseResizeSignature, setNodes]);
 
   const handleCopyTextResponse = useCallback(async () => {
     const contentToCopy = resultMarkdown || resultPlainText;
@@ -923,7 +902,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       className="text-slate-900"
       editor={editor}
       contextMenuItems={
-        isImageOnlyModel || !hasTextResponse
+        !hasTextResponse
           ? undefined
           : (
               <ContextMenuItem onSelect={() => void handleCopyTextResponse()}>
@@ -1056,18 +1035,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                   hasTextResponse ? "text-slate-900" : "text-slate-500",
                 )}
               >
-                {isImageOnlyModel ? (
-                  <p
-                    className={cn(
-                      "text-sm",
-                      imageOnlyHasErrorText ? "text-destructive" : "text-slate-500",
-                    )}
-                  >
-                    {imageOnlyHasErrorText
-                      ? imageOnlyResultText
-                      : imageOnlyStatusText}
-                  </p>
-                ) : hasTextResponse ? (
+                {hasTextResponse ? (
                   <div
                     className="prose prose-sm max-w-none text-slate-900"
                     dangerouslySetInnerHTML={{ __html: resultHtml }}

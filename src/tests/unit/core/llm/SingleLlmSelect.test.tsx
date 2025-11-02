@@ -81,7 +81,7 @@ describe("SingleLlmSelect", () => {
     ]);
   });
 
-  it("groups image-only models under an Image Generator label", async () => {
+  it("groups image-capable models under an Image Generator label", async () => {
     render(
       <FormWrapper>
         <SingleLlmSelect value="chatgpt" onChange={vi.fn()} />

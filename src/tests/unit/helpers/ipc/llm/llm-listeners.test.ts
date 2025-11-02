@@ -110,7 +110,7 @@ describe("addLlmEventListeners", () => {
         },
       ],
       headers: undefined,
-      capabilities: { input: ["text"], output: ["text", "image"] },
+      capabilities: { input: ["text", "image"], output: ["text", "image"] },
     };
 
     handler?.(

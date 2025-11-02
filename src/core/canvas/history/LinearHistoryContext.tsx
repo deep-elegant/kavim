@@ -284,9 +284,7 @@ export const LinearHistoryProvider = ({
         resolvedModel?.capabilities?.output ?? ["text"];
       const supportsTextInput = modelInputCapabilities.includes("text");
       const supportsImageInput = modelInputCapabilities.includes("image");
-      const isImageOnlyModel =
-        modelOutputCapabilities.includes("image") &&
-        !modelOutputCapabilities.includes("text");
+      const supportsImageOutput = modelOutputCapabilities.includes("image");
 
       if (!activeNodeId || (!supportsImageInput && trimmedPrompt.length === 0)) {
         return;
@@ -604,7 +602,7 @@ export const LinearHistoryProvider = ({
           type: "image-placeholder";
           asset: { path: string; uri: string; fileName: string };
         }) => {
-          if (!isImageOnlyModel) {
+          if (!supportsImageOutput) {
             return;
           }
 
@@ -648,7 +646,7 @@ export const LinearHistoryProvider = ({
           asset: { path: string; uri: string; fileName: string };
           alt?: string;
         }) => {
-          if (!isImageOnlyModel) {
+          if (!supportsImageOutput) {
             return;
           }
 
@@ -767,7 +765,7 @@ export const LinearHistoryProvider = ({
               return;
             }
 
-            if (isImageOnlyModel) {
+            if (supportsImageOutput) {
               for (const block of newBlocks) {
                 if (block.type === "image-placeholder") {
                   handlePlaceholderBlock(block);
@@ -775,7 +773,6 @@ export const LinearHistoryProvider = ({
                   handleImageBlock(block);
                 }
               }
-              return;
             }
 
             setNodes((existing) =>
@@ -799,10 +796,6 @@ export const LinearHistoryProvider = ({
           onUpdate: (fullResponse) => {
             // If the request ID has changed, it means a new request has been sent, so we should ignore this update.
             if (requestIdRef.current !== currentRequestId) {
-              return;
-            }
-
-            if (isImageOnlyModel) {
               return;
             }
 
