@@ -428,7 +428,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       });
 
       try {
-        const owner = doc ? String(doc.clientID) : undefined;
         const imageManager = createAiImageGenerationManager({
           supportsImageOutput,
           isRequestCurrent: () => requestIdRef.current === currentRequestId,
@@ -446,7 +445,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
             generatedByNodeId: id,
             generatedFromPrompt: promptText,
           }),
-          owner,
           onImageProcessingError: (error) => {
             console.error("Failed to process AI image chunk", error);
             toast.error("Failed to render AI image", {
@@ -463,6 +461,9 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
           model,
           messages,
           minimumUpdateIntervalMs: 50,
+          onStart: () => {
+            imageManager.handlePlaceholderBlock()
+          },
           onProgress: ({ aggregatedText, newBlocks }) => {
             if (requestIdRef.current !== currentRequestId) {
               return;
@@ -470,9 +471,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
             if (supportsImageOutput) {
               for (const block of newBlocks) {
-                if (block.type === "image-placeholder") {
-                  imageManager.handlePlaceholderBlock(block);
-                } else if (block.type === "image") {
+                if (block.type === "image") {
                   imageManager.handleImageBlock(block);
                 }
               }

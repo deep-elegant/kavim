@@ -552,6 +552,9 @@ export const LinearHistoryProvider = ({
           model,
           messages,
           minimumUpdateIntervalMs: 50,
+          onStart: () => {
+            imageManager.handlePlaceholderBlock();
+          },
           onProgress: ({ aggregatedText, newBlocks }) => {
             if (requestIdRef.current !== currentRequestId) {
               return;
@@ -559,9 +562,7 @@ export const LinearHistoryProvider = ({
 
             if (supportsImageOutput) {
               for (const block of newBlocks) {
-                if (block.type === "image-placeholder") {
-                  imageManager.handlePlaceholderBlock(block);
-                } else if (block.type === "image") {
+                if (block.type === "image") {
                   imageManager.handleImageBlock(block);
                 }
               }
