@@ -21,21 +21,12 @@ import type { AiNodeData } from "../nodes/AINode";
 import type { TextNodeData } from "../nodes/TextNode";
 import type { StickyNoteData } from "../nodes/StickyNoteNode";
 import type { ShapeNodeData } from "../nodes/ShapeNode";
-import {
-  IMAGE_NODE_MIN_HEIGHT,
-  IMAGE_NODE_MIN_WIDTH,
-  type ImageNodeData,
-  type ImageNodeType,
-} from "../nodes/ImageNode";
-import type { LlmFilePlaceholderNodeType } from "../nodes/LlmFilePlaceholderNode";
+import { type ImageNodeData } from "../nodes/ImageNode";
 import type { YouTubeNodeData } from "../nodes/YouTubeNode";
 import { formatTextualNodeSummary, htmlToPlainText } from "../utils/text";
 import { AI_MODELS, type AiModel } from "@/core/llm/aiModels";
 import { generateAiResult } from "@/core/llm/generateAiResult";
-import {
-  AI_IMAGE_VERTICAL_GAP,
-  computeImageDisplaySize,
-} from "../nodes/aiImageUtils";
+import { createAiImageGenerationManager } from "../utils/aiImageGeneration";
 import { buildCanvasChatMessages } from "@/core/llm/buildCanvasChatMessages";
 
 export type LinearHistoryItem = {
@@ -526,234 +517,35 @@ export const LinearHistoryProvider = ({
       requestIdRef.current = currentRequestId;
 
       try {
-        const assetNodeIds = new Map<string, string>();
-        let imageProcessingQueue: Promise<void> = Promise.resolve();
-        let imageAssetOrder: string[] = [];
-
-        const repositionGeneratedNodes = (nodes: Node[]): Node[] => {
-          const targetNode = nodes.find(
-            (node): node is Node<AiNodeData> =>
-              node.id === targetNodeId && node.type === "ai-node",
-          );
-
-          if (!targetNode) {
-            return nodes;
-          }
-
-          const targetWidth = Math.max(
-            AI_NODE_DEFAULT_WIDTH,
-            Number(targetNode.style?.width ?? targetNode.width ?? AI_NODE_DEFAULT_WIDTH),
-          );
-
-          let yOffset = 0;
-          const targetPositions = new Map<string, { x: number; y: number }>();
-
-          for (const assetPath of imageAssetOrder) {
-            const nodeId = assetNodeIds.get(assetPath);
-            if (!nodeId) {
-              continue;
-            }
-
-            const node = nodes.find((candidate) => candidate.id === nodeId);
-            if (!node) {
-              continue;
-            }
-
-            const height = Math.max(
-              IMAGE_NODE_MIN_HEIGHT,
-              Number(
-                node.style?.height ?? node.height ?? IMAGE_NODE_MIN_HEIGHT,
-              ),
-            );
-
-            targetPositions.set(nodeId, {
-              x:
-                targetNode.position.x +
-                targetWidth +
-                AI_NODE_HORIZONTAL_GAP,
-              y: targetNode.position.y + yOffset,
+        const imageManager = createAiImageGenerationManager({
+          supportsImageOutput,
+          isRequestCurrent: () => requestIdRef.current === currentRequestId,
+          getAnchorNode: (nodes) =>
+            nodes.find(
+              (node): node is Node<AiNodeData> =>
+                node.id === targetNodeId && node.type === "ai-node",
+            ),
+          minimumAnchorWidth: AI_NODE_DEFAULT_WIDTH,
+          horizontalGap: AI_NODE_HORIZONTAL_GAP,
+          setNodes,
+          setEdges,
+          edgeSourceId: targetNodeId,
+          edgeSourceHandle: "right-source",
+          buildEdgeMetadata: () => ({
+            generatedByNodeId: targetNodeId,
+            generatedFromPrompt: trimmedPrompt,
+          }),
+          onImageProcessingError: (error) => {
+            console.error("Failed to process AI image chunk", error);
+            toast.error("Failed to render AI image", {
+              description: error instanceof Error ? error.message : String(error),
             });
+          },
+        });
 
-            yOffset += height + AI_IMAGE_VERTICAL_GAP;
-          }
-
-          if (targetPositions.size === 0) {
-            return nodes;
-          }
-
-          return nodes.map((node) => {
-            const position = targetPositions.get(node.id);
-            if (!position) {
-              return node;
-            }
-
-            if (node.position.x === position.x && node.position.y === position.y) {
-              return node;
-            }
-
-            return {
-              ...node,
-              position,
-            };
-          });
-        };
-
-        const handlePlaceholderBlock = (block: {
-          type: "image-placeholder";
-          asset: { path: string; uri: string; fileName: string };
-        }) => {
-          if (!supportsImageOutput) {
-            return;
-          }
-
-          if (assetNodeIds.has(block.asset.path)) {
-            return;
-          }
-
-          const nodeId = crypto.randomUUID();
-          assetNodeIds.set(block.asset.path, nodeId);
-          imageAssetOrder = [...imageAssetOrder, block.asset.path];
-
-          setNodes((existing) => {
-            if (requestIdRef.current !== currentRequestId) {
-              return existing;
-            }
-
-            const placeholderNode: LlmFilePlaceholderNodeType = {
-              id: nodeId,
-              type: "llm-file-placeholder",
-              position: { x: 0, y: 0 },
-              data: {
-                assetPath: block.asset.path,
-                fileName: block.asset.fileName,
-              },
-              width: IMAGE_NODE_MIN_WIDTH,
-              height: IMAGE_NODE_MIN_HEIGHT,
-              style: {
-                width: IMAGE_NODE_MIN_WIDTH,
-                height: IMAGE_NODE_MIN_HEIGHT,
-              },
-              selected: false,
-            };
-
-            const nextNodes = [...existing, placeholderNode];
-            return repositionGeneratedNodes(nextNodes);
-          });
-        };
-
-        const handleImageBlock = (block: {
-          type: "image";
-          asset: { path: string; uri: string; fileName: string };
-          alt?: string;
-        }) => {
-          if (!supportsImageOutput) {
-            return;
-          }
-
-          const nodeId = assetNodeIds.get(block.asset.path);
-          if (!nodeId) {
-            return;
-          }
-
-          const processImage = async () => {
-            if (requestIdRef.current !== currentRequestId) {
-              return;
-            }
-
-            try {
-              const { width, height, naturalWidth, naturalHeight } =
-                await computeImageDisplaySize(block.asset.uri);
-
-              if (requestIdRef.current !== currentRequestId) {
-                return;
-              }
-
-              setNodes((existing) => {
-                if (requestIdRef.current !== currentRequestId) {
-                  return existing;
-                }
-
-                const nextNodes = existing.map((node) => {
-                  if (node.id !== nodeId) {
-                    return node;
-                  }
-
-                  const imageNode: ImageNodeType = {
-                    id: nodeId,
-                    type: "image-node",
-                    position: node.position,
-                    data: {
-                      src: block.asset.uri,
-                      alt: block.alt ?? undefined,
-                      fileName: block.asset.fileName,
-                      naturalWidth,
-                      naturalHeight,
-                      assetOrigin: "local",
-                    },
-                    width,
-                    height,
-                    style: { width, height },
-                    selected: false,
-                  };
-
-                  return imageNode;
-                });
-
-                return repositionGeneratedNodes(nextNodes);
-              });
-
-              if (requestIdRef.current !== currentRequestId) {
-                return;
-              }
-
-              setEdges((existingEdges) => {
-                const hasEdge = existingEdges.some(
-                  (edge) => edge.source === targetNodeId && edge.target === nodeId,
-                );
-
-                if (hasEdge) {
-                  return existingEdges;
-                }
-
-                return [
-                  ...existingEdges,
-                  {
-                    id: crypto.randomUUID(),
-                    source: targetNodeId,
-                    sourceHandle: "right-source",
-                    target: nodeId,
-                    targetHandle: "left-target",
-                    type: "editable",
-                    data: {
-                      ...createDefaultEditableEdgeData(),
-                      targetMarker: "arrow",
-                      metadata: {
-                        generatedByNodeId: targetNodeId,
-                        generatedFromPrompt: trimmedPrompt,
-                      },
-                    },
-                  },
-                ];
-              });
-            } catch (error) {
-              console.error("Failed to process AI image chunk", error);
-              toast.error("Failed to render AI image", {
-                description:
-                  error instanceof Error ? error.message : String(error),
-              });
-            }
-          };
-
-          imageProcessingQueue = imageProcessingQueue
-            .then(() => processImage())
-            .catch((error) => {
-              console.error("Failed to process AI image chunk", error);
-              toast.error("Failed to render AI image", {
-                description:
-                  error instanceof Error ? error.message : String(error),
-              });
-            });
-        };
+        if (supportsImageOutput) {
+          imageManager.reset();
+        }
 
         // Generate the AI result.
         await generateAiResult({
@@ -768,9 +560,9 @@ export const LinearHistoryProvider = ({
             if (supportsImageOutput) {
               for (const block of newBlocks) {
                 if (block.type === "image-placeholder") {
-                  handlePlaceholderBlock(block);
+                  imageManager.handlePlaceholderBlock(block);
                 } else if (block.type === "image") {
-                  handleImageBlock(block);
+                  imageManager.handleImageBlock(block);
                 }
               }
             }
