@@ -461,6 +461,9 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
           model,
           messages,
           minimumUpdateIntervalMs: 50,
+          onStart: () => {
+            imageManager.handlePlaceholderBlock()
+          },
           onProgress: ({ aggregatedText, newBlocks }) => {
             if (requestIdRef.current !== currentRequestId) {
               return;
@@ -468,9 +471,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
             if (supportsImageOutput) {
               for (const block of newBlocks) {
-                if (block.type === "image-placeholder") {
-                  imageManager.handlePlaceholderBlock(block);
-                } else if (block.type === "image") {
+                if (block.type === "image") {
                   imageManager.handleImageBlock(block);
                 }
               }

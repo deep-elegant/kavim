@@ -43,3 +43,7 @@ export type LlmErrorPayload = {
 export type LlmCompletePayload = {
   requestId: string;
 };
+
+export type LlmStartPayload = {
+  requestId: string;
+};

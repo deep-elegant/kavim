@@ -14,6 +14,7 @@ import type {
   LlmCompletePayload,
   LlmErrorPayload,
   LlmModelCapabilities,
+  LlmStartPayload,
   LlmStreamRequestPayload,
 } from "@/helpers/ipc/llm/llm-types";
 
@@ -129,6 +130,7 @@ const assertLlmBridgeAvailable = (): asserts window is Window & {
     onChunk: (callback: (payload: LlmChunkPayload) => void) => () => void;
     onError: (callback: (payload: LlmErrorPayload) => void) => () => void;
     onComplete: (callback: (payload: LlmCompletePayload) => void) => () => void;
+    onStart: (callback: (payload: LlmStartPayload) => void) => () => void;
   };
 } => {
   if (!window.llm) {
@@ -147,12 +149,14 @@ export const generateAiResult = async ({
   messages,
   onUpdate,
   onProgress,
+  onStart,
   minimumUpdateIntervalMs = 50,
 }: {
   model: AiModel;
   messages: ChatMessage[];
   onUpdate: (chunk: string) => void;
   onProgress?: (update: StreamProgressUpdate) => void;
+  onStart?: () => void;
   minimumUpdateIntervalMs?: number;
 }): Promise<void> => {
   const settings = MODEL_SETTINGS[model];
@@ -257,19 +261,6 @@ export const generateAiResult = async ({
         return;
       }
 
-      if (payload.type === "image-placeholder") {
-        onProgress?.({
-          aggregatedText: aggregatedResponse,
-          newBlocks: [
-            {
-              type: "image-placeholder",
-              asset: payload.asset,
-            },
-          ],
-        });
-        return;
-      }
-
       if (payload.type === "image") {
         onProgress?.({
           aggregatedText: aggregatedResponse,
@@ -304,9 +295,18 @@ export const generateAiResult = async ({
       resolve();
     };
 
+    const handleStart = (payload: LlmStartPayload) => {
+      if (payload.requestId !== requestId) {
+        return;
+      }
+
+      onStart?.();
+    };
+
     cleanupCallbacks.push(window.llm.onChunk(handleChunk));
     cleanupCallbacks.push(window.llm.onError(handleError));
     cleanupCallbacks.push(window.llm.onComplete(handleComplete));
+    cleanupCallbacks.push(window.llm.onStart(handleStart));
 
     try {
       // Check if user enabled a gateway (OpenRouter, etc.) for all models

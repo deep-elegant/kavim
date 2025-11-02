@@ -6,6 +6,7 @@ import type {
   LlmChunkPayload,
   LlmCompletePayload,
   LlmErrorPayload,
+  LlmStartPayload,
   LlmStreamRequestPayload,
 } from "./helpers/ipc/llm/llm-types";
 import type {
@@ -95,6 +96,7 @@ interface LlmContext {
   onChunk: (callback: (payload: LlmChunkPayload) => void) => () => void;
   onError: (callback: (payload: LlmErrorPayload) => void) => () => void;
   onComplete: (callback: (payload: LlmCompletePayload) => void) => () => void;
+  onStart: (callback: (payload: LlmStartPayload) => void) => () => void;
 }
 interface DraftContext {
   save: (payload: SaveDraftRequest) => Promise<DraftDetail>;

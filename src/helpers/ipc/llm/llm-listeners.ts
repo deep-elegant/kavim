@@ -16,6 +16,7 @@ import {
   LLM_STREAM_CHUNK_CHANNEL,
   LLM_STREAM_COMPLETE_CHANNEL,
   LLM_STREAM_ERROR_CHANNEL,
+  LLM_STREAM_START_CHANNEL,
 } from "./llm-channels";
 import type { LlmStreamRequestPayload } from "./llm-types";
 import { ensureActivePak, upsertPakAsset } from "@/core/pak/pak-manager";
@@ -358,6 +359,9 @@ export const addLlmEventListeners = () => {
           const { contents, systemInstruction } = (
             buildGeminiRequest(messages)
           );
+          event.sender.send(LLM_STREAM_START_CHANNEL, {
+            requestId: payload.requestId,
+          });
           const response = await genAI.models.generateContentStream({
             model: modelName,
             contents,
@@ -447,6 +451,9 @@ export const addLlmEventListeners = () => {
             model: modelName,
             streaming: true,
           });
+          event.sender.send(LLM_STREAM_START_CHANNEL, {
+            requestId: payload.requestId,
+          });
           const stream = await llm.stream(mapMessagesToLangChain(messages));
 
           for await (const chunk of stream) {
@@ -469,6 +476,9 @@ export const addLlmEventListeners = () => {
             streaming: true,
             ...xaiConfiguration,
           });
+          event.sender.send(LLM_STREAM_START_CHANNEL, {
+            requestId: payload.requestId,
+          });
           const stream = await llm.stream(mapMessagesToLangChain(messages));
 
           for await (const chunk of stream) {
@@ -489,6 +499,9 @@ export const addLlmEventListeners = () => {
           provider === "openrouter"
         ) {
           const llm = createOpenAiChatClient(payload);
+          event.sender.send(LLM_STREAM_START_CHANNEL, {
+            requestId: payload.requestId,
+          });
           const stream = await llm.stream(mapMessagesToLangChain(messages));
 
           for await (const chunk of stream) {

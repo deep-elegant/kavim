@@ -15,15 +15,6 @@ import {
   type EditableEdgeData,
 } from "../edges/EditableEdge";
 
-export type ImagePlaceholderBlock = {
-  type: "image-placeholder";
-  asset: {
-    path: string;
-    uri: string;
-    fileName: string;
-  };
-};
-
 export type ImageBlock = {
   type: "image";
   asset: {
@@ -39,15 +30,13 @@ type EdgesUpdater = (
   updater: (edges: Edge<EditableEdgeData>[]) => Edge<EditableEdgeData>[],
 ) => void;
 
-type EdgeMetadataBuilder = (
-  context: { nodeId: string },
-) => EditableEdgeData["metadata"];
+type EdgeMetadataBuilder = (context: {
+  nodeId: string;
+}) => EditableEdgeData["metadata"];
 
 type AnchorNodeResolver = (nodes: Node[]) => Node | undefined;
 
-type ImageSizeResolver = (
-  uri: string,
-) => Promise<{
+type ImageSizeResolver = (uri: string) => Promise<{
   width: number;
   height: number;
   naturalWidth: number;
@@ -88,7 +77,7 @@ export type AiImageGenerationManagerOptions = {
 
 export type AiImageGenerationManager = {
   reset: () => void;
-  handlePlaceholderBlock: (block: ImagePlaceholderBlock) => void;
+  handlePlaceholderBlock: () => void;
   handleImageBlock: (block: ImageBlock) => void;
 };
 
@@ -104,6 +93,7 @@ export const createAiImageGenerationManager = (
   let assetNodeIds = new Map<string, string>();
   let imageAssetOrder: string[] = [];
   let imageProcessingQueue: Promise<void> = Promise.resolve();
+  let placeholderNodeRef: LlmFilePlaceholderNodeType | undefined;
 
   const resolveImageSize = options.resolveImageSize ?? computeImageDisplaySize;
   const verticalGap = options.verticalGap ?? AI_IMAGE_VERTICAL_GAP;
@@ -123,35 +113,34 @@ export const createAiImageGenerationManager = (
 
     const anchorWidth = Math.max(
       options.minimumAnchorWidth,
-      Number(anchorNode.style?.width ?? anchorNode.width ?? options.minimumAnchorWidth),
+      Number(
+        anchorNode.style?.width ??
+          anchorNode.width ??
+          options.minimumAnchorWidth,
+      ),
     );
 
     let yOffset = 0;
     const targetPositions = new Map<string, { x: number; y: number }>();
 
-    for (const assetPath of imageAssetOrder) {
-      const nodeId = assetNodeIds.get(assetPath);
-      if (!nodeId) {
-        continue;
-      }
+    const nodeId = placeholderNodeRef!.id;
 
-      const node = nodes.find((candidate) => candidate.id === nodeId);
-      if (!node) {
-        continue;
-      }
-
-      const height = Math.max(
-        IMAGE_NODE_MIN_HEIGHT,
-        Number(node.style?.height ?? node.height ?? IMAGE_NODE_MIN_HEIGHT),
-      );
-
-      targetPositions.set(nodeId, {
-        x: anchorNode.position.x + anchorWidth + options.horizontalGap,
-        y: anchorNode.position.y + yOffset,
-      });
-
-      yOffset += height + verticalGap;
+    const node = nodes.find((candidate) => candidate.id === nodeId);
+    if (!node) {
+      return nodes;
     }
+
+    const height = Math.max(
+      IMAGE_NODE_MIN_HEIGHT,
+      Number(node.style?.height ?? node.height ?? IMAGE_NODE_MIN_HEIGHT),
+    );
+
+    targetPositions.set(nodeId, {
+      x: anchorNode.position.x + anchorWidth + options.horizontalGap,
+      y: anchorNode.position.y + yOffset,
+    });
+
+    yOffset += height + verticalGap;
 
     if (targetPositions.size === 0) {
       return nodes;
@@ -175,18 +164,13 @@ export const createAiImageGenerationManager = (
     });
   };
 
-  const handlePlaceholderBlock = (block: ImagePlaceholderBlock) => {
+  const handlePlaceholderBlock = () => {
     if (!options.supportsImageOutput) {
       return;
     }
 
-    if (assetNodeIds.has(block.asset.path)) {
-      return;
-    }
-
+    // Optimistic ui - when generating image node - it create a placeholder node (showing loading state)
     const nodeId = crypto.randomUUID();
-    assetNodeIds.set(block.asset.path, nodeId);
-    imageAssetOrder = [...imageAssetOrder, block.asset.path];
 
     options.setNodes((nodes) => {
       if (!options.isRequestCurrent()) {
@@ -194,8 +178,7 @@ export const createAiImageGenerationManager = (
       }
 
       const placeholderData: LlmFilePlaceholderNodeType["data"] = {
-        assetPath: block.asset.path,
-        fileName: block.asset.fileName,
+        alt: "",
       };
 
       const placeholderNode: LlmFilePlaceholderNodeType = {
@@ -212,8 +195,49 @@ export const createAiImageGenerationManager = (
         selected: false,
       };
 
+      placeholderNodeRef = placeholderNode;
       const nextNodes = [...nodes, placeholderNode];
       return repositionGeneratedNodes(nextNodes);
+    });
+
+    options.setEdges((edges) => {
+      if (!options.isRequestCurrent()) {
+        return edges;
+      }
+
+      const hasEdge = edges.some(
+        (edge) =>
+          edge.source === options.edgeSourceId && edge.target === nodeId,
+      );
+
+      if (hasEdge) {
+        return edges;
+      }
+
+      const edgeData = {
+        ...createDefaultEditableEdgeData(),
+        targetMarker: "arrow",
+      } satisfies EditableEdgeData;
+
+      const metadata = options.buildEdgeMetadata?.({ nodeId });
+      if (metadata) {
+        edgeData.metadata = metadata;
+      }
+
+      const edge: Edge<EditableEdgeData> = {
+        id: crypto.randomUUID(),
+        source: options.edgeSourceId,
+        target: nodeId,
+        type: "editable",
+        data: edgeData,
+        targetHandle: options.edgeTargetHandle ?? "left-target",
+      };
+
+      if (options.edgeSourceHandle) {
+        edge.sourceHandle = options.edgeSourceHandle;
+      }
+
+      return [...edges, edge];
     });
   };
 
@@ -222,7 +246,7 @@ export const createAiImageGenerationManager = (
       return;
     }
 
-    const nodeId = assetNodeIds.get(block.asset.path);
+    const nodeId = placeholderNodeRef!.id;
 
     if (!nodeId) {
       return;
@@ -234,9 +258,8 @@ export const createAiImageGenerationManager = (
       }
 
       try {
-        const { width, height, naturalWidth, naturalHeight } = await resolveImageSize(
-          block.asset.uri,
-        );
+        const { width, height, naturalWidth, naturalHeight } =
+          await resolveImageSize(block.asset.uri);
 
         if (!options.isRequestCurrent()) {
           return;
@@ -279,46 +302,18 @@ export const createAiImageGenerationManager = (
         if (!options.isRequestCurrent()) {
           return;
         }
-
-        options.setEdges((edges) => {
-          if (!options.isRequestCurrent()) {
-            return edges;
-          }
-
-          const hasEdge = edges.some(
-            (edge) => edge.source === options.edgeSourceId && edge.target === nodeId,
-          );
-
-          if (hasEdge) {
-            return edges;
-          }
-
-          const edgeData = {
-            ...createDefaultEditableEdgeData(),
-            targetMarker: "arrow",
-          } satisfies EditableEdgeData;
-
-          const metadata = options.buildEdgeMetadata?.({ nodeId });
-          if (metadata) {
-            edgeData.metadata = metadata;
-          }
-
-          const edge: Edge<EditableEdgeData> = {
-            id: crypto.randomUUID(),
-            source: options.edgeSourceId,
-            target: nodeId,
-            type: "editable",
-            data: edgeData,
-            targetHandle: options.edgeTargetHandle ?? "left-target",
-          };
-
-          if (options.edgeSourceHandle) {
-            edge.sourceHandle = options.edgeSourceHandle;
-          }
-
-          return [...edges, edge];
-        });
       } catch (error) {
+
+        // Remove placeholder node
+        options.setNodes((nodes) => {
+          return nodes.filter((node) => node.id !== nodeId);
+        });
+
+        // Remove placeholder edge
+        options.setEdges((edges) => {
+          return edges.filter((edge) => edge.target !== nodeId);
+        });
+
         options.onImageProcessingError(error);
       }
     };

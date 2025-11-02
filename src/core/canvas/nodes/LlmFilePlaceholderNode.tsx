@@ -6,8 +6,7 @@ import NodeInteractionOverlay from "./NodeInteractionOverlay";
 import { IMAGE_NODE_MIN_HEIGHT, IMAGE_NODE_MIN_WIDTH } from "./ImageNode";
 
 export type LlmFilePlaceholderNodeData = {
-  assetPath: string;
-  fileName?: string;
+  alt: string;
 };
 
 export type LlmFilePlaceholderNodeType = Node<
@@ -15,19 +14,9 @@ export type LlmFilePlaceholderNodeType = Node<
   "llm-file-placeholder"
 >;
 
-const getDisplayName = (assetPath: string, fileName?: string) => {
-  if (fileName) {
-    return fileName;
-  }
-
-  const segments = assetPath.split("/");
-  const last = segments[segments.length - 1];
-  return last && last.length > 0 ? last : assetPath;
-};
-
 const LlmFilePlaceholderNode = memo(
   ({ id, data, selected }: NodeProps<LlmFilePlaceholderNodeType>) => {
-    const displayName = getDisplayName(data.assetPath, data.fileName);
+    const displayName = data.alt;
 
     return (
       <NodeInteractionOverlay
