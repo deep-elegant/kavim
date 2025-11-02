@@ -393,7 +393,6 @@ const CanvasInner = () => {
       hasAsset: pakAssets.hasAsset,
       registerAssetAtPath: pakAssets.registerAssetAtPath,
       isReady: pakAssets.isReady,
-      refreshAssets: pakAssets.refreshAssets,
     },
     isCollaborationActive,
   });
