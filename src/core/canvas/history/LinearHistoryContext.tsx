@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import type { Edge, Node } from "@xyflow/react";
 import { toast } from "sonner";
+import { marked } from "marked";
 
 import { useCanvasData } from "../CanvasDataContext";
 import { useCanvasUndoRedo } from "../undo";
@@ -20,11 +21,13 @@ import type { AiNodeData } from "../nodes/AINode";
 import type { TextNodeData } from "../nodes/TextNode";
 import type { StickyNoteData } from "../nodes/StickyNoteNode";
 import type { ShapeNodeData } from "../nodes/ShapeNode";
-import type { ImageNodeData } from "../nodes/ImageNode";
+import { type ImageNodeData } from "../nodes/ImageNode";
 import type { YouTubeNodeData } from "../nodes/YouTubeNode";
 import { formatTextualNodeSummary, htmlToPlainText } from "../utils/text";
-import type { AiModel } from "@/core/llm/aiModels";
-import { generateAiResult, type ChatMessage } from "@/core/llm/generateAiResult";
+import { AI_MODELS, type AiModel } from "@/core/llm/aiModels";
+import { generateAiResult } from "@/core/llm/generateAiResult";
+import { createAiImageGenerationManager } from "../utils/aiImageGeneration";
+import { buildCanvasChatMessages } from "@/core/llm/buildCanvasChatMessages";
 
 export type LinearHistoryItem = {
   id: string;
@@ -33,6 +36,8 @@ export type LinearHistoryItem = {
   summary?: string | null;
   prompt?: string | null;
   response?: string | null;
+  imageSrc?: string | null;
+  imageAlt?: string | null;
 };
 
 type LinearHistoryContextValue = {
@@ -130,7 +135,10 @@ const summarizeNodeForHistory = (node: Node): LinearHistoryItem => {
     case "ai-node": {
       const data = (node.data as Partial<AiNodeData> | undefined) ?? {};
       const prompt = htmlToPlainText(data.label ?? "");
-      const response = (data.result ?? "").trim();
+      const responseMarkdown = data.result ?? "";
+      const responsePlainText = responseMarkdown
+        ? htmlToPlainText(marked.parse(responseMarkdown))
+        : "";
       const modelLabel = data.model ? `AI (${data.model})` : "AI Node";
 
       return {
@@ -139,7 +147,7 @@ const summarizeNodeForHistory = (node: Node): LinearHistoryItem => {
         title: modelLabel,
         summary: null,
         prompt: prompt || null,
-        response: response || null,
+        response: responsePlainText || null,
       } satisfies LinearHistoryItem;
     }
     case "text-node": {
@@ -178,11 +186,15 @@ const summarizeNodeForHistory = (node: Node): LinearHistoryItem => {
     case "image-node": {
       const data = (node.data as Partial<ImageNodeData> | undefined) ?? {};
       const descriptor = data.fileName ?? data.alt ?? data.src ?? "";
+      const imageSrc = data.src ?? null;
+      const imageAlt = data.alt ?? data.fileName ?? null;
       return {
         id: node.id,
         type,
         title: "Image",
         summary: descriptor || null,
+        imageSrc,
+        imageAlt,
       } satisfies LinearHistoryItem;
     }
     case "youtube-node": {
@@ -255,8 +267,17 @@ export const LinearHistoryProvider = ({
     async ({ model, prompt }: { model: AiModel; prompt: string }) => {
       const activeNodeId = state.activeNodeId;
       const trimmedPrompt = prompt.trim();
+      const resolvedModel = AI_MODELS.find((option) => option.value === model);
+      const modelInputCapabilities = resolvedModel?.capabilities?.input ?? [
+        "text",
+      ];
+      const modelOutputCapabilities =
+        resolvedModel?.capabilities?.output ?? ["text"];
+      const supportsTextInput = modelInputCapabilities.includes("text");
+      const supportsImageInput = modelInputCapabilities.includes("image");
+      const supportsImageOutput = modelOutputCapabilities.includes("image");
 
-      if (!activeNodeId || trimmedPrompt.length === 0) {
+      if (!activeNodeId || (!supportsImageInput && trimmedPrompt.length === 0)) {
         return;
       }
 
@@ -450,52 +471,121 @@ export const LinearHistoryProvider = ({
       // Set the new node as the active node.
       setState({ isOpen: true, activeNodeId: targetNodeId });
 
-      // Create the chat messages to send to the AI model.
-      const textualContextEntries = pathNodes
-        .map((node) => formatTextualNodeSummary(node))
-        .filter((entry): entry is string => Boolean(entry));
+      const allowedAncestorNodeIds = new Set(
+        pathNodes
+          .filter((node) => node.type === "ai-node")
+          .map((node) => node.id),
+      );
 
-      const messages: ChatMessage[] = [];
+      const { messages, hasUsableInput } = buildCanvasChatMessages({
+        nodes: flowNodes,
+        edges: flowEdges,
+        targetNodeId,
+        promptText: trimmedPrompt,
+        supportsTextInput,
+        supportsImageInput,
+        contextNodes: pathNodes,
+        allowedAncestorNodeIds,
+      });
 
-      if (textualContextEntries.length > 0) {
-        messages.push({
-          role: "user",
-          content: `Canvas context:\n${textualContextEntries
-            .map((entry) => `- ${entry}`)
-            .join("\n")}`,
-        });
+      if (!hasUsableInput) {
+        setNodes((existing) =>
+          existing.map((node) => {
+            if (node.id !== targetNodeId || node.type !== "ai-node") {
+              return node;
+            }
+
+            const nodeData = node.data as AiNodeData;
+
+            return {
+              ...node,
+              data: {
+                ...nodeData,
+                status: "not-started",
+                result: "",
+                isTyping: false,
+              },
+            } as Node<AiNodeData>;
+          }),
+        );
+
+        return;
       }
-
-      for (const node of pathNodes) {
-        if (node.type !== "ai-node") {
-          continue;
-        }
-
-        const nodeData = node.data as AiNodeData | undefined;
-        const promptText = htmlToPlainText(nodeData?.label ?? "");
-        const responseText = (nodeData?.result ?? "").trim();
-
-        if (promptText) {
-          messages.push({ role: "user", content: promptText });
-        }
-
-        if (responseText) {
-          messages.push({ role: "assistant", content: responseText });
-        }
-      }
-
-      messages.push({ role: "user", content: trimmedPrompt });
 
       // Keep track of the request ID to avoid race conditions.
       const currentRequestId = requestIdRef.current + 1;
       requestIdRef.current = currentRequestId;
 
       try {
+        const imageManager = createAiImageGenerationManager({
+          supportsImageOutput,
+          isRequestCurrent: () => requestIdRef.current === currentRequestId,
+          getAnchorNode: (nodes) =>
+            nodes.find(
+              (node): node is Node<AiNodeData> =>
+                node.id === targetNodeId && node.type === "ai-node",
+            ),
+          minimumAnchorWidth: AI_NODE_DEFAULT_WIDTH,
+          horizontalGap: AI_NODE_HORIZONTAL_GAP,
+          setNodes,
+          setEdges,
+          edgeSourceId: targetNodeId,
+          edgeSourceHandle: "right-source",
+          buildEdgeMetadata: () => ({
+            generatedByNodeId: targetNodeId,
+            generatedFromPrompt: trimmedPrompt,
+          }),
+          onImageProcessingError: (error) => {
+            console.error("Failed to process AI image chunk", error);
+            toast.error("Failed to render AI image", {
+              description: error instanceof Error ? error.message : String(error),
+            });
+          },
+        });
+
+        if (supportsImageOutput) {
+          imageManager.reset();
+        }
+
         // Generate the AI result.
         await generateAiResult({
           model,
           messages,
           minimumUpdateIntervalMs: 50,
+          onStart: () => {
+            imageManager.handlePlaceholderBlock();
+          },
+          onProgress: ({ aggregatedText, newBlocks }) => {
+            if (requestIdRef.current !== currentRequestId) {
+              return;
+            }
+
+            if (supportsImageOutput) {
+              for (const block of newBlocks) {
+                if (block.type === "image") {
+                  imageManager.handleImageBlock(block);
+                }
+              }
+            }
+
+            setNodes((existing) =>
+              existing.map((node) => {
+                if (node.id !== targetNodeId || node.type !== "ai-node") {
+                  return node;
+                }
+
+                const nodeData = node.data as AiNodeData;
+
+                return {
+                  ...node,
+                  data: {
+                    ...nodeData,
+                    result: aggregatedText,
+                  },
+                };
+              }),
+            );
+          },
           onUpdate: (fullResponse) => {
             // If the request ID has changed, it means a new request has been sent, so we should ignore this update.
             if (requestIdRef.current !== currentRequestId) {
@@ -561,16 +651,17 @@ export const LinearHistoryProvider = ({
 
               const nodeData = node.data as AiNodeData;
               const existingResult = nodeData.result ?? "";
+              const fallbackMessage =
+                existingResult.trim().length > 0
+                  ? existingResult
+                  : "Unable to generate a response. Please verify your API configuration and try again.";
 
               return {
                 ...node,
                 data: {
                   ...nodeData,
                   status: "done",
-                  result:
-                    existingResult.trim().length > 0
-                      ? existingResult
-                      : "Unable to generate a response. Please verify your API configuration and try again.",
+                  result: fallbackMessage,
                 },
               };
             }),

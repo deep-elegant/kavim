@@ -78,6 +78,14 @@ type BaseAiModel = {
   requiresOrganizationVerification?: boolean;
   // Alternative model IDs when accessed via gateway (e.g., OpenRouter uses different format)
   gatewayModelOverrides?: Partial<Record<AiGateway, string>>;
+  capabilities?: Partial<ModelCapabilities>;
+};
+
+export type ModelIOType = "text" | "image" | "audio";
+
+export type ModelCapabilities = {
+  input: ModelIOType[];
+  output: ModelIOType[];
 };
 
 /**
@@ -94,6 +102,7 @@ export const AI_MODELS = [
     gatewayModelOverrides: {
       openrouter: "deepseek/deepseek-chat",
     },
+    capabilities: { input: ["text"], output: ["text"] },
   },
   {
     value: "chatgpt",
@@ -103,6 +112,7 @@ export const AI_MODELS = [
     gatewayModelOverrides: {
       openrouter: "openai/gpt-4o-mini",
     },
+    capabilities: { input: ["text", "image"], output: ["text"] },
   },
   {
     value: "gpt-5-mini",
@@ -113,6 +123,7 @@ export const AI_MODELS = [
     gatewayModelOverrides: {
       openrouter: "openai/gpt-5-mini-2025-08-07",
     },
+    capabilities: { input: ["text", "image"], output: ["text"] },
   },
   {
     value: "gpt-5",
@@ -123,6 +134,7 @@ export const AI_MODELS = [
     gatewayModelOverrides: {
       openrouter: "openai/gpt-5-2025-08-07",
     },
+    capabilities: { input: ["text", "image"], output: ["text"] },
   },
   {
     value: "gpt-5-pro",
@@ -133,6 +145,7 @@ export const AI_MODELS = [
     gatewayModelOverrides: {
       openrouter: "openai/gpt-5-pro-2025-10-06",
     },
+    capabilities: { input: ["text", "image"], output: ["text"] },
   },
   {
     value: "gpt-5-chat-latest",
@@ -142,6 +155,7 @@ export const AI_MODELS = [
     gatewayModelOverrides: {
       openrouter: "openai/gpt-5-chat-latest",
     },
+    capabilities: { input: ["text", "image"], output: ["text"] },
   },
   {
     value: "gemini-2-5-flash",
@@ -151,15 +165,24 @@ export const AI_MODELS = [
     gatewayModelOverrides: {
       openrouter: "google/gemini-2.5-flash",
     },
+    capabilities: { input: ["text", "image"], output: ["text"] },
   },
   {
     value: "gemini-2-5-pro",
     label: "Google: Gemini 2.5 Pro",
     provider: "google",
     modelId: "gemini-2.5-pro",
+    capabilities: { input: ["text", "image"], output: ["text"] },
     gatewayModelOverrides: {
       openrouter: "google/gemini-2.5-pro",
     },
+  },
+  {
+    value: "gemini-2-5-flash-image",
+    label: "Google: Gemini 2.5 Flash Image",
+    provider: "google",
+    modelId: "gemini-2.5-flash-image",
+    capabilities: { input: ["text", "image"], output: ["text", "image"] },
   },
   {
     value: "claude-haiku-4-5",
@@ -169,6 +192,7 @@ export const AI_MODELS = [
     gatewayModelOverrides: {
       openrouter: "anthropic/claude-haiku-4.5",
     },
+    capabilities: { input: ["text"], output: ["text"] },
   },
   {
     value: "claude-sonnet-4-5",
@@ -178,6 +202,7 @@ export const AI_MODELS = [
     gatewayModelOverrides: {
       openrouter: "anthropic/claude-sonnet-4.5",
     },
+    capabilities: { input: ["text", "image"], output: ["text"] },
   },
   {
     value: "grok-4",
@@ -187,6 +212,7 @@ export const AI_MODELS = [
     gatewayModelOverrides: {
       openrouter: "xai/grok-4",
     },
+    capabilities: { input: ["text"], output: ["text"] },
   },
 ] as const satisfies ReadonlyArray<BaseAiModel>;
 

@@ -1,6 +1,7 @@
 import {
   PAK_ADD_ASSET_CHANNEL,
   PAK_GET_ASSET_CHANNEL,
+  PAK_HAS_ASSET_CHANNEL,
   PAK_LIST_ASSETS_CHANNEL,
   PAK_LOAD_CHANNEL,
   PAK_REMOVE_ASSET_CHANNEL,
@@ -49,5 +50,6 @@ export function exposePakContext() {
       ipcRenderer.invoke(PAK_LIST_ASSETS_CHANNEL),
     getAssetData: (assetPath: string) =>
       ipcRenderer.invoke(PAK_GET_ASSET_CHANNEL, assetPath),
+    hasAsset: (assetPath: string) => ipcRenderer.invoke(PAK_HAS_ASSET_CHANNEL, assetPath),
   });
 }

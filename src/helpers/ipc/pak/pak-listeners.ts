@@ -25,12 +25,19 @@ import {
   PAK_REMOVE_ASSET_CHANNEL,
   PAK_SAVE_CHANNEL,
   PAK_GET_ASSET_CHANNEL,
+  PAK_HAS_ASSET_CHANNEL,
 } from "./pak-channels";
 import {
   buildManifest,
   createPakArchive,
   getCanvasFromPak,
 } from "@/core/pak/pak-utils";
+
+export interface PakAssetDataResult {
+  path: string;
+  data: ArrayBuffer | SharedArrayBuffer;
+  mimeType: string;
+}
 
 const extractAssetInputs = (
   files?: Record<string, Buffer>,
@@ -90,6 +97,30 @@ const loadPakFile = async (filePath: string): Promise<PakOperationResult> => {
   setActivePak({ ...pak, filePath });
   const canvas = getCanvasFromPak(pak.files);
   return { manifest: pak.manifest, canvas, filePath };
+};
+
+export const getAssetData = (assetPath: string): PakAssetDataResult | null => {
+  const pak = ensureActivePak();
+  const normalizedPath = assetPath.startsWith("pak://")
+    ? assetPath.slice("pak://".length)
+    : assetPath;
+  const file = pak.files[normalizedPath];
+
+  if (!file) {
+    return null;
+  }
+
+  const buffer = toBuffer(file);
+  const arrayBuffer = buffer.buffer.slice(
+    buffer.byteOffset,
+    buffer.byteOffset + buffer.byteLength,
+  );
+
+  return {
+    path: normalizedPath,
+    data: arrayBuffer,
+    mimeType: guessMimeType(normalizedPath),
+  };
 };
 
 export const addPakEventListeners = () => {
@@ -158,26 +189,19 @@ export const addPakEventListeners = () => {
   });
 
   ipcMain.handle(PAK_GET_ASSET_CHANNEL, async (_event, assetPath: string) => {
+    return getAssetData(assetPath);
+  });
+
+  ipcMain.handle(PAK_HAS_ASSET_CHANNEL, async (_event, assetPath: string) => {
     const pak = ensureActivePak();
     const normalizedPath = assetPath.startsWith("pak://")
-      ? assetPath.slice("pak://".length)
-      : assetPath;
+        ? assetPath.slice("pak://".length)
+        : assetPath;
     const file = pak.files[normalizedPath];
 
     if (!file) {
-      return null;
+        return false;
     }
-
-    const buffer = toBuffer(file);
-    const arrayBuffer = buffer.buffer.slice(
-      buffer.byteOffset,
-      buffer.byteOffset + buffer.byteLength,
-    );
-
-    return {
-      path: normalizedPath,
-      data: arrayBuffer,
-      mimeType: guessMimeType(normalizedPath),
-    };
+    return true;
   });
 };

@@ -14,7 +14,6 @@ import {
   Background,
   addEdge,
   type Connection,
-  type Edge,
   type EdgeChange,
   type XYPosition,
   useReactFlow,
@@ -45,6 +44,7 @@ import AiNode, { aiNodeDrawable } from "./nodes/AINode";
 import ShapeNodeComponent, { shapeDrawable } from "./nodes/ShapeNode";
 import TextNodeComponent, { textDrawable } from "./nodes/TextNode";
 import ImageNode from "./nodes/ImageNode";
+import LlmFilePlaceholderNode from "./nodes/LlmFilePlaceholderNode";
 import YouTubeNode from "./nodes/YouTubeNode";
 import { type DrawableNode } from "./nodes/DrawableNode";
 import YouTubeEmbedDialog from "./components/YouTubeEmbedDialog"; // Dialog for embedding YouTube videos
@@ -65,7 +65,6 @@ import useCanvasImageNodes, {
   isImageFile,
 } from "./hooks/useCanvasImageNodes";
 import useCanvasYouTubeNodes from "./hooks/useCanvasYouTubeNodes"; // Hook for managing YouTube nodes on the canvas
-import useImageAssetTransfers from "./hooks/useImageAssetTransfers";
 import type { CanvasNode, ToolId } from "./types";
 import { StatsForNerdsOverlay } from "@/components/diagnostics/StatsForNerdsOverlay";
 import { usePakAssets } from "@/core/pak/usePakAssets";
@@ -122,6 +121,7 @@ const nodeTypes = {
   "shape-node": ShapeNodeComponent,
   "text-node": TextNodeComponent,
   "ai-node": AiNode,
+  "llm-file-placeholder": LlmFilePlaceholderNode,
   "image-node": ImageNode,
   "youtube-node": YouTubeNode,
 };
@@ -176,12 +176,7 @@ const CanvasInner = () => {
     broadcastSelection,
     broadcastTyping,
   } = useCanvasCollaboration();
-  const {
-    completedTransfers,
-    failedTransfers,
-    requestAsset: requestRemoteAsset,
-    releaseAssetRequest: releaseRemoteAssetRequest,
-  } = useWebRTC();
+  const isCollaborationActive = dataChannelState === "open";
 
   const selectionMode = useMemo(() => {
     return 'partial' as SelectionMode
@@ -377,20 +372,6 @@ const CanvasInner = () => {
     },
     [addYouTubeNode, setIsYouTubeDialogOpen],
   );
-
-  useImageAssetTransfers({
-    nodes,
-    setNodes,
-    requestAsset: requestRemoteAsset,
-    releaseAssetRequest: releaseRemoteAssetRequest,
-    completedTransfers,
-    failedTransfers,
-    pakAssets: {
-      hasAsset: pakAssets.hasAsset,
-      registerAssetAtPath: pakAssets.registerAssetAtPath,
-      isReady: pakAssets.isReady,
-    },
-  });
 
   // Drawing tools toggle active state
   const handleDrawingToolSelect = useCallback(

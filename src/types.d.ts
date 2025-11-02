@@ -6,6 +6,7 @@ import type {
   LlmChunkPayload,
   LlmCompletePayload,
   LlmErrorPayload,
+  LlmStartPayload,
   LlmStreamRequestPayload,
 } from "./helpers/ipc/llm/llm-types";
 import type {
@@ -60,6 +61,7 @@ interface PakContext {
   removeAsset: (assetPath: string) => Promise<boolean>;
   listAssets: () => Promise<PakAssetSummary[]>;
   getAssetData: (assetPath: string) => Promise<PakAssetData | null>;
+  hasAsset: (assetPath: string) => Promise<boolean>;
 }
 
 type DialogFileFilter = {
@@ -71,6 +73,11 @@ type DialogOpenFileOptions = {
   filters?: DialogFileFilter[];
 };
 
+type DialogSaveFileOptions = {
+  defaultPath?: string;
+  filters?: DialogFileFilter[];
+};
+
 interface FileSystemContext {
   readFileAsDataUrl: (filePath: string) => Promise<string>;
   openFile: (options?: DialogOpenFileOptions) => Promise<string | null>;
@@ -79,6 +86,10 @@ interface FileSystemContext {
     base64Data: string,
     extension: string,
   ) => Promise<string>;
+  saveFile: (
+    buffer: ArrayBuffer | Uint8Array,
+    options?: DialogSaveFileOptions,
+  ) => Promise<string | null>;
 }
 
 interface LlmContext {
@@ -86,6 +97,7 @@ interface LlmContext {
   onChunk: (callback: (payload: LlmChunkPayload) => void) => () => void;
   onError: (callback: (payload: LlmErrorPayload) => void) => () => void;
   onComplete: (callback: (payload: LlmCompletePayload) => void) => () => void;
+  onStart: (callback: (payload: LlmStartPayload) => void) => () => void;
 }
 interface DraftContext {
   save: (payload: SaveDraftRequest) => Promise<DraftDetail>;

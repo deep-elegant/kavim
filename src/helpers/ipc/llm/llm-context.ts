@@ -3,11 +3,13 @@ import {
   LLM_STREAM_CHUNK_CHANNEL,
   LLM_STREAM_COMPLETE_CHANNEL,
   LLM_STREAM_ERROR_CHANNEL,
+  LLM_STREAM_START_CHANNEL,
 } from "./llm-channels";
 import type {
   LlmChunkPayload,
   LlmCompletePayload,
   LlmErrorPayload,
+  LlmStartPayload,
   LlmStreamRequestPayload,
 } from "./llm-types";
 
@@ -36,5 +38,7 @@ export function exposeLlmContext() {
       subscribe(LLM_STREAM_ERROR_CHANNEL, callback),
     onComplete: (callback: (payload: LlmCompletePayload) => void) =>
       subscribe(LLM_STREAM_COMPLETE_CHANNEL, callback),
+    onStart: (callback: (payload: LlmStartPayload) => void) =>
+      subscribe(LLM_STREAM_START_CHANNEL, callback),
   });
 }

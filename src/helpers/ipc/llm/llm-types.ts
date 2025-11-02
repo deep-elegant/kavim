@@ -1,4 +1,8 @@
-import type { AiGateway, AiProvider } from "@/core/llm/aiModels";
+import type {
+  AiGateway,
+  AiProvider,
+  ModelIOType,
+} from "@/core/llm/aiModels";
 import type { ChatMessage } from "@/core/llm/chatTypes";
 
 export type LlmStreamRequestPayload = {
@@ -10,12 +14,26 @@ export type LlmStreamRequestPayload = {
   apiKey: string;
   messages: ChatMessage[];
   headers?: Record<string, string>;
+  capabilities: LlmModelCapabilities;
 };
 
-export type LlmChunkPayload = {
-  requestId: string;
-  content: string;
+export type LlmModelCapabilities = {
+  input: ModelIOType[];
+  output: ModelIOType[];
 };
+
+export type LlmImageAsset = {
+  path: string;
+  uri: string;
+  fileName: string;
+};
+
+export type LlmChunkContent =
+  | { type: "text"; delta: string }
+  | { type: "image-placeholder"; asset: LlmImageAsset }
+  | { type: "image"; asset: LlmImageAsset; alt?: string };
+
+export type LlmChunkPayload = { requestId: string } & LlmChunkContent;
 
 export type LlmErrorPayload = {
   requestId: string;
@@ -23,5 +41,9 @@ export type LlmErrorPayload = {
 };
 
 export type LlmCompletePayload = {
+  requestId: string;
+};
+
+export type LlmStartPayload = {
   requestId: string;
 };

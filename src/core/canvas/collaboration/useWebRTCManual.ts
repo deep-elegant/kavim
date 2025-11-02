@@ -398,7 +398,10 @@ export function useWebRTCManual(doc: Y.Doc) {
 
         const assetData = await window.projectPak.getAssetData(assetPath);
         if (!assetData) {
-          throw new Error(`Asset not found in active pak: ${assetPath}`);
+          console.warn("[WebRTCManual] requested asset is not available", {
+            assetPath,
+          });
+          return;
         }
 
         const fileBytes = assetData.data;
@@ -444,12 +447,9 @@ export function useWebRTCManual(doc: Y.Doc) {
   );
 
   const {
-    activeTransfers,
-    completedTransfers,
-    failedTransfers,
     sendFile,
-    cancelTransfer,
     requestFile,
+    requestFileFull,
   } = useFileTransferChannel({
     channelRef: fileTransferChannelRef,
     channel: fileTransferChannel,
@@ -520,73 +520,6 @@ export function useWebRTCManual(doc: Y.Doc) {
     setDataChannelHandler,
     handleFileTransferChannel,
   );
-
-  const requestAsset = useCallback(
-    (assetPath: string, displayName?: string) => {
-      const trimmed = assetPath.trim();
-      if (!trimmed) {
-        console.warn("[WebRTCManual] refusing to request empty asset path");
-        return false;
-      }
-
-      const normalized = stripPakProtocol(trimmed) || trimmed;
-
-      if (pendingAssetRequestsRef.current.has(normalized)) {
-        const existing = pendingAssetRequestsRef.current.get(normalized);
-        if (displayName && existing && !existing.displayName) {
-          pendingAssetRequestsRef.current.set(normalized, { displayName });
-        }
-        flushPendingAssetRequests();
-        return true;
-      }
-
-      if (inflightAssetRequestsRef.current.has(normalized)) {
-        return true;
-      }
-
-      pendingAssetRequestsRef.current.set(
-        normalized,
-        displayName ? { displayName } : {},
-      );
-      flushPendingAssetRequests();
-      console.info("[WebRTCManual] queued asset request", {
-        assetPath: normalized,
-        displayName,
-      });
-      return true;
-    },
-    [flushPendingAssetRequests],
-  );
-
-  const releaseAssetRequest = useCallback((assetPath: string) => {
-    const trimmed = assetPath.trim();
-    if (!trimmed) {
-      return;
-    }
-
-    const normalized = stripPakProtocol(trimmed) || trimmed;
-    pendingAssetRequestsRef.current.delete(normalized);
-    inflightAssetRequestsRef.current.delete(normalized);
-    console.info("[WebRTCManual] released asset request", {
-      assetPath: normalized,
-    });
-  }, []);
-
-  useEffect(() => {
-    completedTransfers.forEach((transfer) => {
-      if (transfer.direction === "incoming" && transfer.assetPath) {
-        inflightAssetRequestsRef.current.delete(transfer.assetPath);
-      }
-    });
-  }, [completedTransfers]);
-
-  useEffect(() => {
-    failedTransfers.forEach((transfer) => {
-      if (transfer.direction === "incoming" && transfer.assetPath) {
-        inflightAssetRequestsRef.current.delete(transfer.assetPath);
-      }
-    });
-  }, [failedTransfers]);
 
   /**
    * Listen for local Yjs document changes and queue for sync.
@@ -736,13 +669,8 @@ export function useWebRTCManual(doc: Y.Doc) {
     messages,
     remotePresenceByClient,
     requestSync,
-    activeTransfers,
-    completedTransfers,
-    failedTransfers,
     sendFile,
-    cancelTransfer,
-    requestAsset,
-    releaseAssetRequest,
+    requestFileFull,
     broadcastNewBoard,
     incomingNewBoard,
     clearIncomingNewBoard,

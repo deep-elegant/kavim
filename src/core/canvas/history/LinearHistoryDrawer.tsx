@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef } from "react";
+import { marked } from "marked";
 import { X } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -118,7 +119,6 @@ const LinearHistoryDrawer = () => {
                       ref={item.id === activeNodeId ? activeItemRef : undefined}
                       className={cn(
                         "rounded-lg border p-3 text-sm shadow-sm transition-colors",
-                        // Highlight the active node in the history.
                         item.id === activeNodeId
                           ? "border-primary bg-primary/10"
                           : "border-border bg-background",
@@ -127,7 +127,17 @@ const LinearHistoryDrawer = () => {
                       <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                         {item.title}
                       </p>
-                      {item.summary ? (
+                      {item.imageSrc ? (
+                        <div className="mt-2">
+                          <div className="overflow-hidden rounded-md border bg-muted/20">
+                            <img
+                              src={item.imageSrc}
+                              alt={item.imageAlt ?? item.summary ?? item.title}
+                              className="max-h-64 max-w-full object-contain"
+                            />
+                          </div>
+                        </div>
+                      ) : item.summary ? (
                         <p className="mt-2 whitespace-pre-wrap break-words text-sm text-foreground">
                           {item.summary}
                         </p>
@@ -147,9 +157,12 @@ const LinearHistoryDrawer = () => {
                           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                             Response
                           </p>
-                          <p className="whitespace-pre-wrap break-words text-sm text-foreground">
-                            {item.response}
-                          </p>
+                          <div
+                            className="prose prose-sm max-w-none text-foreground"
+                            dangerouslySetInnerHTML={{
+                              __html: marked.parse(item.response ?? ""),
+                            }}
+                          />
                         </div>
                       ) : null}
                     </div>
