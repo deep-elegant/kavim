@@ -1,4 +1,3 @@
-import { Buffer } from "buffer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   LLM_STREAM_CHANNEL,
@@ -77,15 +76,17 @@ describe("addLlmEventListeners", () => {
     addLlmEventListeners();
   });
 
-  it("routes image-only Google models through generateImages", async () => {
-    generateImagesMock.mockResolvedValue({
-      generatedImages: [
-        {
-          image: { imageBytes: "AAAA", mimeType: "image/png" },
-          enhancedPrompt: "Better prompt",
-        },
-      ],
-    });
+  it("routes Google models through generateContentStream", async () => {
+    const streamedChunks = [
+      { text: "Generated response" },
+    ];
+    generateContentStreamMock.mockResolvedValue(
+      (async function* () {
+        for (const chunk of streamedChunks) {
+          yield chunk;
+        }
+      })(),
+    );
 
     const handler = registeredHandlers[LLM_STREAM_CHANNEL];
     expect(typeof handler).toBe("function");
@@ -109,7 +110,7 @@ describe("addLlmEventListeners", () => {
         },
       ],
       headers: undefined,
-      capabilities: { input: ["text"], output: ["image"] },
+      capabilities: { input: ["text"], output: ["text", "image"] },
     };
 
     handler?.(
@@ -121,62 +122,36 @@ describe("addLlmEventListeners", () => {
 
     await Promise.resolve();
     await Promise.resolve();
+    await new Promise((resolve) => setImmediate(resolve));
 
-    expect(generateContentStreamMock).not.toHaveBeenCalled();
-    expect(generateImagesMock).toHaveBeenCalledWith({
+    expect(generateImagesMock).not.toHaveBeenCalled();
+    expect(generateContentStreamMock).toHaveBeenCalledWith({
       model: "gemini-2.5-flash-image",
-      prompt: expect.stringContaining("A castle at sunrise"),
-    });
-    expect(generateImagesMock.mock.calls[0][0].prompt).toContain(
-      "Use cinematic lighting.",
-    );
-
-    const placeholderCall = sendMock.mock.calls.find(
-      ([channel, message]) =>
-        channel === LLM_STREAM_CHUNK_CHANNEL &&
-        (message as { type?: string }).type === "image-placeholder",
-    );
-    expect(placeholderCall).toBeTruthy();
-    expect(placeholderCall?.[1]).toEqual({
-      requestId: payload.requestId,
-      type: "image-placeholder",
-      asset: {
-        path: "assets/ai-image.png",
-        uri: "pak://assets/ai-image.png",
-        fileName: "ai-image.png",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: "A castle at sunrise" }],
+        },
+      ],
+      systemInstruction: {
+        role: "system",
+        parts: [{ text: "Use cinematic lighting." }],
       },
     });
 
-    const chunkCall = sendMock.mock.calls.find(
+    const textChunkCall = sendMock.mock.calls.find(
       ([channel, message]) =>
         channel === LLM_STREAM_CHUNK_CHANNEL &&
-        (message as { type?: string }).type === "image",
+        (message as { type?: string }).type === "text",
     );
-    expect(chunkCall).toBeTruthy();
-    expect(chunkCall?.[1]).toEqual({
-      requestId: payload.requestId,
-      type: "image",
-      asset: {
-        path: "assets/ai-image.png",
-        uri: "pak://assets/ai-image.png",
-        fileName: "ai-image.png",
+    expect(textChunkCall).toEqual([
+      LLM_STREAM_CHUNK_CHANNEL,
+      {
+        requestId: payload.requestId,
+        type: "text",
+        delta: "Generated response",
       },
-      alt: "Better prompt",
-    });
-
-    expect(ensureAssetFileMetadataMock).toHaveBeenCalledWith(
-      "Better prompt",
-      "png",
-    );
-    expect(reserveAssetPathMock).toHaveBeenCalledWith(
-      expect.any(Set),
-      "ai-image.png",
-    );
-    expect(upsertPakAssetMock).toHaveBeenCalledWith({
-      path: "assets/ai-image.png",
-      data: expect.any(Buffer),
-    });
-    expect(buildPakUriMock).toHaveBeenCalledWith("assets/ai-image.png");
+    ]);
 
     expect(sendMock).toHaveBeenCalledWith(LLM_STREAM_COMPLETE_CHANNEL, {
       requestId: payload.requestId,

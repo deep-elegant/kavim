@@ -1,7 +1,7 @@
 import { Buffer } from "buffer";
 import { ipcMain } from "electron";
 import { ChatOpenAI } from "@langchain/openai";
-import { ContentReferenceImage, GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { ChatAnthropic } from "@langchain/anthropic";
 import { ChatXAI } from "@langchain/xai";
 import {
@@ -206,7 +206,6 @@ const buildGeminiRequest = (
 ) => {
   const contents: GeminiContent[] = [];
   const systemParts: GeminiTextPart[] = [];
-  let lastUserPrompt: string | undefined;
 
   messages.forEach((message) => {
     if (message.role === "system") {
@@ -219,7 +218,6 @@ const buildGeminiRequest = (
     }
 
     const parts: GeminiPart[] = [];
-    const textSegments: string[] = [];
 
     message.content.forEach((part) => {
       if (part.type === "text") {
@@ -228,7 +226,6 @@ const buildGeminiRequest = (
         }
 
         parts.push({ text: part.text });
-        textSegments.push(part.text);
         return;
       }
 
@@ -247,13 +244,6 @@ const buildGeminiRequest = (
       return;
     }
 
-    if (message.role === "user") {
-      const currentPrompt = textSegments.join("\n\n");
-      if (currentPrompt) {
-        lastUserPrompt = currentPrompt;
-      }
-    }
-
     contents.push({
       role: message.role === "user" ? "user" : "model",
       parts,
@@ -265,7 +255,7 @@ const buildGeminiRequest = (
       ? ({ role: "system", parts: systemParts } satisfies GeminiContent)
       : undefined;
 
-  return { contents, systemInstruction, lastUserPrompt };
+  return { contents, systemInstruction };
 };
 
 const createOpenAiChatClient = (payload: LlmStreamRequestPayload) => {
