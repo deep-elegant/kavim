@@ -77,15 +77,25 @@ describe("addLlmEventListeners", () => {
     addLlmEventListeners();
   });
 
-  it("routes image-only Google models through generateImages", async () => {
-    generateImagesMock.mockResolvedValue({
-      generatedImages: [
-        {
-          image: { imageBytes: "AAAA", mimeType: "image/png" },
-          enhancedPrompt: "Better prompt",
-        },
-      ],
-    });
+  it("streams Google models with image output via generateContentStream", async () => {
+    const stream = (async function* () {
+      yield { text: "A castle at sunrise" };
+      yield {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  inlineData: { data: "AAAA", mimeType: "image/png" },
+                  altText: "Better prompt",
+                },
+              ],
+            },
+          },
+        ],
+      };
+    })();
+    generateContentStreamMock.mockResolvedValue(stream);
 
     const handler = registeredHandlers[LLM_STREAM_CHANNEL];
     expect(typeof handler).toBe("function");
@@ -109,7 +119,7 @@ describe("addLlmEventListeners", () => {
         },
       ],
       headers: undefined,
-      capabilities: { input: ["text"], output: ["image"] },
+      capabilities: { input: ["text", "image"], output: ["text", "image"] },
     };
 
     handler?.(
@@ -119,17 +129,19 @@ describe("addLlmEventListeners", () => {
       payload,
     );
 
-    await Promise.resolve();
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(generateContentStreamMock).not.toHaveBeenCalled();
-    expect(generateImagesMock).toHaveBeenCalledWith({
+    expect(generateContentStreamMock).toHaveBeenCalledWith({
       model: "gemini-2.5-flash-image",
-      prompt: expect.stringContaining("A castle at sunrise"),
+      contents: expect.any(Array),
+      systemInstruction: {
+        role: "system",
+        parts: [{ text: "Use cinematic lighting." }],
+      },
     });
-    expect(generateImagesMock.mock.calls[0][0].prompt).toContain(
-      "Use cinematic lighting.",
-    );
+    expect(generateImagesMock).not.toHaveBeenCalled();
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     const placeholderCall = sendMock.mock.calls.find(
       ([channel, message]) =>
