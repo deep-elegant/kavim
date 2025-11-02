@@ -7,7 +7,39 @@ import {
   OPEN_FILE_DIALOG_CHANNEL,
   READ_FILE_AS_DATA_URL_CHANNEL,
   SAVE_CLIPBOARD_IMAGE_CHANNEL,
+  SAVE_FILE_CHANNEL,
 } from "./file-system-channels";
+
+type SaveFileDialogOptions = {
+  defaultPath?: string;
+  filters?: Electron.FileFilter[];
+};
+
+type SaveFilePayload =
+  | Buffer
+  | Uint8Array
+  | ArrayBuffer
+  | number[];
+
+const toNodeBuffer = (data: SaveFilePayload) => {
+  if (Buffer.isBuffer(data)) {
+    return data;
+  }
+
+  if (data instanceof Uint8Array) {
+    return Buffer.from(data);
+  }
+
+  if (data instanceof ArrayBuffer) {
+    return Buffer.from(new Uint8Array(data));
+  }
+
+  if (Array.isArray(data)) {
+    return Buffer.from(data);
+  }
+
+  throw new Error("Unsupported data type for saveFile");
+};
 
 const mimeTypes: Record<string, string> = {
   ".png": "image/png",
@@ -64,6 +96,28 @@ export const addFileSystemEventListeners = () => {
       const filePath = path.join(imagesDir, fileName);
       await fs.writeFile(filePath, buffer);
       return filePath;
+    },
+  );
+  ipcMain.handle(
+    SAVE_FILE_CHANNEL,
+    async (
+      _,
+      data: SaveFilePayload,
+      options?: SaveFileDialogOptions,
+    ) => {
+      const result = await dialog.showSaveDialog({
+        defaultPath: options?.defaultPath,
+        filters: options?.filters,
+      });
+
+      if (result.canceled || !result.filePath) {
+        return null;
+      }
+
+      const buffer = toNodeBuffer(data);
+      await fs.writeFile(result.filePath, buffer);
+
+      return result.filePath;
     },
   );
 };

@@ -71,6 +71,11 @@ type DialogOpenFileOptions = {
   filters?: DialogFileFilter[];
 };
 
+type DialogSaveFileOptions = {
+  defaultPath?: string;
+  filters?: DialogFileFilter[];
+};
+
 interface FileSystemContext {
   readFileAsDataUrl: (filePath: string) => Promise<string>;
   openFile: (options?: DialogOpenFileOptions) => Promise<string | null>;
@@ -79,6 +84,10 @@ interface FileSystemContext {
     base64Data: string,
     extension: string,
   ) => Promise<string>;
+  saveFile: (
+    buffer: ArrayBuffer | Uint8Array,
+    options?: DialogSaveFileOptions,
+  ) => Promise<string | null>;
 }
 
 interface LlmContext {
