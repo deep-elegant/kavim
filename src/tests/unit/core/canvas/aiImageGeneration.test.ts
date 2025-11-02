@@ -45,7 +45,6 @@ describe("createAiImageGenerationManager", () => {
       edgeSourceId: baseAiNode.id,
       edgeSourceHandle: "right-source",
       buildEdgeMetadata: vi.fn(),
-      owner: "1234",
       onImageProcessingError: vi.fn(),
     });
 
@@ -58,7 +57,6 @@ describe("createAiImageGenerationManager", () => {
     const placeholder = nodes.find((node) => node.type === "llm-file-placeholder");
     expect(placeholder).toBeTruthy();
     expect(placeholder?.position).toEqual({ x: 440, y: 0 });
-    expect((placeholder?.data as { owner?: string }).owner).toBe("1234");
     expect(edges).toHaveLength(0);
   });
 
@@ -167,4 +165,3 @@ describe("createAiImageGenerationManager", () => {
     expect(edges).toHaveLength(0);
   });
 });
-

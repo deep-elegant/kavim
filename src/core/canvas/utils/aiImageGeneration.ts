@@ -80,8 +80,6 @@ export type AiImageGenerationManagerOptions = {
   edgeTargetHandle?: string;
   /** Builds optional metadata stored on generated edges. */
   buildEdgeMetadata?: EdgeMetadataBuilder;
-  /** Optional owner ID stored on placeholder nodes. */
-  owner?: string;
   /** Invoked when image materialization fails. */
   onImageProcessingError: (error: unknown) => void;
   /** Optional override for computing display dimensions. */
@@ -199,10 +197,6 @@ export const createAiImageGenerationManager = (
         assetPath: block.asset.path,
         fileName: block.asset.fileName,
       };
-
-      if (options.owner) {
-        placeholderData.owner = options.owner;
-      }
 
       const placeholderNode: LlmFilePlaceholderNodeType = {
         id: nodeId,
@@ -342,4 +336,3 @@ export const createAiImageGenerationManager = (
     handleImageBlock,
   };
 };
-

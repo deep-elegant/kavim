@@ -8,7 +8,6 @@ import { IMAGE_NODE_MIN_HEIGHT, IMAGE_NODE_MIN_WIDTH } from "./ImageNode";
 export type LlmFilePlaceholderNodeData = {
   assetPath: string;
   fileName?: string;
-  owner?: string;
 };
 
 export type LlmFilePlaceholderNodeType = Node<
