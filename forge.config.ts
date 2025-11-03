@@ -1,5 +1,5 @@
 import type { ForgeConfig } from "@electron-forge/shared-types";
-import { MakerWix } from "@electron-forge/maker-wix";
+import { MakerSquirrel } from "@electron-forge/maker-squirrel";
 import { MakerZIP } from "@electron-forge/maker-zip";
 import { MakerDeb } from "@electron-forge/maker-deb";
 import { MakerRpm } from "@electron-forge/maker-rpm";
@@ -24,14 +24,11 @@ const config: ForgeConfig = {
   },
   rebuildConfig: {},
   makers: [
-    new MakerWix({
-      manufacturer: "DeepElegant",
-      icon: "./assets/icon.ico",
+    new MakerSquirrel({
+      authors: "DeepElegant",
+      iconUrl: "https://kavim.deepelegant.com/favicon.ico",
       name: "DeepElegantKavim", // No spaces for Windows
-      // language: 1033, // English
       description: "DeepElegant Kavim Application", // Plain ASCII only
-      appUserModelId: "com.deepelegant.kavim",
-      upgradeCode: "9bd05423-a0a9-41c9-a443-138f35c133e0", // DO-NOT Change this GUID
     }),
     new MakerDMG({
       name: "DeepElegantKavim",
