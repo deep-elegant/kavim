@@ -96,17 +96,44 @@ const config: ForgeConfig = {
     }),
   ],
   hooks: {
-    postMake: async (forgeConfig, makeResults) => {
+    postMake: async (_forgeConfig, makeResults) => {
       for (const result of makeResults) {
-        if (result.platform === "darwin") {
-          // it's a mac build — apply rename logic for the DMG artifact
-          for (const artifact of result.artifacts) {
-            if (artifact.endsWith(".dmg")) {
-              const dirname = path.dirname(artifact);
-              const newName = `DeepElegantKavim-${result.platform}-${result.arch}.dmg`;
-              const newPath = path.join(dirname, newName);
+        const { platform, arch, artifacts } = result;
+        for (const artifact of artifacts) {
+          const dirname = path.dirname(artifact);
+          const ext = path.extname(artifact);
+          const currentName = path.basename(artifact);
+          let newName: string | null = null;
+
+          if (platform === "win32") {
+            if (ext === ".msi") {
+              newName = `DeepElegantKavim-windows-${arch}.msi`;
+            } else if (ext === ".exe") {
+              newName = `DeepElegantKavim-windows-${arch}.exe`;
+            }
+          } else if (platform === "darwin") {
+            if (ext === ".dmg") {
+              newName = `DeepElegantKavim-macos-${arch}.dmg`;
+            } else if (ext === ".zip") {
+              newName = `DeepElegantKavim-macos-${arch}.zip`;
+            }
+          } else if (platform === "linux") {
+            if (ext === ".rpm") {
+              newName = `DeepElegantKavim-linux-${arch}.rpm`;
+            } else if (ext === ".deb") {
+              newName = `DeepElegantKavim-linux-${arch}.deb`;
+            } else if (ext === ".AppImage") {
+              newName = `DeepElegantKavim-linux-${arch}.AppImage`;
+            } else if (currentName.endsWith(".tar.gz")) {
+              newName = `DeepElegantKavim-linux-${arch}.tar.gz`;
+            }
+          }
+
+          if (newName) {
+            const newPath = path.join(dirname, newName);
+            if (artifact !== newPath) {
               await fs.rename(artifact, newPath);
-              console.log(`Renamed DMG to ${newPath}`);
+              console.log(`Renamed artifact to ${newPath}`);
             }
           }
         }

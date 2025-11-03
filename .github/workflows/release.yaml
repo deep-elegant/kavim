@@ -77,14 +77,17 @@ jobs:
         shell: bash
         run: |
           ASSET_PATTERNS=""
-          if [[ "${{ runner.os }}" == "Linux" && "${{ matrix.arch }}" == "x64" ]]; then
-            ASSET_PATTERNS="out/make/**/*linux-x64*.rpm\nout/make/**/*linux-x64*.deb\nout/make/**/*linux-x64*.AppImage\nout/make/**/*linux-x64*.tar.gz"
-          elif [[ "${{ runner.os }}" == "macOS" && "${{ matrix.arch }}" == "arm64" ]]; then
-            ASSET_PATTERNS="out/make/**/*macos-arm64*.dmg\nout/make/**/*macos-arm64*.zip"
-          elif [[ "${{ runner.os }}" == "macOS" && "${{ matrix.arch }}" == "x64" ]]; then
-            ASSET_PATTERNS="out/make/**/*macos-x64*.dmg\nout/make/**/*macos-x64*.zip"
-          elif [[ "${{ runner.os }}" == "Windows" && "${{ matrix.arch }}" == "x64" ]]; then
-            ASSET_PATTERNS="out/make/**/*windows-x64.exe\nout/make/**/*windows-x64.msi\nout/make/**/*windows-x64*.zip"
+          if [[ "${{ runner.os }}" == "Linux" ]]; then
+            ASSET_PATTERNS="out/make/**/DeepElegantKavim-linux-${{ matrix.arch }}.rpm
+out/make/**/DeepElegantKavim-linux-${{ matrix.arch }}.deb
+out/make/**/DeepElegantKavim-linux-${{ matrix.arch }}.AppImage
+out/make/**/DeepElegantKavim-linux-${{ matrix.arch }}.tar.gz"
+          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+            ASSET_PATTERNS="out/make/**/DeepElegantKavim-macos-${{ matrix.arch }}.dmg
+out/make/**/DeepElegantKavim-macos-${{ matrix.arch }}.zip"
+          elif [[ "${{ runner.os }}" == "Windows" ]]; then
+            ASSET_PATTERNS="out/make/**/DeepElegantKavim-windows-${{ matrix.arch }}.exe
+out/make/**/DeepElegantKavim-windows-${{ matrix.arch }}.msi"
           fi
           echo "ASSET_PATTERNS<<EOF" >> $GITHUB_OUTPUT
           echo "$ASSET_PATTERNS" >> $GITHUB_OUTPUT
