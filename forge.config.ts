@@ -98,34 +98,34 @@ const config: ForgeConfig = {
   hooks: {
     postMake: async (_forgeConfig, makeResults) => {
       for (const result of makeResults) {
-        const { platform, arch, artifacts } = result;
-        for (const artifact of artifacts) {
+        for (let i = 0; i < result.artifacts.length; i++) {
+          const artifact = result.artifacts[i];
           const dirname = path.dirname(artifact);
           const ext = path.extname(artifact);
           const currentName = path.basename(artifact);
           let newName: string | null = null;
 
-          if (platform === "win32") {
+          if (result.platform === "win32") {
             if (ext === ".msi") {
-              newName = `DeepElegantKavim-windows-${arch}.msi`;
+              newName = `DeepElegantKavim-windows-${result.arch}.msi`;
             } else if (ext === ".exe") {
-              newName = `DeepElegantKavim-windows-${arch}.exe`;
+              newName = `DeepElegantKavim-windows-${result.arch}.exe`;
             }
-          } else if (platform === "darwin") {
+          } else if (result.platform === "darwin") {
             if (ext === ".dmg") {
-              newName = `DeepElegantKavim-macos-${arch}.dmg`;
+              newName = `DeepElegantKavim-macos-${result.arch}.dmg`;
             } else if (ext === ".zip") {
-              newName = `DeepElegantKavim-macos-${arch}.zip`;
+              newName = `DeepElegantKavim-macos-${result.arch}.zip`;
             }
-          } else if (platform === "linux") {
+          } else if (result.platform === "linux") {
             if (ext === ".rpm") {
-              newName = `DeepElegantKavim-linux-${arch}.rpm`;
+              newName = `DeepElegantKavim-linux-${result.arch}.rpm`;
             } else if (ext === ".deb") {
-              newName = `DeepElegantKavim-linux-${arch}.deb`;
+              newName = `DeepElegantKavim-linux-${result.arch}.deb`;
             } else if (ext === ".AppImage") {
-              newName = `DeepElegantKavim-linux-${arch}.AppImage`;
+              newName = `DeepElegantKavim-linux-${result.arch}.AppImage`;
             } else if (currentName.endsWith(".tar.gz")) {
-              newName = `DeepElegantKavim-linux-${arch}.tar.gz`;
+              newName = `DeepElegantKavim-linux-${result.arch}.tar.gz`;
             }
           }
 
@@ -134,6 +134,8 @@ const config: ForgeConfig = {
             if (artifact !== newPath) {
               await fs.rename(artifact, newPath);
               console.log(`Renamed artifact to ${newPath}`);
+              // IMPORTANT: Update the artifact path in the results object
+              result.artifacts[i] = newPath;
             }
           }
         }
