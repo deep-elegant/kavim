@@ -49,34 +49,96 @@ jobs:
       - name: Cleanup mounted volumes
         if: runner.os == 'macOS'
         run: |
-          for volume in /Volumes/DeepElegant*; do
-            if [ -d "$volume" ]; then
-              hdiutil detach "$volume" 2>/dev/null || true
-            fi
-          done
+          hdiutil detach /Volumes/DeepElegant* -quiet -force || true
         continue-on-error: true
 
-
-      # --- Build Electron app for specific architecture
-      - name: Make release package
+      # --- Build/Package Electron app
+      # For non-macOS, we create the final distributable directly.
+      - name: Build/Package Electron app
+        if: runner.os != 'macOS'
         run: npm run make -- --arch=${{ matrix.arch }}
         env:
-          # Ensure the build targets the correct architecture
           npm_config_arch: ${{ matrix.arch }}
 
-      # --- Upload build artifacts for debugging (optional)
-      - name: Upload build artifacts
+      # For macOS, we run 'package' to get the .app bundle needed for the universal build.
+      # This assumes you have a 'package' script in package.json: "package": "electron-forge package"
+      - name: Package macOS app
+        if: runner.os == 'macOS'
+        run: npm run package -- --arch=${{ matrix.arch }}
+        env:
+          npm_config_arch: ${{ matrix.arch }}
+
+      # --- Upload build artifacts
+      # For macOS, upload the .app folder. For others, upload the final distributable.
+      - name: Upload macOS artifact
+        if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ runner.os }}-${{ matrix.arch }}-artifacts
+          name: macos-app-${{ matrix.arch }}
+          path: out/DeepElegant-Kavim-darwin-${{ matrix.arch }}/DeepElegant-Kavim.app
+
+      - name: Upload Linux/Windows artifact
+        if: runner.os != 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ runner.os }}-${{ matrix.arch }}-artifact
           path: out/make/**
 
-      # --- Publish to GitHub Releases
-      - name: Release to GitHub
+      # --- Publish to GitHub Releases (Linux/Windows only)
+      # The universal macOS app will be released in a separate job.
+      - name: Release to GitHub (Linux/Windows)
         uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
+        if: startsWith(github.ref, 'refs/tags/') && runner.os != 'macOS'
         with:
           files: |
             out/make/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  release-macos-universal:
+    name: Build and Release macOS Universal App
+    runs-on: macos-latest
+    needs: build
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download Intel app
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-app-x64
+          path: out/DeepElegant-Kavim-darwin-x64/DeepElegant-Kavim.app
+
+      - name: Download ARM app
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-app-arm64
+          path: out/DeepElegant-Kavim-darwin-arm64/DeepElegant-Kavim.app
+
+      - name: Install @electron/universal
+        run: npm install -g @electron/universal
+
+      - name: Create universal .app
+        run: |
+          electron-universal --x64 out/DeepElegant-Kavim-darwin-x64/DeepElegant-Kavim.app --arm64 out/DeepElegant-Kavim-darwin-arm64/DeepElegant-Kavim.app --out out/universal/DeepElegant-Kavim.app --force
+
+      - name: Make universal DMG
+        run: npm exec electron-forge -- make --from-dir out/universal --arch=universal --platform=darwin
+
+      - name: Release to GitHub (macOS Universal)
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: out/make/*.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
