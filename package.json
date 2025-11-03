@@ -38,6 +38,7 @@
     "@electron/fuses": "~1.8.0",
     "@eslint/compat": "^1.4.0",
     "@eslint/js": "^9.28.0",
+    "@pengx17/electron-forge-maker-appimage": "^1.2.1",
     "@playwright/test": "^1.55.1",
     "@tailwindcss/typography": "^0.5.19",
     "@tanstack/router-plugin": "^1.132.41",
