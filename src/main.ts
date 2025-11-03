@@ -2,12 +2,17 @@ import { app, BrowserWindow, Menu } from "electron";
 import Store from "electron-store";
 import registerListeners from "./helpers/ipc/listeners-register";
 import { updateElectronApp } from "update-electron-app";
+import started from 'electron-squirrel-startup';
+
+// Handle creating/removing shortcuts on Windows when installing/uninstalling.
+if (started) {
+  app.quit();
+}
+
 updateElectronApp(); // additional configuration options available
 
 // Initialize renderer process access to electron-store
 Store.initRenderer();
-// "electron-squirrel-startup" seems broken when packaging with vite
-//import started from "electron-squirrel-startup";
 import path from "path";
 import {
   installExtension,
