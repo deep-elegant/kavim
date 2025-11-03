@@ -71,7 +71,7 @@ jobs:
           name: ${{ runner.os }}-${{ matrix.arch }}-artifacts
           path: out/make/**
 
-- name: Set asset patterns
+      - name: Set asset patterns
         id: set_asset_patterns
         shell: bash
         run: |
