@@ -74,6 +74,7 @@ jobs:
       # --- Publish to GitHub Releases
       - name: Set asset patterns
         id: set_asset_patterns
+        shell: bash
         run: |
           ASSET_PATTERNS=""
           if [[ "${{ runner.os }}" == "Linux" && "${{ matrix.arch }}" == "x64" ]]; then
