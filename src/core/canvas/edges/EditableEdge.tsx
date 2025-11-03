@@ -264,8 +264,10 @@ const EditableEdge = memo(
         const [bezierPath] = getBezierPath({
           sourceX,
           sourceY,
+          sourcePosition,
           targetX,
           targetY,
+          targetPosition,
         });
         return bezierPath;
       }
