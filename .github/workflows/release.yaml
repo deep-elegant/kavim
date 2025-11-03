@@ -57,54 +57,8 @@ jobs:
         continue-on-error: true
 
 
-      # --- Build Electron app for specific architecture
-      - name: Make release package
-        run: npm run make -- --arch=${{ matrix.arch }}
-        env:
-          # Ensure the build targets the correct architecture
-          npm_config_arch: ${{ matrix.arch }}
-
-      # --- Upload build artifacts for debugging (optional)
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ runner.os }}-${{ matrix.arch }}-artifacts
-          path: out/make/**
-
-      # --- Publish to GitHub Releases
-      - name: Set asset patterns
-        id: set_asset_patterns
-        shell: bash
-        run: |
-          if [[ "${{ runner.os }}" == "Linux" ]]; then
-            cat >> $GITHUB_OUTPUT <<EOF
-          ASSET_PATTERNS<<PATTERNS
-          out/make/**/DeepElegantKavim-linux-${{ matrix.arch }}.rpm
-          out/make/**/DeepElegantKavim-linux-${{ matrix.arch }}.deb
-          out/make/**/DeepElegantKavim-linux-${{ matrix.arch }}.AppImage
-          out/make/**/DeepElegantKavim-linux-${{ matrix.arch }}.tar.gz
-          PATTERNS
-          EOF
-          elif [[ "${{ runner.os }}" == "macOS" ]]; then
-            cat >> $GITHUB_OUTPUT <<EOF
-          ASSET_PATTERNS<<PATTERNS
-          out/make/**/DeepElegantKavim-macos-${{ matrix.arch }}.dmg
-          out/make/**/DeepElegantKavim-macos-${{ matrix.arch }}.zip
-          PATTERNS
-          EOF
-          elif [[ "${{ runner.os }}" == "Windows" ]]; then
-            cat >> $GITHUB_OUTPUT <<EOF
-          ASSET_PATTERNS<<PATTERNS
-          out/make/**/DeepElegantKavim-windows-${{ matrix.arch }}.exe
-          out/make/**/DeepElegantKavim-windows-${{ matrix.arch }}.msi
-          PATTERNS
-          EOF
-          fi
-
-      - name: Release to GitHub
-        uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          files: ${{ steps.set_asset_patterns.outputs.ASSET_PATTERNS }}
+      - name: Publish to GitHub Releases
+        run: npx electron-forge publish --arch=${{ matrix.arch }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          npm_config_arch: ${{ matrix.arch }}
