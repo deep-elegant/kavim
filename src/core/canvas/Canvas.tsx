@@ -13,6 +13,7 @@ import {
   Controls,
   Background,
   addEdge,
+  ConnectionLineType,
   type Connection,
   type EdgeChange,
   type XYPosition,
@@ -571,6 +572,7 @@ const CanvasInner = () => {
           selectionOnDrag={!isDrawingToolSelected}
           nodeTypes={nodeTypes}
           edgesReconnectable
+          connectionLineType={ConnectionLineType.Bezier}
           defaultEdgeOptions={{
             type: "editable",
             deletable: true,

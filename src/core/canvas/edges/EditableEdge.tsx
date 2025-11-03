@@ -9,6 +9,7 @@ import React, {
 import {
   useReactFlow,
   useStoreApi,
+  getBezierPath,
   type Edge,
   type EdgeProps,
   type XYPosition,
@@ -200,7 +201,20 @@ const EditableEdge = memo(
       [sourceX, sourceY, targetX, targetY, controlPoints],
     );
 
-    const path = useMemo(() => buildSmoothPath(points), [points]);
+    const path = useMemo(() => {
+      // If there are no control points, use React Flow's built-in Bezier path for smooth curves
+      if (controlPoints.length === 0) {
+        const [bezierPath] = getBezierPath({
+          sourceX,
+          sourceY,
+          targetX,
+          targetY,
+        });
+        return bezierPath;
+      }
+      // Otherwise use our custom smooth path with control points
+      return buildSmoothPath(points);
+    }, [points, controlPoints.length, sourceX, sourceY, targetX, targetY]);
 
     const showSourceArrow = sourceMarker === "arrow";
     const showTargetArrow = targetMarker === "arrow";
