@@ -71,6 +71,7 @@ jobs:
           name: ${{ runner.os }}-${{ matrix.arch }}-artifacts
           path: out/make/**
 
+      # --- Publish to GitHub Releases
       - name: Set asset patterns
         id: set_asset_patterns
         shell: bash
