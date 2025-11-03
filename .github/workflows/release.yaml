@@ -72,11 +72,27 @@ jobs:
           path: out/make/**
 
       # --- Publish to GitHub Releases
+      - name: Set asset patterns
+        id: set_asset_patterns
+        run: |
+          ASSET_PATTERNS=""
+          if [[ "${{ runner.os }}" == "Linux" && "${{ matrix.arch }}" == "x64" ]]; then
+            ASSET_PATTERNS="out/make/**/*linux-x64*.rpm\nout/make/**/*linux-x64*.deb\nout/make/**/*linux-x64*.AppImage\nout/make/**/*linux-x64*.tar.gz"
+          elif [[ "${{ runner.os }}" == "macOS" && "${{ matrix.arch }}" == "arm64" ]]; then
+            ASSET_PATTERNS="out/make/**/*macos-arm64*.dmg\nout/make/**/*macos-arm64*.zip"
+          elif [[ "${{ runner.os }}" == "macOS" && "${{ matrix.arch }}" == "x64" ]]; then
+            ASSET_PATTERNS="out/make/**/*macos-x64*.dmg\nout/make/**/*macos-x64*.zip"
+          elif [[ "${{ runner.os }}" == "Windows" && "${{ matrix.arch }}" == "x64" ]]; then
+            ASSET_PATTERNS="out/make/**/*windows-x64.exe\nout/make/**/*windows-x64.msi\nout/make/**/*windows-x64*.zip"
+          fi
+          echo "ASSET_PATTERNS<<EOF" >> $GITHUB_OUTPUT
+          echo "$ASSET_PATTERNS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Release to GitHub
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: |
-            out/make/**/*
+          files: ${{ steps.set_asset_patterns.outputs.ASSET_PATTERNS }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
