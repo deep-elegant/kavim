@@ -29,8 +29,6 @@ const config: ForgeConfig = {
       iconUrl: "https://kavim.deepelegant.com/favicon.ico",
       name: "DeepElegantKavim", // No spaces for Windows
       description: "DeepElegant Kavim Application", // Plain ASCII only
-    //   appUserModelId: "com.deepelegant.kavim",
-    //   upgradeCode: "9bd05423-a0a9-41c9-a443-138f35c133e0", // DO-NOT Change this GUID
     }),
     new MakerDMG({
       name: "DeepElegantKavim",
