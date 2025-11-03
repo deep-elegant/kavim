@@ -71,27 +71,34 @@ jobs:
           name: ${{ runner.os }}-${{ matrix.arch }}-artifacts
           path: out/make/**
 
-      # --- Publish to GitHub Releases
-      - name: Set asset patterns
+- name: Set asset patterns
         id: set_asset_patterns
         shell: bash
         run: |
-          ASSET_PATTERNS=""
           if [[ "${{ runner.os }}" == "Linux" ]]; then
-            ASSET_PATTERNS="out/make/**/DeepElegantKavim-linux-${{ matrix.arch }}.rpm
-out/make/**/DeepElegantKavim-linux-${{ matrix.arch }}.deb
-out/make/**/DeepElegantKavim-linux-${{ matrix.arch }}.AppImage
-out/make/**/DeepElegantKavim-linux-${{ matrix.arch }}.tar.gz"
+            cat >> $GITHUB_OUTPUT <<EOF
+          ASSET_PATTERNS<<PATTERNS
+          out/make/**/DeepElegantKavim-linux-${{ matrix.arch }}.rpm
+          out/make/**/DeepElegantKavim-linux-${{ matrix.arch }}.deb
+          out/make/**/DeepElegantKavim-linux-${{ matrix.arch }}.AppImage
+          out/make/**/DeepElegantKavim-linux-${{ matrix.arch }}.tar.gz
+          PATTERNS
+          EOF
           elif [[ "${{ runner.os }}" == "macOS" ]]; then
-            ASSET_PATTERNS="out/make/**/DeepElegantKavim-macos-${{ matrix.arch }}.dmg
-out/make/**/DeepElegantKavim-macos-${{ matrix.arch }}.zip"
+            cat >> $GITHUB_OUTPUT <<EOF
+          ASSET_PATTERNS<<PATTERNS
+          out/make/**/DeepElegantKavim-macos-${{ matrix.arch }}.dmg
+          out/make/**/DeepElegantKavim-macos-${{ matrix.arch }}.zip
+          PATTERNS
+          EOF
           elif [[ "${{ runner.os }}" == "Windows" ]]; then
-            ASSET_PATTERNS="out/make/**/DeepElegantKavim-windows-${{ matrix.arch }}.exe
-out/make/**/DeepElegantKavim-windows-${{ matrix.arch }}.msi"
+            cat >> $GITHUB_OUTPUT <<EOF
+          ASSET_PATTERNS<<PATTERNS
+          out/make/**/DeepElegantKavim-windows-${{ matrix.arch }}.exe
+          out/make/**/DeepElegantKavim-windows-${{ matrix.arch }}.msi
+          PATTERNS
+          EOF
           fi
-          echo "ASSET_PATTERNS<<EOF" >> $GITHUB_OUTPUT
-          echo "$ASSET_PATTERNS" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Release to GitHub
         uses: softprops/action-gh-release@v2
