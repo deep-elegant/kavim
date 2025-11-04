@@ -35,6 +35,7 @@ import {
   WandSparklesIcon,
   Circle,
   Youtube,
+  Square,
 } from "lucide-react";
 
 import "@xyflow/react/dist/style.css";
@@ -44,6 +45,7 @@ import AiNode, { aiNodeDrawable } from "./nodes/AINode";
 import ShapeNodeComponent, { shapeDrawable } from "./nodes/ShapeNode";
 import TextNodeComponent, { textDrawable } from "./nodes/TextNode";
 import ImageNode from "./nodes/ImageNode";
+import FrameNode, { frameDrawable } from "./nodes/FrameNode";
 import LlmFilePlaceholderNode from "./nodes/LlmFilePlaceholderNode";
 import YouTubeNode from "./nodes/YouTubeNode";
 import { type DrawableNode } from "./nodes/DrawableNode";
@@ -89,6 +91,7 @@ const drawingToolConfigs: DrawingToolConfig[] = [ // Configuration for tools tha
   { id: "shape", label: "Shape", icon: Circle },
   { id: "prompt-node", label: "Prompt Node", icon: WandSparklesIcon },
   { id: "text", label: "Text", icon: Type },
+  { id: "frame", label: "Frame", icon: Square },
 ];
 
 /**
@@ -124,6 +127,7 @@ const nodeTypes = {
   "llm-file-placeholder": LlmFilePlaceholderNode,
   "image-node": ImageNode,
   "youtube-node": YouTubeNode,
+  "frame-node": FrameNode,
 };
 
 // Drawable tools implement mouse-based drawing (drag to create)
@@ -132,6 +136,7 @@ const drawableNodeTools: Partial<Record<ToolId, DrawableNode>> = {
   shape: shapeDrawable,
   text: textDrawable,
   "prompt-node": aiNodeDrawable,
+  frame: frameDrawable,
 };
 
 // Tools that support click-and-drag creation
@@ -235,15 +240,123 @@ const CanvasInner = () => {
     nodeDragTokenRef.current = beginAction("node-drag");
   }, [beginAction, isReplaying]);
 
-  const handleNodeDragStop = useCallback(() => {
-    const token = nodeDragTokenRef.current;
-    nodeDragTokenRef.current = null;
-    if (!token) {
-      return;
-    }
 
-    commitAction(token);
-  }, [commitAction]);
+  // After a drag ends, if a node is released over a frame, reparent it so it
+  // moves with the frame. If a node exits its parent frame, unparent it.
+  const handleReparentOnDrop = useCallback(
+    (draggedNode: Node) => {
+      // Don't reparent frames themselves (avoid nested frames for now)
+      if (draggedNode.type === "frame-node") return;
+
+      const allNodes = nodes;
+      const frames = allNodes.filter(
+        (n): n is Node & { type: "frame-node" } => n.type === "frame-node",
+      );
+
+      if (frames.length === 0) return;
+
+      const getAbs = (n: Node) => n.positionAbsolute ?? n.position;
+      const dnAbs = getAbs(draggedNode);
+      const dnW = draggedNode.width ?? 0;
+      const dnH = draggedNode.height ?? 0;
+      const dnCenter = { x: dnAbs.x + dnW / 2, y: dnAbs.y + dnH / 2 };
+
+      // Find the top-most frame whose bounds contain the node center
+      const containingFrame = frames
+        .filter((f) => (f.width ?? 0) > 0 && (f.height ?? 0) > 0)
+        .find((f) => {
+          const fa = getAbs(f);
+          const fx = fa.x;
+          const fy = fa.y;
+          const fw = f.width ?? 0;
+          const fh = f.height ?? 0;
+          return (
+            dnCenter.x >= fx &&
+            dnCenter.x <= fx + fw &&
+            dnCenter.y >= fy &&
+            dnCenter.y <= fy + fh
+          );
+        });
+
+      // Helper to convert absolute to local coordinates for a parent
+      const toLocal = (abs: { x: number; y: number }, parent: Node) => {
+        const pa = getAbs(parent);
+        return { x: abs.x - pa.x, y: abs.y - pa.y } as XYPosition;
+      };
+
+      // Helper to convert local to absolute using parent
+      const toAbsolute = (local: { x: number; y: number }, parent: Node) => {
+        const pa = getAbs(parent);
+        return { x: local.x + pa.x, y: local.y + pa.y } as XYPosition;
+      };
+
+      const currentParentId = (draggedNode as any).parentId as string | undefined;
+      const currentParent = currentParentId
+        ? frames.find((f) => f.id === currentParentId)
+        : undefined;
+
+      // If dropped over a frame: ensure parenting and local coords
+      if (containingFrame) {
+        if (currentParentId === containingFrame.id) {
+          // Already child of this frame; no change needed
+          return;
+        }
+
+        // Compute new local position relative to the new parent
+        const newLocal = toLocal(dnAbs, containingFrame);
+        setNodes((nds) =>
+          nds.map((n) =>
+            n.id === draggedNode.id
+              ? ({
+                  ...n,
+                  position: newLocal,
+                  // extent 'parent' constrains dragging within the frame
+                  extent: "parent",
+                  // XYFlow uses parentId to define hierarchy
+                  parentId: containingFrame.id,
+                  // ensure the frame renders behind its children
+                  zIndex: Math.max((containingFrame.zIndex ?? 0) + 1, n.zIndex ?? 1),
+                } satisfies Node)
+              : n,
+          ),
+        );
+        return;
+      }
+
+      // If not over any frame but currently parented: unparent to root
+      if (currentParent) {
+        const abs = toAbsolute(draggedNode.position, currentParent);
+        setNodes((nds) =>
+          nds.map((n) =>
+            n.id === draggedNode.id
+              ? ({
+                  ...n,
+                  position: abs,
+                  parentId: undefined,
+                  extent: undefined,
+                } satisfies Node)
+              : n,
+          ),
+        );
+      }
+    },
+    [nodes, setNodes],
+  );
+
+  const handleNodeDragStop = useCallback(
+    (_: ReactMouseEvent, node: Node) => {
+      const token = nodeDragTokenRef.current;
+      nodeDragTokenRef.current = null;
+      if (token) {
+        commitAction(token);
+      }
+
+      // Perform (un)parenting after drag stop based on final drop position
+      handleReparentOnDrop(node as Node);
+    },
+    [commitAction, handleReparentOnDrop],
+  );
+
 
   // Clear typing state when clicking empty canvas (commits edits)
   const onPaneClick = useCallback(() => {
