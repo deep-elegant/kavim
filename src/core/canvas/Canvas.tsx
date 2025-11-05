@@ -77,6 +77,8 @@ import {
   useUndoRedoShortcuts,
 } from "./undo";
 import clsx from "clsx";
+import { Z } from "./nodes/nodesZindex";
+import { attachToFrameOnCreate, getAbsolutePosition, pickContainingFrame, toLocal } from "./utils/frameReparent";
 
 /**
  * Configuration for a drawing tool, excluding image and YouTube tools.
@@ -87,7 +89,8 @@ type DrawingToolConfig = {
   icon: ComponentType<{ className?: string }>;
 };
 
-const drawingToolConfigs: DrawingToolConfig[] = [ // Configuration for tools that create nodes by drawing on the canvas
+const drawingToolConfigs: DrawingToolConfig[] = [
+  // Configuration for tools that create nodes by drawing on the canvas
   { id: "sticky-note", label: "Sticky Note", icon: StickyNote },
   { id: "shape", label: "Shape", icon: Circle },
   { id: "prompt-node", label: "Prompt Node", icon: WandSparklesIcon },
@@ -114,7 +117,8 @@ type ActionButtonConfig = {
   icon: ComponentType<{ className?: string }>;
 };
 
-const actionButtonConfigs: ActionButtonConfig[] = [ // Configuration for toolbar buttons that trigger specific actions (e.g., adding media)
+const actionButtonConfigs: ActionButtonConfig[] = [
+  // Configuration for toolbar buttons that trigger specific actions (e.g., adding media)
   { id: "image", label: "Image", icon: ImageIcon },
   { id: "youtube", label: "YouTube Video", icon: Youtube },
 ];
@@ -151,14 +155,8 @@ const drawingToolIds: ToolId[] = drawingToolConfigs.map((tool) => tool.id);
  */
 const CanvasInner = () => {
   const { nodes, edges, setNodes, setEdges } = useCanvasData();
-  const {
-    beginAction,
-    commitAction,
-    performAction,
-    undo,
-    redo,
-    isReplaying,
-  } = useCanvasUndoRedo();
+  const { beginAction, commitAction, performAction, undo, redo, isReplaying } =
+    useCanvasUndoRedo();
   const [selectedTool, setSelectedTool] = useState<ToolId | null>(null);
   // State to control the visibility of the YouTube embed dialog
   const [isYouTubeDialogOpen, setIsYouTubeDialogOpen] = useState(false);
@@ -185,8 +183,8 @@ const CanvasInner = () => {
   const isCollaborationActive = dataChannelState === "open";
 
   const selectionMode = useMemo(() => {
-    return 'partial' as SelectionMode
-  }, [])
+    return "partial" as SelectionMode;
+  }, []);
 
   // Wrap structural changes in `performAction` to make them undoable.
   const onNodesChange = useCallback(
@@ -199,7 +197,9 @@ const CanvasInner = () => {
       // If it's structural, wrap it in an undoable action.
       if (hasStructuralChange) {
         performAction(() =>
-          setNodes((nds) => applyNodeChanges(changes, nds as Node<CanvasNode>[])),
+          setNodes((nds) =>
+            applyNodeChanges(changes, nds as Node<CanvasNode>[]),
+          ),
         );
         return;
       }
@@ -254,11 +254,10 @@ const CanvasInner = () => {
     );
   }, [beginAction, isReplaying, setNodes]);
 
-
   // After a drag ends, batch-reparent selected nodes (or the dragged node) to frames
   const handleReparentOnDrop = useCallback(
     (draggedNode: Node) => {
-      // Use latest snapshot to avoid stale coordinates
+      // normalize frames' zIndex up-front
       const allNodes = nodes;
       const frames = allNodes.filter(
         (n): n is Node & { type: "frame-node" } => n.type === "frame-node",
@@ -276,111 +275,62 @@ const CanvasInner = () => {
           : [draggedNode];
       if (candidates.length === 0) return;
 
-      const getAbs = (n: Node) => n.positionAbsolute ?? n.position;
-
-      const ATTACH_MARGIN = 8; // be generous near the edges
-      const contains = (f: Node, p: { x: number; y: number }) => {
-        const fa = getAbs(f);
-        const fw = (f.width ?? 0) + ATTACH_MARGIN * 2;
-        const fh = (f.height ?? 0) + ATTACH_MARGIN * 2;
-        const fx = fa.x - ATTACH_MARGIN;
-        const fy = fa.y - ATTACH_MARGIN;
-        return p.x >= fx && p.x <= fx + fw && p.y >= fy && p.y <= fy + fh;
-      };
-
-      // Overlap ratio between node and frame rects
-      const overlapRatio = (n: Node, f: Node) => {
-        const na = getAbs(n);
-        const fa = getAbs(f);
-        const nx1 = na.x;
-        const ny1 = na.y;
-        const nx2 = na.x + (n.width ?? 0);
-        const ny2 = na.y + (n.height ?? 0);
-        const fx1 = fa.x;
-        const fy1 = fa.y;
-        const fx2 = fa.x + (f.width ?? 0);
-        const fy2 = fa.y + (f.height ?? 0);
-        const ix = Math.max(0, Math.min(nx2, fx2) - Math.max(nx1, fx1));
-        const iy = Math.max(0, Math.min(ny2, fy2) - Math.max(ny1, fy1));
-        const inter = ix * iy;
-        const nArea = Math.max(1, (n.width ?? 0) * (n.height ?? 0));
-        return inter / nArea;
-      };
-
-      const pickContainingFrame = (center: { x: number; y: number }, node: Node) => {
-        let best: Node | null = null;
-        let bestZ = -Infinity;
-        for (const f of frames) {
-          if ((f.width ?? 0) <= 0 || (f.height ?? 0) <= 0) continue;
-          const inside = contains(f, center);
-          const overlap = overlapRatio(node, f);
-          if (inside || overlap >= 0.25) {
-            const z = (f as any).zIndex ?? 0;
-            if (z >= bestZ) {
-              bestZ = z;
-              best = f;
-            }
-          }
-        }
-        return best;
-      };
-
       const updates = new Map<string, Node>();
+      const framesById = new Map(frames.map((frame) => [frame.id, frame]));
 
       for (const n of candidates) {
-        const abs = getAbs(n);
-        const center = {
-          x: abs.x + (n.width ?? 0) / 2,
-          y: abs.y + (n.height ?? 0) / 2,
-        };
-        const targetFrame = pickContainingFrame(center, n);
+        const absPos = getAbsolutePosition(n, framesById);
+        const targetFrame = pickContainingFrame(n, frames);
+
         const currentParentId = (n as any).parentId as string | undefined;
         const currentParent = currentParentId
-          ? frames.find((f) => f.id === currentParentId)
+          ? framesById.get(currentParentId)
           : undefined;
-
         if (targetFrame && targetFrame.id === currentParentId) {
-          continue; // no change
+          // still ensure the child sits above its parent
+          if ((n.zIndex ?? 0) <= (targetFrame.zIndex ?? 0)) {
+            updates.set(n.id, {
+              ...n,
+              zIndex: (targetFrame.zIndex ?? Z.FRAME_BASE) + Z.CHILD_OFFSET,
+            });
+          }
+          continue;
         }
 
-        const toLocal = (pt: { x: number; y: number }, parent: Node) => {
-          const pa = getAbs(parent);
-          return { x: pt.x - pa.x, y: pt.y - pa.y } as XYPosition;
-        };
-        const toAbsolute = (pt: { x: number; y: number }, parent: Node) => {
-          const pa = getAbs(parent);
-          return { x: pt.x + pa.x, y: pt.y + pa.y } as XYPosition;
-        };
-
-        const absPos = currentParent ? toAbsolute(n.position, currentParent) : abs;
-
         if (targetFrame) {
-          const local = toLocal(absPos, targetFrame);
-          updates.set(
-            n.id,
-            {
-              ...n,
-              position: local,
-              parentId: targetFrame.id,
-              extent: "parent",
-              zIndex: Math.max(((targetFrame as any).zIndex ?? 0) + 1, (n as any).zIndex ?? 1),
-            } as Node,
-          );
+          const local = toLocal(absPos, targetFrame, framesById);
+          const frameZ = targetFrame.zIndex ?? Z.FRAME_BASE;
+          updates.set(n.id, {
+            ...n,
+            position: local,
+            parentId: targetFrame.id,
+            extent: "parent",
+            // child ALWAYS above its frame
+            zIndex: Math.max(n.zIndex ?? 0, frameZ + Z.CHILD_OFFSET),
+          } as Node);
         } else if (currentParent) {
-          updates.set(
-            n.id,
-            {
-              ...n,
-              position: absPos,
-              parentId: undefined,
-              extent: undefined,
-            } as Node,
-          );
+          // leaving a frame → back to content layer
+          updates.set(n.id, {
+            ...n,
+            position: absPos,
+            parentId: undefined,
+            extent: undefined,
+            zIndex: Math.max(n.zIndex ?? 0, Z.CONTENT_BASE),
+          } as Node);
+        } else {
+          // neither before nor after: make sure it has a sane base
+          if ((n.zIndex ?? 0) < Z.CONTENT_BASE) {
+            updates.set(n.id, { ...n, zIndex: Z.CONTENT_BASE });
+          }
         }
       }
 
       if (updates.size === 0) return;
-      setNodes((nds) => nds.map((n) => updates.get(n.id) ?? n));
+
+      setNodes((nds) =>
+        nds
+          .map((n) => updates.get(n.id) ?? n),
+      );
     },
     [nodes, setNodes],
   );
@@ -397,7 +347,6 @@ const CanvasInner = () => {
     },
     [commitAction, handleReparentOnDrop],
   );
-
 
   // Clear typing state when clicking empty canvas (commits edits)
   const onPaneClick = useCallback(() => {
@@ -528,12 +477,9 @@ const CanvasInner = () => {
   );
 
   // Drawing tools toggle active state
-  const handleDrawingToolSelect = useCallback(
-    (id: DrawingToolId) => {
-      setSelectedTool((current) => (current === id ? null : id));
-    },
-    [],
-  );
+  const handleDrawingToolSelect = useCallback((id: DrawingToolId) => {
+    setSelectedTool((current) => (current === id ? null : id));
+  }, []);
 
   // Starts drawing operation when mouse pressed with drawing tool active
   const handlePaneMouseDown = useCallback(
@@ -636,7 +582,7 @@ const CanvasInner = () => {
         if (node.id !== nodeId) {
           return node;
         }
-        return toolImpl.onPaneMouseUp(node);
+        return attachToFrameOnCreate(toolImpl.onPaneMouseUp(node), currentNodes);
       }),
     );
 
@@ -697,7 +643,9 @@ const CanvasInner = () => {
 
   return (
     <div
-      className={clsx("rf-wrapper relative", { "rf-creating": isDrawingToolSelected })}
+      className={clsx("rf-wrapper relative", {
+        "rf-creating": isDrawingToolSelected,
+      })}
       style={{ height: "100%", width: "100%" }}
       ref={reactFlowWrapperRef}
       onPaste={handlePaste}
@@ -740,6 +688,9 @@ const CanvasInner = () => {
           onSelectionChange={handleSelectionChange}
           nodesDraggable={!selectedTool}
           selectNodesOnDrag={!selectedTool}
+          elevateNodesOnSelect={false}
+          minZoom={0.1}
+          maxZoom={6.0}
         >
           <MiniMap />
           <Controls

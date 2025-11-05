@@ -3,6 +3,7 @@ import { type Node, type NodeProps } from "@xyflow/react";
 
 import NodeInteractionOverlay from "./NodeInteractionOverlay";
 import { type DrawableNode } from "./DrawableNode";
+import { Z } from "./nodesZindex";
 
 export type FrameNodeData = {
   title?: string;
@@ -64,6 +65,7 @@ export const frameDrawable: DrawableNode<FrameNodeType> = {
     height: 400,
     style: { width: 600, height: 400 },
     selected: true,
+    zIndex: Z.FRAME_BASE,
   }),
 
   onPaneMouseMove: (node, start, current) => {

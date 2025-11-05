@@ -17,6 +17,7 @@ import {
 import { type FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
 import { useAutoFontSizeObserver } from "./useAutoFontSizeObserver";
 import { useCanvasUndoRedo } from "../undo";
+import { Z } from "./nodesZindex";
 
 /** Data structure for sticky notes with color theming and font sizing */
 export type StickyNoteData = {
@@ -71,6 +72,7 @@ export const stickyNoteDrawable: DrawableNode<StickyNoteNodeType> = {
     height: DEFAULT_NOTE_SIZE,
     style: { width: DEFAULT_NOTE_SIZE, height: DEFAULT_NOTE_SIZE },
     selected: true,
+    zIndex: Z.CONTENT_BASE,
   }),
 
   onPaneMouseMove: (node, start, current) => {
