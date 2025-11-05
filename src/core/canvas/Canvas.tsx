@@ -76,6 +76,7 @@ import {
   useCanvasUndoRedo,
   useUndoRedoShortcuts,
 } from "./undo";
+import clsx from "clsx";
 
 /**
  * Configuration for a drawing tool, excluding image and YouTube tools.
@@ -696,7 +697,7 @@ const CanvasInner = () => {
 
   return (
     <div
-      className="relative"
+      className={clsx("rf-wrapper relative", { "rf-creating": isDrawingToolSelected })}
       style={{ height: "100%", width: "100%" }}
       ref={reactFlowWrapperRef}
       onPaste={handlePaste}
@@ -737,6 +738,8 @@ const CanvasInner = () => {
             cursor: isDrawingToolSelected ? "cursor-crosshair" : undefined,
           }}
           onSelectionChange={handleSelectionChange}
+          nodesDraggable={!selectedTool}
+          selectNodesOnDrag={!selectedTool}
         >
           <MiniMap />
           <Controls
