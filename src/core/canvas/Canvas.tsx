@@ -238,107 +238,148 @@ const CanvasInner = () => {
       return;
     }
     nodeDragTokenRef.current = beginAction("node-drag");
-  }, [beginAction, isReplaying]);
+
+    // Allow dragging children out of frames by temporarily disabling extent
+    setNodes((nds) =>
+      nds.map((n) => {
+        const parentId = (n as any).parentId as string | undefined;
+        if (n.selected && parentId) {
+          if (n.extent !== undefined) {
+            return { ...n, extent: undefined } as Node;
+          }
+        }
+        return n;
+      }),
+    );
+  }, [beginAction, isReplaying, setNodes]);
 
 
-  // After a drag ends, if a node is released over a frame, reparent it so it
-  // moves with the frame. If a node exits its parent frame, unparent it.
+  // After a drag ends, batch-reparent selected nodes (or the dragged node) to frames
   const handleReparentOnDrop = useCallback(
     (draggedNode: Node) => {
-      // Don't reparent frames themselves (avoid nested frames for now)
-      if (draggedNode.type === "frame-node") return;
-
+      // Use latest snapshot to avoid stale coordinates
       const allNodes = nodes;
       const frames = allNodes.filter(
         (n): n is Node & { type: "frame-node" } => n.type === "frame-node",
       );
-
       if (frames.length === 0) return;
 
+      // Consider all selected, non-frame nodes. If none, fallback to dragged node.
+      const selected = allNodes.filter(
+        (n) => n.selected && n.type !== "frame-node",
+      );
+      const candidates = selected.length
+        ? selected
+        : draggedNode.type === "frame-node"
+          ? []
+          : [draggedNode];
+      if (candidates.length === 0) return;
+
       const getAbs = (n: Node) => n.positionAbsolute ?? n.position;
-      const dnAbs = getAbs(draggedNode);
-      const dnW = draggedNode.width ?? 0;
-      const dnH = draggedNode.height ?? 0;
-      const dnCenter = { x: dnAbs.x + dnW / 2, y: dnAbs.y + dnH / 2 };
 
-      // Find the top-most frame whose bounds contain the node center
-      const containingFrame = frames
-        .filter((f) => (f.width ?? 0) > 0 && (f.height ?? 0) > 0)
-        .find((f) => {
-          const fa = getAbs(f);
-          const fx = fa.x;
-          const fy = fa.y;
-          const fw = f.width ?? 0;
-          const fh = f.height ?? 0;
-          return (
-            dnCenter.x >= fx &&
-            dnCenter.x <= fx + fw &&
-            dnCenter.y >= fy &&
-            dnCenter.y <= fy + fh
-          );
-        });
-
-      // Helper to convert absolute to local coordinates for a parent
-      const toLocal = (abs: { x: number; y: number }, parent: Node) => {
-        const pa = getAbs(parent);
-        return { x: abs.x - pa.x, y: abs.y - pa.y } as XYPosition;
+      const ATTACH_MARGIN = 8; // be generous near the edges
+      const contains = (f: Node, p: { x: number; y: number }) => {
+        const fa = getAbs(f);
+        const fw = (f.width ?? 0) + ATTACH_MARGIN * 2;
+        const fh = (f.height ?? 0) + ATTACH_MARGIN * 2;
+        const fx = fa.x - ATTACH_MARGIN;
+        const fy = fa.y - ATTACH_MARGIN;
+        return p.x >= fx && p.x <= fx + fw && p.y >= fy && p.y <= fy + fh;
       };
 
-      // Helper to convert local to absolute using parent
-      const toAbsolute = (local: { x: number; y: number }, parent: Node) => {
-        const pa = getAbs(parent);
-        return { x: local.x + pa.x, y: local.y + pa.y } as XYPosition;
+      // Overlap ratio between node and frame rects
+      const overlapRatio = (n: Node, f: Node) => {
+        const na = getAbs(n);
+        const fa = getAbs(f);
+        const nx1 = na.x;
+        const ny1 = na.y;
+        const nx2 = na.x + (n.width ?? 0);
+        const ny2 = na.y + (n.height ?? 0);
+        const fx1 = fa.x;
+        const fy1 = fa.y;
+        const fx2 = fa.x + (f.width ?? 0);
+        const fy2 = fa.y + (f.height ?? 0);
+        const ix = Math.max(0, Math.min(nx2, fx2) - Math.max(nx1, fx1));
+        const iy = Math.max(0, Math.min(ny2, fy2) - Math.max(ny1, fy1));
+        const inter = ix * iy;
+        const nArea = Math.max(1, (n.width ?? 0) * (n.height ?? 0));
+        return inter / nArea;
       };
 
-      const currentParentId = (draggedNode as any).parentId as string | undefined;
-      const currentParent = currentParentId
-        ? frames.find((f) => f.id === currentParentId)
-        : undefined;
+      const pickContainingFrame = (center: { x: number; y: number }, node: Node) => {
+        let best: Node | null = null;
+        let bestZ = -Infinity;
+        for (const f of frames) {
+          if ((f.width ?? 0) <= 0 || (f.height ?? 0) <= 0) continue;
+          const inside = contains(f, center);
+          const overlap = overlapRatio(node, f);
+          if (inside || overlap >= 0.25) {
+            const z = (f as any).zIndex ?? 0;
+            if (z >= bestZ) {
+              bestZ = z;
+              best = f;
+            }
+          }
+        }
+        return best;
+      };
 
-      // If dropped over a frame: ensure parenting and local coords
-      if (containingFrame) {
-        if (currentParentId === containingFrame.id) {
-          // Already child of this frame; no change needed
-          return;
+      const updates = new Map<string, Node>();
+
+      for (const n of candidates) {
+        const abs = getAbs(n);
+        const center = {
+          x: abs.x + (n.width ?? 0) / 2,
+          y: abs.y + (n.height ?? 0) / 2,
+        };
+        const targetFrame = pickContainingFrame(center, n);
+        const currentParentId = (n as any).parentId as string | undefined;
+        const currentParent = currentParentId
+          ? frames.find((f) => f.id === currentParentId)
+          : undefined;
+
+        if (targetFrame && targetFrame.id === currentParentId) {
+          continue; // no change
         }
 
-        // Compute new local position relative to the new parent
-        const newLocal = toLocal(dnAbs, containingFrame);
-        setNodes((nds) =>
-          nds.map((n) =>
-            n.id === draggedNode.id
-              ? ({
-                  ...n,
-                  position: newLocal,
-                  // extent 'parent' constrains dragging within the frame
-                  extent: "parent",
-                  // XYFlow uses parentId to define hierarchy
-                  parentId: containingFrame.id,
-                  // ensure the frame renders behind its children
-                  zIndex: Math.max((containingFrame.zIndex ?? 0) + 1, n.zIndex ?? 1),
-                } satisfies Node)
-              : n,
-          ),
-        );
-        return;
+        const toLocal = (pt: { x: number; y: number }, parent: Node) => {
+          const pa = getAbs(parent);
+          return { x: pt.x - pa.x, y: pt.y - pa.y } as XYPosition;
+        };
+        const toAbsolute = (pt: { x: number; y: number }, parent: Node) => {
+          const pa = getAbs(parent);
+          return { x: pt.x + pa.x, y: pt.y + pa.y } as XYPosition;
+        };
+
+        const absPos = currentParent ? toAbsolute(n.position, currentParent) : abs;
+
+        if (targetFrame) {
+          const local = toLocal(absPos, targetFrame);
+          updates.set(
+            n.id,
+            {
+              ...n,
+              position: local,
+              parentId: targetFrame.id,
+              extent: "parent",
+              zIndex: Math.max(((targetFrame as any).zIndex ?? 0) + 1, (n as any).zIndex ?? 1),
+            } as Node,
+          );
+        } else if (currentParent) {
+          updates.set(
+            n.id,
+            {
+              ...n,
+              position: absPos,
+              parentId: undefined,
+              extent: undefined,
+            } as Node,
+          );
+        }
       }
 
-      // If not over any frame but currently parented: unparent to root
-      if (currentParent) {
-        const abs = toAbsolute(draggedNode.position, currentParent);
-        setNodes((nds) =>
-          nds.map((n) =>
-            n.id === draggedNode.id
-              ? ({
-                  ...n,
-                  position: abs,
-                  parentId: undefined,
-                  extent: undefined,
-                } satisfies Node)
-              : n,
-          ),
-        );
-      }
+      if (updates.size === 0) return;
+      setNodes((nds) => nds.map((n) => updates.get(n.id) ?? n));
     },
     [nodes, setNodes],
   );
@@ -346,13 +387,12 @@ const CanvasInner = () => {
   const handleNodeDragStop = useCallback(
     (_: ReactMouseEvent, node: Node) => {
       const token = nodeDragTokenRef.current;
+      // Include reparenting within the same undoable drag step
+      handleReparentOnDrop(node as Node);
       nodeDragTokenRef.current = null;
       if (token) {
         commitAction(token);
       }
-
-      // Perform (un)parenting after drag stop based on final drop position
-      handleReparentOnDrop(node as Node);
     },
     [commitAction, handleReparentOnDrop],
   );
