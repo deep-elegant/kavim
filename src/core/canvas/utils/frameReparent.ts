@@ -1,5 +1,5 @@
 // frameReparent.ts
-import type { Node, XYPosition } from "@xyflow/react";
+import type { InternalNode, Node, XYPosition } from "@xyflow/react";
 
 export const ATTACH_MARGIN = 8;
 export const OVERLAP_MIN = 0.25;
@@ -11,18 +11,14 @@ export const isFrameNode = (
 const clonePosition = (pt?: XYPosition): XYPosition =>
   pt ? { x: pt.x, y: pt.y } : { x: 0, y: 0 };
 
-const getAbs = (n: Node): XYPosition =>
-  clonePosition(n.positionAbsolute ?? n.position);
+const getLocalPos = (n: Node): XYPosition =>
+  clonePosition(n.position);
 
-const resolveAbsWithFrames = (
+const resolveLocalPositionWithFrames = (
   n: Node,
   framesById: Map<string, Node>,
   visited: Set<string> = new Set(),
 ): XYPosition => {
-  if (n.positionAbsolute) {
-    return clonePosition(n.positionAbsolute);
-  }
-
   const base = clonePosition(n.position);
   const parentId = (n as any).parentId as string | undefined;
   if (!parentId) {
@@ -39,7 +35,7 @@ const resolveAbsWithFrames = (
   }
 
   visited.add(parentId);
-  const parentAbs = resolveAbsWithFrames(parent, framesById, visited);
+  const parentAbs = resolveLocalPositionWithFrames(parent, framesById, visited);
   visited.delete(parentId);
 
   return {
@@ -48,14 +44,14 @@ const resolveAbsWithFrames = (
   };
 };
 
-export const getAbsolutePosition = (
+export const getLocalPosition = (
   node: Node,
   framesById?: Map<string, Node>,
 ): XYPosition => {
   if (!framesById || framesById.size === 0) {
-    return getAbs(node);
+    return getLocalPos(node);
   }
-  return resolveAbsWithFrames(node, framesById);
+  return resolveLocalPositionWithFrames(node, framesById);
 };
 
 const containsWithMargin = (
@@ -63,7 +59,7 @@ const containsWithMargin = (
   p: { x: number; y: number },
   framesById?: Map<string, Node>,
 ) => {
-  const fa = getAbsolutePosition(f, framesById);
+  const fa = getLocalPosition(f, framesById);
   const fw = (f.width ?? 0) + ATTACH_MARGIN * 2;
   const fh = (f.height ?? 0) + ATTACH_MARGIN * 2;
   const fx = fa.x - ATTACH_MARGIN;
@@ -76,8 +72,8 @@ const overlapRatio = (
   f: Node,
   framesById?: Map<string, Node>,
 ): number => {
-  const na = getAbsolutePosition(n, framesById);
-  const fa = getAbsolutePosition(f, framesById);
+  const na = getLocalPosition(n, framesById);
+  const fa = getLocalPosition(f, framesById);
   const nx1 = na.x;
   const ny1 = na.y;
   const nx2 = na.x + (n.width ?? 0);
@@ -111,7 +107,7 @@ export const pickContainingFrame = (node: Node, frames: Node[]) => {
 
   const framesById = new Map(frames.map((frame) => [frame.id, frame]));
 
-  const na = getAbsolutePosition(node, framesById);
+  const na = getLocalPosition(node, framesById);
   const center = {
     x: na.x + (node.width ?? 0) / 2,
     y: na.y + (node.height ?? 0) / 2,
@@ -140,7 +136,7 @@ export const pickContainingFrame = (node: Node, frames: Node[]) => {
  * Returns the same node if no frame matched, or if it's a frame/has a parent already.
  * (Position is assumed absolute on creation.)
  */
-export function attachToFrameOnCreate(newNode: Node, allNodes: Node[]): Node {
+export function attachToFrameOnCreate(newNode: Node, allNodes: Node[], getInternalNode: (id: string) => InternalNode | undefined): Node {
   if (isFrameNode(newNode) || (newNode as any).parentId) return newNode;
 
   const frames = allNodes.filter(isFrameNode);
@@ -149,9 +145,9 @@ export function attachToFrameOnCreate(newNode: Node, allNodes: Node[]): Node {
   const target = pickContainingFrame(newNode, frames);
   if (!target) return newNode;
 
-  const framesById = new Map(frames.map((frame) => [frame.id, frame]));
-  const absPos = getAbsolutePosition(newNode, framesById);
-  const local = toLocal(absPos, target, framesById);
+  const nodeAbsPos = getInternalNode(newNode.id)?.internals.positionAbsolute!;
+  const targetAbsPos = getInternalNode(target.id)?.internals.positionAbsolute!;
+  const local = toLocal(nodeAbsPos, targetAbsPos);
 
   return {
     ...newNode,
@@ -160,33 +156,4 @@ export function attachToFrameOnCreate(newNode: Node, allNodes: Node[]): Node {
     extent: "parent",
     // zIndex left for your normalize pass
   };
-}
-
-/**
- * Batch version, useful if you add several nodes at once.
- */
-export function attachManyOnCreate(
-  newNodes: Node[],
-  allNodes: Node[],
-): Node[] {
-  if (!newNodes.length) return newNodes;
-  const frames = allNodes.filter(isFrameNode);
-  if (frames.length === 0) return newNodes;
-
-  const framesById = new Map(frames.map((frame) => [frame.id, frame]));
-
-  return newNodes.map((n) =>
-    isFrameNode(n) || (n as any).parentId
-      ? n
-      : ((): Node => {
-          const target = pickContainingFrame(n, frames);
-          if (!target) return n;
-          const local = toLocal(
-            getAbsolutePosition(n, framesById),
-            target,
-            framesById,
-          );
-          return { ...n, position: local, parentId: target.id, extent: "parent" };
-        })(),
-  );
 }

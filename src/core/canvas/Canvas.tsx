@@ -583,7 +583,7 @@ const CanvasInner = () => {
         if (node.id !== nodeId) {
           return node;
         }
-        return attachToFrameOnCreate(toolImpl.onPaneMouseUp(node), currentNodes);
+        return attachToFrameOnCreate(toolImpl.onPaneMouseUp(node), currentNodes, getInternalNode);
       }),
     );
 
