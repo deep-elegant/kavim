@@ -94,21 +94,10 @@ const overlapRatio = (
 };
 
 export const toLocal = (
-  pt: XYPosition,
-  parent: Node,
-  framesById?: Map<string, Node>,
+  nodeAbsPosition: XYPosition,
+  parentAbsPosition: XYPosition,
 ): XYPosition => {
-  const pa = getAbsolutePosition(parent, framesById);
-  return { x: pt.x - pa.x, y: pt.y - pa.y };
-};
-
-export const toAbsolute = (
-  pt: XYPosition,
-  parent: Node,
-  framesById?: Map<string, Node>,
-): XYPosition => {
-  const pa = getAbsolutePosition(parent, framesById);
-  return { x: pt.x + pa.x, y: pt.y + pa.y };
+  return { x: nodeAbsPosition.x - parentAbsPosition.x, y: nodeAbsPosition.y - parentAbsPosition.y };
 };
 
 /**

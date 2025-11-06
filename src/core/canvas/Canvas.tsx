@@ -166,7 +166,7 @@ const CanvasInner = () => {
     start: XYPosition;
   } | null>(null);
   const reactFlowWrapperRef = useRef<HTMLDivElement | null>(null);
-  const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow();
+  const { screenToFlowPosition, zoomIn, zoomOut, fitView, getInternalNode } = useReactFlow();
   const nodeDragTokenRef = useRef<symbol | null>(null);
   // Prevents redundant broadcasts when selection hasn't changed
   const lastSelectionBroadcastRef = useRef<string | null>(null);
@@ -279,7 +279,7 @@ const CanvasInner = () => {
       const framesById = new Map(frames.map((frame) => [frame.id, frame]));
 
       for (const n of candidates) {
-        const absPos = getAbsolutePosition(n, framesById);
+        const absPos = getInternalNode(n.id)?.internals.positionAbsolute!;
         const targetFrame = pickContainingFrame(n, frames);
 
         const currentParentId = (n as any).parentId as string | undefined;
@@ -298,7 +298,8 @@ const CanvasInner = () => {
         }
 
         if (targetFrame) {
-          const local = toLocal(absPos, targetFrame, framesById);
+          const targetFrameAbsPos = getInternalNode(targetFrame.id)?.internals.positionAbsolute!;
+          const local = toLocal(absPos, targetFrameAbsPos);
           const frameZ = targetFrame.zIndex ?? Z.FRAME_BASE;
           updates.set(n.id, {
             ...n,
