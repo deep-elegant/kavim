@@ -688,7 +688,6 @@ const CanvasInner = () => {
           }}
           onSelectionChange={handleSelectionChange}
           nodesDraggable={!selectedTool}
-          selectNodesOnDrag={!selectedTool}
           elevateNodesOnSelect={false}
           minZoom={0.1}
           maxZoom={6.0}
