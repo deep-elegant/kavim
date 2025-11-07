@@ -1,4 +1,4 @@
-import React, {
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -70,7 +70,6 @@ import useCanvasYouTubeNodes from "./hooks/useCanvasYouTubeNodes"; // Hook for m
 import type { CanvasNode, ToolId } from "./types";
 import { StatsForNerdsOverlay } from "@/components/diagnostics/StatsForNerdsOverlay";
 import { usePakAssets } from "@/core/pak/usePakAssets";
-import { useWebRTC } from "./collaboration/WebRTCContext";
 import {
   CanvasUndoRedoProvider,
   useCanvasUndoRedo,
@@ -78,7 +77,7 @@ import {
 } from "./undo";
 import clsx from "clsx";
 import { Z } from "./nodes/nodesZindex";
-import { attachToFrameOnCreate, getAbsolutePosition, pickContainingFrame, toLocal } from "./utils/frameReparent";
+import { useCanvasFrame, toLocal } from "./utils/frameReparent";
 
 /**
  * Configuration for a drawing tool, excluding image and YouTube tools.
@@ -155,6 +154,7 @@ const drawingToolIds: ToolId[] = drawingToolConfigs.map((tool) => tool.id);
  */
 const CanvasInner = () => {
   const { nodes, edges, setNodes, setEdges } = useCanvasData();
+  const { pickContainingFrame, attachToFrameOnCreate } = useCanvasFrame();
   const { beginAction, commitAction, performAction, undo, redo, isReplaying } =
     useCanvasUndoRedo();
   const [selectedTool, setSelectedTool] = useState<ToolId | null>(null);
@@ -348,30 +348,6 @@ const CanvasInner = () => {
     },
     [commitAction, handleReparentOnDrop],
   );
-
-  // Clear typing state when clicking empty canvas (commits edits)
-  const onPaneClick = useCallback(() => {
-    setNodes((currentNodes) => {
-      const hasTypingNode = currentNodes.some((node) => node.data.isTyping);
-      if (!hasTypingNode) {
-        return currentNodes;
-      }
-
-      return currentNodes.map((node) => {
-        if (!node.data.isTyping) {
-          return node;
-        }
-
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            isTyping: false,
-          },
-        };
-      });
-    });
-  }, [setNodes]);
 
   // Creates new edges when user drags connection between nodes
   const onConnect = useCallback(
@@ -583,7 +559,7 @@ const CanvasInner = () => {
         if (node.id !== nodeId) {
           return node;
         }
-        return attachToFrameOnCreate(toolImpl.onPaneMouseUp(node), currentNodes, getInternalNode);
+        return attachToFrameOnCreate(toolImpl.onPaneMouseUp(node), currentNodes);
       }),
     );
 
@@ -663,7 +639,6 @@ const CanvasInner = () => {
           onNodeDragStart={handleNodeDragStart}
           onNodeDragStop={handleNodeDragStop}
           edgeTypes={edgeTypes}
-          onPaneClick={onPaneClick}
           onMouseDown={handlePaneMouseDown}
           onPaneMouseMove={handlePaneMouseMove}
           onMouseUp={handlePaneMouseUp}
@@ -688,6 +663,7 @@ const CanvasInner = () => {
           }}
           onSelectionChange={handleSelectionChange}
           nodesDraggable={!selectedTool}
+          selectNodesOnDrag={false}
           elevateNodesOnSelect={false}
           minZoom={0.1}
           maxZoom={6.0}
