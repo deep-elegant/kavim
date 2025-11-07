@@ -26,11 +26,12 @@ const TriangleIcon = () => (
   </svg>
 );
 
+
 const shapeIcons: Record<StickyNoteShape, React.FC> = {
   rectangle: RectangleIcon,
-  circle: CircleIcon,
   diamond: DiamondIcon,
   triangle: TriangleIcon,
+  ellipse: CircleIcon,
 };
 
 interface ShapePickerProps {

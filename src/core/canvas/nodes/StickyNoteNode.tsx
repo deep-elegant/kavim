@@ -23,9 +23,9 @@ import { Z } from "./nodesZindex";
 /** Data structure for sticky notes with color theming and font sizing */
 export type StickyNoteShape =
   | "rectangle"
-  | "circle"
   | "diamond"
-  | "triangle";
+  | "triangle"
+  | "ellipse";
 
 export type StickyNoteData = {
   label: string;
@@ -391,7 +391,7 @@ const StickyNoteNode = memo(
             width: "50%",
             height: "50%",
           };
-        case "circle":
+        case "ellipse":
           return {
             position: "absolute",
             top: "15%",
@@ -414,6 +414,10 @@ const StickyNoteNode = memo(
         case "circle":
           return {
             clipPath: "circle(50% at 50% 50%)",
+          };
+        case "ellipse":
+          return {
+            clipPath: "ellipse(50% 50% at 50% 50%)",
           };
         case "diamond":
           return {
