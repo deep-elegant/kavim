@@ -202,3 +202,12 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer utilities {
+  .rf-creating .react-flow__node { @apply !pointer-events-none; }
+  .rf-creating .react-flow__edge,
+  .rf-creating .react-flow__handle,
+  .rf-creating .react-flow__edges *,
+  .rf-creating .react-flow__handle-connecting,
+  .rf-creating .react-flow__handle-valid { @apply !pointer-events-none; }
+}

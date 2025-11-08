@@ -1,4 +1,4 @@
-import React, {
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -36,6 +36,9 @@ import {
   WandSparklesIcon,
   Circle,
   Youtube,
+  Square,
+  FrameIcon,
+  ShapesIcon,
 } from "lucide-react";
 
 import "@xyflow/react/dist/style.css";
@@ -45,6 +48,7 @@ import AiNode, { aiNodeDrawable } from "./nodes/AINode";
 import ShapeNodeComponent, { shapeDrawable } from "./nodes/ShapeNode";
 import TextNodeComponent, { textDrawable } from "./nodes/TextNode";
 import ImageNode from "./nodes/ImageNode";
+import FrameNode, { frameDrawable } from "./nodes/FrameNode";
 import LlmFilePlaceholderNode from "./nodes/LlmFilePlaceholderNode";
 import YouTubeNode from "./nodes/YouTubeNode";
 import { type DrawableNode } from "./nodes/DrawableNode";
@@ -69,12 +73,14 @@ import useCanvasYouTubeNodes from "./hooks/useCanvasYouTubeNodes"; // Hook for m
 import type { CanvasNode, ToolId } from "./types";
 import { StatsForNerdsOverlay } from "@/components/diagnostics/StatsForNerdsOverlay";
 import { usePakAssets } from "@/core/pak/usePakAssets";
-import { useWebRTC } from "./collaboration/WebRTCContext";
 import {
   CanvasUndoRedoProvider,
   useCanvasUndoRedo,
   useUndoRedoShortcuts,
 } from "./undo";
+import clsx from "clsx";
+import { Z } from "./nodes/nodesZindex";
+import { useCanvasFrame, toLocal } from "./utils/frameReparent";
 import { CONNECTION_RADIUS } from "./constants";
 import { useEnhancedConnectionSnap } from "./hooks/useEnhancedConnectionSnap";
 import { ConnectionHoverProvider } from "./hooks/ConnectionHoverContext";
@@ -88,9 +94,10 @@ type DrawingToolConfig = {
   icon: ComponentType<{ className?: string }>;
 };
 
-const drawingToolConfigs: DrawingToolConfig[] = [ // Configuration for tools that create nodes by drawing on the canvas
-  { id: "sticky-note", label: "Sticky Note", icon: StickyNote },
-  { id: "shape", label: "Shape", icon: Circle },
+const drawingToolConfigs: DrawingToolConfig[] = [
+  // Configuration for tools that create nodes by drawing on the canvas
+  { id: "sticky-note", label: "Sticky Note", icon: ShapesIcon },
+  { id: "frame", label: "Frame", icon: FrameIcon },
   { id: "prompt-node", label: "Prompt Node", icon: WandSparklesIcon },
   { id: "text", label: "Text", icon: Type },
 ];
@@ -114,7 +121,8 @@ type ActionButtonConfig = {
   icon: ComponentType<{ className?: string }>;
 };
 
-const actionButtonConfigs: ActionButtonConfig[] = [ // Configuration for toolbar buttons that trigger specific actions (e.g., adding media)
+const actionButtonConfigs: ActionButtonConfig[] = [
+  // Configuration for toolbar buttons that trigger specific actions (e.g., adding media)
   { id: "image", label: "Image", icon: ImageIcon },
   { id: "youtube", label: "YouTube Video", icon: Youtube },
 ];
@@ -128,6 +136,7 @@ const nodeTypes = {
   "llm-file-placeholder": LlmFilePlaceholderNode,
   "image-node": ImageNode,
   "youtube-node": YouTubeNode,
+  "frame-node": FrameNode,
 };
 
 // Drawable tools implement mouse-based drawing (drag to create)
@@ -136,6 +145,7 @@ const drawableNodeTools: Partial<Record<ToolId, DrawableNode>> = {
   shape: shapeDrawable,
   text: textDrawable,
   "prompt-node": aiNodeDrawable,
+  frame: frameDrawable,
 };
 
 // Tools that support click-and-drag creation
@@ -149,14 +159,9 @@ const drawingToolIds: ToolId[] = drawingToolConfigs.map((tool) => tool.id);
  */
 const CanvasInner = () => {
   const { nodes, edges, setNodes, setEdges } = useCanvasData();
-  const {
-    beginAction,
-    commitAction,
-    performAction,
-    undo,
-    redo,
-    isReplaying,
-  } = useCanvasUndoRedo();
+  const { pickContainingFrame, attachToFrameOnCreate } = useCanvasFrame();
+  const { beginAction, commitAction, performAction, undo, redo, isReplaying } =
+    useCanvasUndoRedo();
   const [selectedTool, setSelectedTool] = useState<ToolId | null>(null);
   // State to control the visibility of the YouTube embed dialog
   const [isYouTubeDialogOpen, setIsYouTubeDialogOpen] = useState(false);
@@ -166,7 +171,7 @@ const CanvasInner = () => {
     start: XYPosition;
   } | null>(null);
   const reactFlowWrapperRef = useRef<HTMLDivElement | null>(null);
-  const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow();
+  const { screenToFlowPosition, zoomIn, zoomOut, fitView, getInternalNode } = useReactFlow();
   const nodeDragTokenRef = useRef<symbol | null>(null);
   // Prevents redundant broadcasts when selection hasn't changed
   const lastSelectionBroadcastRef = useRef<string | null>(null);
@@ -183,8 +188,8 @@ const CanvasInner = () => {
   const isCollaborationActive = dataChannelState === "open";
 
   const selectionMode = useMemo(() => {
-    return 'partial' as SelectionMode
-  }, [])
+    return "partial" as SelectionMode;
+  }, []);
 
   // Wrap structural changes in `performAction` to make them undoable.
   const onNodesChange = useCallback(
@@ -197,7 +202,9 @@ const CanvasInner = () => {
       // If it's structural, wrap it in an undoable action.
       if (hasStructuralChange) {
         performAction(() =>
-          setNodes((nds) => applyNodeChanges(changes, nds as Node<CanvasNode>[])),
+          setNodes((nds) =>
+            applyNodeChanges(changes, nds as Node<CanvasNode>[]),
+          ),
         );
         return;
       }
@@ -237,41 +244,100 @@ const CanvasInner = () => {
       return;
     }
     nodeDragTokenRef.current = beginAction("node-drag");
-  }, [beginAction, isReplaying]);
+  }, [beginAction, isReplaying, setNodes]);
 
-  const handleNodeDragStop = useCallback(() => {
-    const token = nodeDragTokenRef.current;
-    nodeDragTokenRef.current = null;
-    if (!token) {
-      return;
-    }
+  // After a drag ends, batch-reparent selected nodes (or the dragged node) to frames
+  const handleReparentOnDrop = useCallback(
+    (draggedNode: Node) => {
+      // normalize frames' zIndex up-front
+      const allNodes = nodes;
+      const frames = allNodes.filter(
+        (n): n is Node & { type: "frame-node" } => n.type === "frame-node",
+      );
+      if (frames.length === 0) return;
 
-    commitAction(token);
-  }, [commitAction]);
+      // Consider all selected, non-frame nodes. If none, fallback to dragged node.
+      const selected = allNodes.filter(
+        (n) => n.selected && n.type !== "frame-node",
+      );
+      const candidates = selected.length
+        ? selected
+        : draggedNode.type === "frame-node"
+          ? []
+          : [draggedNode];
+      if (candidates.length === 0) return;
 
-  // Clear typing state when clicking empty canvas (commits edits)
-  const onPaneClick = useCallback(() => {
-    setNodes((currentNodes) => {
-      const hasTypingNode = currentNodes.some((node) => node.data.isTyping);
-      if (!hasTypingNode) {
-        return currentNodes;
-      }
+      const updates = new Map<string, Node>();
+      const framesById = new Map(frames.map((frame) => [frame.id, frame]));
 
-      return currentNodes.map((node) => {
-        if (!node.data.isTyping) {
-          return node;
+      for (const n of candidates) {
+        const absPos = getInternalNode(n.id)?.internals.positionAbsolute!;
+        const targetFrame = pickContainingFrame(n, frames);
+
+        const currentParentId = (n as any).parentId as string | undefined;
+        const currentParent = currentParentId
+          ? framesById.get(currentParentId)
+          : undefined;
+        if (targetFrame && targetFrame.id === currentParentId) {
+          // still ensure the child sits above its parent
+          if ((n.zIndex ?? 0) <= (targetFrame.zIndex ?? 0)) {
+            updates.set(n.id, {
+              ...n,
+              zIndex: (targetFrame.zIndex ?? Z.FRAME_BASE) + Z.CHILD_OFFSET,
+            });
+          }
+          continue;
         }
 
-        return {
-          ...node,
-          data: {
-            ...node.data,
-            isTyping: false,
-          },
-        };
-      });
-    });
-  }, [setNodes]);
+        if (targetFrame) {
+          const targetFrameAbsPos = getInternalNode(targetFrame.id)?.internals.positionAbsolute!;
+          const local = toLocal(absPos, targetFrameAbsPos);
+          const frameZ = targetFrame.zIndex ?? Z.FRAME_BASE;
+          updates.set(n.id, {
+            ...n,
+            position: local,
+            parentId: targetFrame.id,
+            // child ALWAYS above its frame
+            zIndex: Math.max(n.zIndex ?? 0, frameZ + Z.CHILD_OFFSET),
+          } as Node);
+        } else if (currentParent) {
+          // leaving a frame → back to content layer
+          updates.set(n.id, {
+            ...n,
+            position: absPos,
+            parentId: undefined,
+            zIndex: Math.max(n.zIndex ?? 0, Z.CONTENT_BASE),
+          } as Node);
+        } else {
+          // neither before nor after: make sure it has a sane base
+          if ((n.zIndex ?? 0) < Z.CONTENT_BASE) {
+            updates.set(n.id, { ...n, zIndex: Z.CONTENT_BASE });
+          }
+        }
+      }
+
+      if (updates.size === 0) return;
+
+      setNodes((nds) =>
+        nds
+          .map((n) => updates.get(n.id) ?? n),
+      );
+    },
+    [nodes, setNodes],
+  );
+
+  const handleNodeDragStop = useCallback(
+    (_: ReactMouseEvent, node: Node) => {
+      const token = nodeDragTokenRef.current;
+      // Include reparenting within the same undoable drag step
+      handleReparentOnDrop(node as Node);
+      nodeDragTokenRef.current = null;
+      if (token) {
+        commitAction(token);
+      }
+    },
+    [commitAction, handleReparentOnDrop],
+  );
 
   // Creates new edges when user drags connection between nodes
   const onConnectInternal = useCallback(
@@ -384,12 +450,9 @@ const CanvasInner = () => {
   );
 
   // Drawing tools toggle active state
-  const handleDrawingToolSelect = useCallback(
-    (id: DrawingToolId) => {
-      setSelectedTool((current) => (current === id ? null : id));
-    },
-    [],
-  );
+  const handleDrawingToolSelect = useCallback((id: DrawingToolId) => {
+    setSelectedTool((current) => (current === id ? null : id));
+  }, []);
 
   // Starts drawing operation when mouse pressed with drawing tool active
   const handlePaneMouseDown = useCallback(
@@ -415,7 +478,17 @@ const CanvasInner = () => {
         const deselected = currentNodes.map((node) =>
           node.selected ? { ...node, selected: false } : node,
         );
-        return [...deselected, newNode];
+
+        /** The order of nodes is important for React Flow to correctly establish parent-child relationships.
+         * Parent nodes should come before child nodes.
+         */
+        const frames = deselected.filter((n) => n.type === "frame-node");
+        const others = deselected.filter((n) => n.type !== "frame-node");
+
+        if (newNode.type === "frame-node") {
+          return [newNode, ...frames, ...others];
+        }
+        return [...frames, ...others, newNode];
       });
       drawingState.current = {
         nodeId,
@@ -432,7 +505,7 @@ const CanvasInner = () => {
         x: event.clientX,
         y: event.clientY,
       });
-      
+
       // Broadcast cursor position to remote collaborators
       collaborationPaneMouseMove(current);
 
@@ -466,7 +539,7 @@ const CanvasInner = () => {
         y: event.clientY,
       });
       collaborationPaneMouseMove(position);
-      
+
       // Track connection hover state for visual feedback
       onConnectionMove(event.nativeEvent);
     },
@@ -496,7 +569,7 @@ const CanvasInner = () => {
         if (node.id !== nodeId) {
           return node;
         }
-        return toolImpl.onPaneMouseUp(node);
+        return attachToFrameOnCreate(toolImpl.onPaneMouseUp(node), currentNodes);
       }),
     );
 
@@ -557,7 +630,9 @@ const CanvasInner = () => {
 
   return (
     <div
-      className="relative"
+      className={clsx("rf-wrapper relative", {
+        "rf-creating": isDrawingToolSelected,
+      })}
       style={{ height: "100%", width: "100%" }}
       ref={reactFlowWrapperRef}
       onPaste={handlePaste}
@@ -577,7 +652,6 @@ const CanvasInner = () => {
           onNodeDragStart={handleNodeDragStart}
           onNodeDragStop={handleNodeDragStop}
           edgeTypes={edgeTypes}
-          onPaneClick={onPaneClick}
           onMouseDown={handlePaneMouseDown}
           onPaneMouseMove={handlePaneMouseMove}
           onMouseUp={handlePaneMouseUp}
@@ -602,6 +676,11 @@ const CanvasInner = () => {
             cursor: isDrawingToolSelected ? "cursor-crosshair" : undefined,
           }}
           onSelectionChange={handleSelectionChange}
+          nodesDraggable={!selectedTool}
+          selectNodesOnDrag={false}
+          elevateNodesOnSelect={false}
+          minZoom={0.1}
+          maxZoom={6.0}
         >
           <MiniMap />
           <Controls
@@ -617,25 +696,30 @@ const CanvasInner = () => {
                 aria-label="zoom in"
                 title="zoom in"
                 variant="ghost"
+                size="icon"
+                className="h-14 w-14"
               >
-                <ZoomIn className="h-5 w-5" />
+                <ZoomIn style={{ width: 32, height: 32 }} />
               </Button>
               <Button
                 onClick={() => zoomOut()}
                 aria-label="zoom out"
                 title="zoom out"
                 variant="ghost"
-                className=""
+                size="icon"
+                className="h-14 w-14"
               >
-                <ZoomOut className="h-5 w-5" />
+                <ZoomOut style={{ width: 32, height: 32 }} />
               </Button>
               <Button
                 onClick={() => fitView()}
                 aria-label="fit view"
                 title="fit view"
                 variant="ghost"
+                size="icon"
+                className="h-14 w-14"
               >
-                <Maximize className="h-5 w-5" />
+                <Maximize style={{ width: 32, height: 32 }} />
               </Button>
               <div className="border-border mx-1 h-6 border-r" />
               {drawingToolConfigs.map(({ id, label, icon: Icon }) => (
@@ -645,8 +729,10 @@ const CanvasInner = () => {
                   variant={selectedTool === id ? "secondary" : "ghost"}
                   title={label}
                   onClick={() => handleDrawingToolSelect(id)}
+                  size="icon"
+                  className="h-14 w-14"
                 >
-                  <Icon className="h-5 w-5" />
+                  <Icon style={{ width: 32, height: 32 }} />
                   <span className="sr-only">{label}</span>
                 </Button>
               ))}
@@ -658,8 +744,10 @@ const CanvasInner = () => {
                   variant="ghost"
                   title={label}
                   onClick={() => handleToolbarAction(id)}
+                  size="icon"
+                  className="h-14 w-14"
                 >
-                  <Icon className="h-5 w-5" />
+                  <Icon style={{ width: 32, height: 32 }} />
                   <span className="sr-only">{label}</span>
                 </Button>
               ))}

@@ -22,18 +22,11 @@ const isRecord = (value: unknown): value is NodeDataRecord =>
   !!value && typeof value === "object";
 
 const hasTransientEditingFlag = (data: Node["data"]): boolean => {
-  if (!isRecord(data)) {
-    return false;
-  }
-
+  if (!isRecord(data)) return false;
   const record = data as NodeDataRecord;
-
   for (const key of TRANSIENT_NODE_DATA_KEYS) {
-    if (record[key]) {
-      return true;
-    }
+    if (record[key]) return true;
   }
-
   return false;
 };
 
@@ -47,7 +40,6 @@ const dedupeNodeIds = (ids: string[]) => {
       duplicateFound = true;
       return;
     }
-
     seenIds.add(id);
     dedupedIds.push(id);
   });
@@ -100,22 +92,42 @@ export const useCanvasNodes = ({
   nodeOrder: Y.Array<string>;
   nodesMap: Y.Map<Node>;
 }): CanvasNodeHandles => {
-  // Tracks each node's index within the local array for fast lookup when
-  // handling targeted updates from the shared document.
+  // ---------- Canonical + local state refs ----------
   const nodeIndexRef = useRef<Map<string, number>>(new Map());
-  // Caches serialized node payloads so we can detect structural changes and
-  // avoid rewriting identical data back to the document.
   const nodeSerializationRef = useRef<Map<string, string>>(new Map());
-  // Stores the latest snapshot of nodes mirrored from the document to serve as
-  // the canonical local state reference for optimistic updates.
   const nodesRef = useRef<Node[]>([]);
   const listenersRef = useRef(new Set<() => void>());
   const shouldSyncFromDocRef = useRef(true);
 
+  // ---------- rAF batching state ----------
+  const emitScheduledRef = useRef(false);
+  const rebuildScheduledRef = useRef(false);
+
+  const raf =
+    typeof window !== "undefined" && "requestAnimationFrame" in window
+      ? window.requestAnimationFrame.bind(window)
+      : (cb: FrameRequestCallback) =>
+          setTimeout(() => cb(performance.now()), 16) as unknown as number;
+
   const compareArrays = useCallback(
-    <T>(a: readonly T[], b: readonly T[]) => arraysShallowEqual(a, b),
+    <T,>(a: readonly T[], b: readonly T[]) => arraysShallowEqual(a, b),
     [],
   );
+
+  // ---------- Core emit (unchanged) ----------
+  const emit = useCallback(() => {
+    listenersRef.current.forEach((listener) => listener());
+  }, []);
+
+  // ---------- rAF-coalesced emit ----------
+  const scheduleEmit = useCallback(() => {
+    if (emitScheduledRef.current) return;
+    emitScheduledRef.current = true;
+    raf(() => {
+      emitScheduledRef.current = false;
+      emit();
+    });
+  }, [emit, raf]);
 
   /**
    * Reconstructs local node array from Yjs document.
@@ -146,9 +158,7 @@ export const useCanvasNodes = ({
 
     dedupedOrder.forEach((id) => {
       const node = nodesMap.get(id);
-      if (!node) {
-        return;
-      }
+      if (!node) return;
 
       const index = nextNodes.length;
       const previousNode = previousNodesById.get(id);
@@ -186,9 +196,20 @@ export const useCanvasNodes = ({
     restoreTransientNodeState,
   ]);
 
-  const emit = useCallback(() => {
-    listenersRef.current.forEach((listener) => listener());
-  }, []);
+  // ---------- rAF-coalesced rebuild from doc + emit ----------
+  const scheduleRebuildFromDoc = useCallback(() => {
+    if (rebuildScheduledRef.current) return;
+    rebuildScheduledRef.current = true;
+    raf(() => {
+      rebuildScheduledRef.current = false;
+      const previous = nodesRef.current;
+      const snapshot = snapshotNodesFromDoc();
+      shouldSyncFromDocRef.current = false;
+      if (!compareArrays(previous, snapshot)) {
+        scheduleEmit();
+      }
+    });
+  }, [raf, snapshotNodesFromDoc, compareArrays, scheduleEmit]);
 
   /**
    * Updates local node state and refs without writing to Yjs.
@@ -202,18 +223,19 @@ export const useCanvasNodes = ({
       });
 
       nodeIndexRef.current = indexMap;
-
       shouldSyncFromDocRef.current = false;
 
       const previous = nodesRef.current;
       nodesRef.current = nextNodes;
       if (!compareArrays(previous, nextNodes)) {
-        emit();
+        // rAF: coalesce local emits (e.g., many position changes per drag)
+        scheduleEmit();
       }
     },
-    [compareArrays, emit],
+    [compareArrays, scheduleEmit],
   );
 
+  // ---------- subscribe/getSnapshot ----------
   const subscribe = useCallback((listener: () => void) => {
     listenersRef.current.add(listener);
     return () => {
@@ -221,79 +243,54 @@ export const useCanvasNodes = ({
     };
   }, []);
 
-  useEffect(() => {
-    shouldSyncFromDocRef.current = false;
-    const previous = nodesRef.current;
-    const snapshot = snapshotNodesFromDoc();
-    if (!compareArrays(previous, snapshot)) {
-      emit();
-    }
-  }, [compareArrays, emit, snapshotNodesFromDoc]);
-
-  // Listen to Yjs events and sync to React state
-  useEffect(() => {
-    // Order change: full rebuild needed (nodes added/removed/reordered)
-    const handleNodeOrderChange = (event: Y.YArrayEvent<string>) => {
-      if (event.transaction?.origin === "canvas") {
-        return; // Skip our own writes to avoid feedback loop
-      }
-
-      const previous = nodesRef.current;
-      const snapshot = snapshotNodesFromDoc();
-      shouldSyncFromDocRef.current = false;
-      if (!compareArrays(previous, snapshot)) {
-        emit();
-      }
-    };
-
-    // Map change: targeted updates for modified nodes
-    const handleNodesMapChange = (event: Y.YMapEvent<Node>) => {
-      if (event.transaction?.origin === "canvas") {
-        return; // Skip our own writes
-      }
-
-      if (event.keysChanged.size === 0) {
-        return;
-      }
-
-      event.keysChanged.forEach((key) => {
-        if (!nodesMap.has(key)) {
-          nodeSerializationRef.current.delete(key);
-        }
-      });
-
-      const previous = nodesRef.current;
-      const snapshot = snapshotNodesFromDoc();
-      shouldSyncFromDocRef.current = false;
-      if (!compareArrays(previous, snapshot)) {
-        emit();
-      }
-    };
-
-    nodeOrder.observe(handleNodeOrderChange);
-    nodesMap.observe(handleNodesMapChange);
-
-    return () => {
-      nodeOrder.unobserve(handleNodeOrderChange);
-      nodesMap.unobserve(handleNodesMapChange);
-    };
-  }, [compareArrays, emit, nodeOrder, nodesMap, snapshotNodesFromDoc]);
-
   const getSnapshot = useCallback(() => {
     if (shouldSyncFromDocRef.current) {
       const snapshot = snapshotNodesFromDoc();
       shouldSyncFromDocRef.current = false;
       return snapshot;
     }
-
     return nodesRef.current;
   }, [snapshotNodesFromDoc]);
 
   const nodes = useSyncExternalStore(subscribe, getSnapshot);
 
+  // ---------- Initial bootstrap from doc (batched) ----------
+  useEffect(() => {
+    shouldSyncFromDocRef.current = false;
+    scheduleRebuildFromDoc();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---------- Yjs observers (batched) ----------
+  useEffect(() => {
+    const handleNodeOrderChange = (event: Y.YArrayEvent<string>) => {
+      if (event.transaction?.origin === "canvas") return; // skip our own writes
+      scheduleRebuildFromDoc();
+    };
+
+    const handleNodesMapChange = (event: Y.YMapEvent<Node>) => {
+      if (event.transaction?.origin === "canvas") return; // skip our own writes
+      if (event.keysChanged.size === 0) return;
+
+      // keep serialization cache clean for removed keys
+      event.keysChanged.forEach((key) => {
+        if (!nodesMap.has(key)) nodeSerializationRef.current.delete(key);
+      });
+
+      scheduleRebuildFromDoc();
+    };
+
+    nodeOrder.observe(handleNodeOrderChange);
+    nodesMap.observe(handleNodesMapChange);
+    return () => {
+      nodeOrder.unobserve(handleNodeOrderChange);
+      nodesMap.unobserve(handleNodesMapChange);
+    };
+  }, [nodesMap, nodeOrder, scheduleRebuildFromDoc]);
+
   /**
    * ReactFlow-compatible setter for nodes.
-   * - Updates local state optimistically.
+   * - Updates local state optimistically (rAF-batched emit).
    * - Writes sanitized changes to Yjs in a transaction.
    * - Uses serialization cache to skip unchanged nodes.
    */
@@ -306,11 +303,9 @@ export const useCanvasNodes = ({
           ? (updater as (prevState: Node[]) => Node[])(current)
           : updater;
 
-      if (!Array.isArray(next)) {
-        return;
-      }
+      if (!Array.isArray(next)) return;
 
-      // Optimistically update local state first (immediate UI feedback)
+      // Optimistic local update (rAF emit)
       updateLocalNodesState(next);
 
       const nextIds = next.map((node) => node.id);
@@ -321,23 +316,18 @@ export const useCanvasNodes = ({
       const nextIdSet = new Set(dedupedNextIds);
       const removedIds: string[] = [];
 
-      // Collect IDs of deleted nodes
       currentIds.forEach((id) => {
-        if (!nextIdSet.has(id)) {
-          removedIds.push(id);
-        }
+        if (!nextIdSet.has(id)) removedIds.push(id);
       });
 
       const sanitizedUpdates = new Map<string, Node>();
       const serializedUpdates = new Map<string, string>();
 
-      // Identify nodes that actually changed (skip identical serializations)
       next.forEach((node) => {
         const sanitized = sanitizeNodeForSync(node);
         const previousIndex = currentIndex.get(node.id);
 
         if (previousIndex === undefined) {
-          // New node, add to updates
           sanitizedUpdates.set(node.id, sanitized);
           serializedUpdates.set(node.id, JSON.stringify(sanitized));
           return;
@@ -347,7 +337,6 @@ export const useCanvasNodes = ({
         const previousNode = current[previousIndex];
 
         if (previousNode === node) {
-          // Identity match (no change), but ensure serialization exists
           if (previousSerialization === undefined) {
             serializedUpdates.set(node.id, JSON.stringify(sanitized));
           }
@@ -355,21 +344,17 @@ export const useCanvasNodes = ({
         }
 
         const serialized = JSON.stringify(sanitized);
-        if (previousSerialization === serialized) {
-          return; // Structural match, skip write
-        }
+        if (previousSerialization === serialized) return;
 
         sanitizedUpdates.set(node.id, sanitized);
         serializedUpdates.set(node.id, serialized);
       });
 
-      // Batch all changes into one Yjs transaction
+      // Single Yjs transaction; our observers are rAF-batched anyway
       canvasDoc.transact(() => {
         if (orderChanged) {
           nodeOrder.delete(0, nodeOrder.length);
-          if (dedupedNextIds.length > 0) {
-            nodeOrder.insert(0, dedupedNextIds);
-          }
+          if (dedupedNextIds.length > 0) nodeOrder.insert(0, dedupedNextIds);
         }
 
         removedIds.forEach((id) => {
@@ -405,22 +390,21 @@ export const useCanvasNodes = ({
    */
   const replaceNodesInDoc = useCallback(
     (nextNodes: Node[]) => {
-      // Completely rebuild the Yjs order/map with sanitized nodes and reset the
-      // serialization cache to reflect the fresh document state.
       nodeOrder.delete(0, nodeOrder.length);
       nodesMap.clear();
 
-      const sanitizedNodes = nextNodes.map((node) => sanitizeNodeForSync(node));
+      const sanitized = nextNodes.map((n) => sanitizeNodeForSync(n));
       nodeSerializationRef.current.clear();
 
-      if (sanitizedNodes.length > 0) {
-        const nodeIds = sanitizedNodes.map((node) => node.id);
-        nodeOrder.insert(0, nodeIds);
-        sanitizedNodes.forEach((node) => {
-          nodesMap.set(node.id, node);
-          nodeSerializationRef.current.set(node.id, JSON.stringify(node));
+      if (sanitized.length > 0) {
+        const ids = sanitized.map((n) => n.id);
+        nodeOrder.insert(0, ids);
+        sanitized.forEach((n) => {
+          nodesMap.set(n.id, n);
+          nodeSerializationRef.current.set(n.id, JSON.stringify(n));
         });
       }
+      // Let the observer rebuild + emit in the next frame
     },
     [nodeOrder, nodesMap, sanitizeNodeForSync],
   );
