@@ -34,10 +34,13 @@ import { copyNodesToClipboard } from "../hooks/useCanvasCopyPaste";
 import type { CanvasNode } from "../types";
 import { useCanvasUndoRedo } from "../undo";
 import { useLinearHistory } from "../history/LinearHistoryContext";
-
-const HANDLE_SIZE = 12;
-const HANDLE_OFFSET = 10; // Distance resize handles appear outside node bounds
-const CONNECTION_HANDLE_OFFSET = 14; // Additional gap for connection handles to avoid overlapping node edges
+import {
+  HANDLE_SIZE,
+  HANDLE_OFFSET,
+  CONNECTION_HANDLE_OFFSET,
+  CONNECTION_RADIUS,
+  TOOLBAR_VERTICAL_GAP,
+} from "../constants";
 
 /**
  * All 4 sides provide both source and target handles for maximum connection flexibility.
@@ -82,9 +85,6 @@ const sharedHandleStyle: React.CSSProperties = {
   backgroundColor: "white",
   boxShadow: "0 0 0 2px rgb(191 219 254 / 0.45)",
 };
-
-const DEFAULT_CONNECTION_RADIUS = 30;
-const TOOLBAR_VERTICAL_GAP = 36; // Space between node bounds and floating toolbar to keep top handles accessible.
 
 export type NodeInteractionOverlayProps = PropsWithChildren<{
   nodeId: string;
@@ -214,7 +214,7 @@ const NodeInteractionOverlay = ({
   const shouldShowInteractions = isActive && !interactionsDisabledWhileEditing;
 
   const connectionRadius = useStore(
-    (state) => state.connectionRadius ?? DEFAULT_CONNECTION_RADIUS,
+    (state) => state.connectionRadius ?? CONNECTION_RADIUS,
   );
   const node = useInternalNode(nodeId);
 

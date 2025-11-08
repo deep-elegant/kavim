@@ -75,6 +75,8 @@ import {
   useCanvasUndoRedo,
   useUndoRedoShortcuts,
 } from "./undo";
+import { CONNECTION_RADIUS } from "./constants";
+import { useEnhancedConnectionSnap } from "./hooks/useEnhancedConnectionSnap";
 
 /**
  * Configuration for a drawing tool, excluding image and YouTube tools.
@@ -271,7 +273,7 @@ const CanvasInner = () => {
   }, [setNodes]);
 
   // Creates new edges when user drags connection between nodes
-  const onConnect = useCallback(
+  const onConnectInternal = useCallback(
     (params: Connection) =>
       performAction(
         () =>
@@ -290,6 +292,12 @@ const CanvasInner = () => {
         "edge-add",
       ),
     [performAction, setEdges],
+  );
+
+  // Enhanced connection snapping hooks
+  const { onConnectStart, onConnect, onConnectEnd } = useEnhancedConnectionSnap(
+    nodes as Node<CanvasNode>[],
+    onConnectInternal
   );
 
   // The `onEdgeUpdate` handler has been removed.
@@ -423,6 +431,7 @@ const CanvasInner = () => {
         x: event.clientX,
         y: event.clientY,
       });
+      
       // Broadcast cursor position to remote collaborators
       collaborationPaneMouseMove(current);
 
@@ -558,6 +567,8 @@ const CanvasInner = () => {
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onConnectStart={onConnectStart}
+          onConnectEnd={onConnectEnd}
           onNodeDragStart={handleNodeDragStart}
           onNodeDragStop={handleNodeDragStop}
           edgeTypes={edgeTypes}
@@ -579,7 +590,7 @@ const CanvasInner = () => {
             reconnectable: true,
           }}
           deleteKeyCode={["Delete", "Backspace"]}
-          connectionRadius={50}
+          connectionRadius={CONNECTION_RADIUS}
           selectionMode={selectionMode}
           className={isDrawingToolSelected ? "cursor-crosshair" : undefined}
           style={{
