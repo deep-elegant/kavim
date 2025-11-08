@@ -240,19 +240,6 @@ const CanvasInner = () => {
       return;
     }
     nodeDragTokenRef.current = beginAction("node-drag");
-
-    // Allow dragging children out of frames by temporarily disabling extent
-    setNodes((nds) =>
-      nds.map((n) => {
-        const parentId = (n as any).parentId as string | undefined;
-        if (n.selected && parentId) {
-          if (n.extent !== undefined) {
-            return { ...n, extent: undefined } as Node;
-          }
-        }
-        return n;
-      }),
-    );
   }, [beginAction, isReplaying, setNodes]);
 
   // After a drag ends, batch-reparent selected nodes (or the dragged node) to frames
@@ -306,7 +293,6 @@ const CanvasInner = () => {
             ...n,
             position: local,
             parentId: targetFrame.id,
-            extent: "parent",
             // child ALWAYS above its frame
             zIndex: Math.max(n.zIndex ?? 0, frameZ + Z.CHILD_OFFSET),
           } as Node);
@@ -316,7 +302,6 @@ const CanvasInner = () => {
             ...n,
             position: absPos,
             parentId: undefined,
-            extent: undefined,
             zIndex: Math.max(n.zIndex ?? 0, Z.CONTENT_BASE),
           } as Node);
         } else {

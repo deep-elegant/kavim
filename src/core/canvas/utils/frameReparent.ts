@@ -145,7 +145,6 @@ export const useCanvasFrame = () => {
         ...newNode,
         position: local,
         parentId: target.id,
-        extent: "parent",
         // zIndex left for your normalize pass
       };
     },
