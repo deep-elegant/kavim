@@ -10,6 +10,7 @@ import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
 import path from "path";
 import fs from "fs/promises";
+import 'dotenv/config'
 
 const iconPath = path.resolve(__dirname, "assets", "icon");
 
@@ -21,6 +22,14 @@ const config: ForgeConfig = {
     appBundleId: "com.deepelegant.kavim", // Add if you don't have it
     extraResource: ["./assets"],
     icon: iconPath,
+    osxSign: {
+      identity: process.env.APPLE_IDENTITY,
+    },
+    osxNotarize: {
+    appleId: process.env.APPLE_ID,
+    appleIdPassword: process.env.APPLE_ID_PASSWORD,
+    teamId: process.env.APPLE_TEAM_ID,
+    }
   },
   rebuildConfig: {},
   makers: [
