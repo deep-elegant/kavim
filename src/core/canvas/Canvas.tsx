@@ -483,7 +483,14 @@ const CanvasInner = () => {
         const deselected = currentNodes.map((node) =>
           node.selected ? { ...node, selected: false } : node,
         );
-        return [...deselected, newNode];
+
+        const frames = deselected.filter((n) => n.type === "frame-node");
+        const others = deselected.filter((n) => n.type !== "frame-node");
+
+        if (newNode.type === "frame-node") {
+          return [newNode, ...frames, ...others];
+        }
+        return [...frames, ...others, newNode];
       });
       drawingState.current = {
         nodeId,
