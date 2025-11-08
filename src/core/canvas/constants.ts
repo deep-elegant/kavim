@@ -3,34 +3,19 @@
  * These values control interaction behaviors and visual appearance of the canvas
  */
 
-/**
- * CONNECTION HANDLE SNAPPING CONFIGURATION
- * 
- * HANDLE_SNAP_RADIUS: The distance (in pixels) from a connection handle where
- * an edge will automatically snap to that handle when released.
- * 
- * Increasing this value makes it easier to connect edges without precise mouse placement.
- * Default ReactFlow behavior uses a much smaller internal radius (~8-10px).
- */
-export const HANDLE_SNAP_RADIUS = 20; // Increased from ReactFlow's internal default
 
 /**
- * NODE_BOUNDS_SNAP_RADIUS: The distance (in pixels) from a node's bounding box
- * where an edge will automatically connect to the nearest available handle.
- * 
- * This allows users to release the mouse anywhere inside or near the node,
- * and the edge will intelligently find the best connection point.
+ * NODE_BOUNDS_SNAP_RADIUS: "Forgiveness zone" for auto-connecting
+ * When you release within this distance of a node (but not on a handle),
+ * it will auto-snap to the nearest handle
  */
-export const NODE_BOUNDS_SNAP_RADIUS = 20;
+export const NODE_BOUNDS_SNAP_RADIUS = 50;
 
 /**
- * CONNECTION_RADIUS: The distance (in pixels) around a node where connection
- * handles become visible during a connection attempt.
- * 
- * This provides visual feedback to users that they're close enough to make a connection.
- * Should be >= HANDLE_SNAP_RADIUS for consistent UX.
+ * CONNECTION_RADIUS: Distance where connection handles become VISIBLE
+ * Increase this to make handles appear from farther away (better UX)
  */
-export const CONNECTION_RADIUS = 30; // Increased from 50 for better discoverability
+export const CONNECTION_RADIUS = 80; // Increased from 50 for better discoverability
 
 /**
  * Node interaction configuration
