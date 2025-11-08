@@ -13,6 +13,7 @@ import {
   Controls,
   Background,
   addEdge,
+  ConnectionLineType,
   type Connection,
   type EdgeChange,
   type XYPosition,
@@ -74,6 +75,9 @@ import {
   useCanvasUndoRedo,
   useUndoRedoShortcuts,
 } from "./undo";
+import { CONNECTION_RADIUS } from "./constants";
+import { useEnhancedConnectionSnap } from "./hooks/useEnhancedConnectionSnap";
+import { ConnectionHoverProvider } from "./hooks/ConnectionHoverContext";
 
 /**
  * Configuration for a drawing tool, excluding image and YouTube tools.
@@ -270,7 +274,7 @@ const CanvasInner = () => {
   }, [setNodes]);
 
   // Creates new edges when user drags connection between nodes
-  const onConnect = useCallback(
+  const onConnectInternal = useCallback(
     (params: Connection) =>
       performAction(
         () =>
@@ -289,6 +293,12 @@ const CanvasInner = () => {
         "edge-add",
       ),
     [performAction, setEdges],
+  );
+
+  // Enhanced connection snapping hooks
+  const { onConnectStart, onConnect, onConnectEnd, onConnectionMove, hoverTarget } = useEnhancedConnectionSnap(
+    nodes as Node<CanvasNode>[],
+    onConnectInternal
   );
 
   // The `onEdgeUpdate` handler has been removed.
@@ -422,6 +432,7 @@ const CanvasInner = () => {
         x: event.clientX,
         y: event.clientY,
       });
+      
       // Broadcast cursor position to remote collaborators
       collaborationPaneMouseMove(current);
 
@@ -455,8 +466,11 @@ const CanvasInner = () => {
         y: event.clientY,
       });
       collaborationPaneMouseMove(position);
+      
+      // Track connection hover state for visual feedback
+      onConnectionMove(event.nativeEvent);
     },
-    [collaborationPaneMouseMove, screenToFlowPosition],
+    [collaborationPaneMouseMove, screenToFlowPosition, onConnectionMove],
   );
 
   // Hide cursor from remote collaborators when leaving canvas
@@ -551,12 +565,15 @@ const CanvasInner = () => {
       onMouseLeave={handleWrapperMouseLeave}
     >
       <RemoteNodePresenceProvider value={remoteNodeInteractions}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
+        <ConnectionHoverProvider value={hoverTarget}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
+          onConnectStart={onConnectStart}
+          onConnectEnd={onConnectEnd}
           onNodeDragStart={handleNodeDragStart}
           onNodeDragStop={handleNodeDragStop}
           edgeTypes={edgeTypes}
@@ -571,13 +588,14 @@ const CanvasInner = () => {
           selectionOnDrag={!isDrawingToolSelected}
           nodeTypes={nodeTypes}
           edgesReconnectable
+          connectionLineType={ConnectionLineType.Bezier}
           defaultEdgeOptions={{
             type: "editable",
             deletable: true,
             reconnectable: true,
           }}
           deleteKeyCode={["Delete", "Backspace"]}
-          connectionRadius={50}
+          connectionRadius={CONNECTION_RADIUS}
           selectionMode={selectionMode}
           className={isDrawingToolSelected ? "cursor-crosshair" : undefined}
           style={{
@@ -649,6 +667,7 @@ const CanvasInner = () => {
           </Controls>
           <Background />
         </ReactFlow>
+        </ConnectionHoverProvider>
       </RemoteNodePresenceProvider>
 
       {/* Remote cursor overlay - positioned relative to the canvas wrapper */}
