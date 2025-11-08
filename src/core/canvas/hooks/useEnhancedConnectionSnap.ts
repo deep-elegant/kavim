@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import type { Connection, Node, OnConnectStartParams, OnConnect } from "@xyflow/react";
 import type { CanvasNode } from "../types";
 import { NODE_BOUNDS_SNAP_RADIUS } from "../constants";
+import { setTimeout } from "timers/promises";
 
 /**
  * Information about the current hover target during connection drag
@@ -61,73 +62,73 @@ export const useEnhancedConnectionSnap = (
    * Only runs if ReactFlow didn't already handle the connection.
    */
   const handleConnectEnd = useCallback(
-    (event: MouseEvent | TouchEvent) => {
+    async (event: MouseEvent | TouchEvent) => {
       // Clear hover state
       setHoverTarget(null);
       
       // Wait a tick to see if ReactFlow's onConnect was called
-      setTimeout(() => {
-        if (isConnectingRef.current) {
-          isConnectingRef.current = false;
-          connectionStartRef.current = null;
-          return;
-        }
-        
-        const startParams = connectionStartRef.current;
+      await setTimeout(0);
+      
+      if (isConnectingRef.current) {
+        isConnectingRef.current = false;
         connectionStartRef.current = null;
+        return;
+      }
+      
+      const startParams = connectionStartRef.current;
+      connectionStartRef.current = null;
 
-        if (!startParams || !startParams.nodeId || !startParams.handleId) {
-          return;
-        }
+      if (!startParams || !startParams.nodeId || !startParams.handleId) {
+        return;
+      }
 
-        // Get the mouse position in screen coordinates
-        const clientX = 'clientX' in event ? event.clientX : event.changedTouches[0].clientX;
-        const clientY = 'clientY' in event ? event.clientY : event.changedTouches[0].clientY;
-        
+      // Get the mouse position in screen coordinates
+      const clientX = 'clientX' in event ? event.clientX : event.changedTouches[0].clientX;
+      const clientY = 'clientY' in event ? event.clientY : event.changedTouches[0].clientY;
+      
 
-        // Find if the mouse is over any node
-        const targetNode = findNodeAtPosition(nodes, { x: clientX, y: clientY });
-        
+      // Find if the mouse is over any node
+      const targetNode = findNodeAtPosition(nodes, { x: clientX, y: clientY });
+      
 
-        if (!targetNode) {
-          return;
-        }
+      if (!targetNode) {
+        return;
+      }
 
-        // Don't connect to the same node
-        if (targetNode.id === startParams.nodeId) {
-          return;
-        }
+      // Don't connect to the same node
+      if (targetNode.id === startParams.nodeId) {
+        return;
+      }
 
-        // Find the best handle on the target node
-        const targetHandle = findClosestHandle(targetNode, { x: clientX, y: clientY });
-        
+      // Find the best handle on the target node
+      const targetHandle = findClosestHandle(targetNode, { x: clientX, y: clientY });
+      
 
-        if (!targetHandle) {
-          return;
-        }
+      if (!targetHandle) {
+        return;
+      }
 
-        // Determine if we're connecting from a source or target handle
-        const isSourceHandle = startParams.handleType === 'source';
+      // Determine if we're connecting from a source or target handle
+      const isSourceHandle = startParams.handleType === 'source';
 
-        // Create the connection
-        const connection: Connection = isSourceHandle
-          ? {
-              source: startParams.nodeId,
-              sourceHandle: startParams.handleId,
-              target: targetNode.id,
-              targetHandle: targetHandle,
-            }
-          : {
-              source: targetNode.id,
-              sourceHandle: targetHandle,
-              target: startParams.nodeId,
-              targetHandle: startParams.handleId,
-            };
+      // Create the connection
+      const connection: Connection = isSourceHandle
+        ? {
+            source: startParams.nodeId,
+            sourceHandle: startParams.handleId,
+            target: targetNode.id,
+            targetHandle: targetHandle,
+          }
+        : {
+            source: targetNode.id,
+            sourceHandle: targetHandle,
+            target: startParams.nodeId,
+            targetHandle: startParams.handleId,
+          };
 
 
-        // Call the original onConnect callback
-        onConnectCallback(connection);
-      }, 0);
+      // Call the original onConnect callback
+      onConnectCallback(connection);
     },
     [nodes, onConnectCallback]
   );
