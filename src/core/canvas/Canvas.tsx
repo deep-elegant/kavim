@@ -484,6 +484,9 @@ const CanvasInner = () => {
           node.selected ? { ...node, selected: false } : node,
         );
 
+        /** The order of nodes is important for React Flow to correctly establish parent-child relationships.
+         * Parent nodes should come before child nodes.
+         */
         const frames = deselected.filter((n) => n.type === "frame-node");
         const others = deselected.filter((n) => n.type !== "frame-node");
 
