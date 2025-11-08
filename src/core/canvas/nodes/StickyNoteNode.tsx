@@ -411,10 +411,6 @@ const StickyNoteNode = memo(
 
     const shapeStyles = useMemo(() => {
       switch (shape) {
-        case "circle":
-          return {
-            clipPath: "circle(50% at 50% 50%)",
-          };
         case "ellipse":
           return {
             clipPath: "ellipse(50% 50% at 50% 50%)",
