@@ -23,5 +23,4 @@ export const CONNECTION_RADIUS = 80; // Increased from 50 for better discoverabi
 export const HANDLE_SIZE = 12;
 export const HANDLE_OFFSET = 10;
 export const CONNECTION_HANDLE_OFFSET = 14;
-export const DEFAULT_CONNECTION_RADIUS = 30;
 export const TOOLBAR_VERTICAL_GAP = 36;
