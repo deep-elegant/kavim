@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import type { Connection, Node, OnConnectStartParams, OnConnect } from "@xyflow/react";
 import type { CanvasNode } from "../types";
 import { NODE_BOUNDS_SNAP_RADIUS } from "../constants";
-import { setTimeout } from "timers/promises";
+import { setTimeout } from "@/utils/timers";
 
 /**
  * Information about the current hover target during connection drag
@@ -14,7 +14,7 @@ export type ConnectionHoverTarget = {
 
 /**
  * Enhanced connection snapping logic that makes it easier to connect edges.
- * 
+ *
  * This hook provides:
  * 1. Increased snap radius around handles (via connectionRadius prop)
  * 2. Auto-connection when releasing inside node bounds
@@ -46,10 +46,10 @@ export const useEnhancedConnectionSnap = (
    */
   const handleConnect = useCallback<OnConnect>(
     (connection) => {
-      
+
       // Mark that connection was handled
       isConnectingRef.current = true;
-      
+
       // Always create the connection
       onConnectCallback(connection);
     },
@@ -65,16 +65,16 @@ export const useEnhancedConnectionSnap = (
     async (event: MouseEvent | TouchEvent) => {
       // Clear hover state
       setHoverTarget(null);
-      
+
       // Wait a tick to see if ReactFlow's onConnect was called
       await setTimeout(0);
-      
+
       if (isConnectingRef.current) {
         isConnectingRef.current = false;
         connectionStartRef.current = null;
         return;
       }
-      
+
       const startParams = connectionStartRef.current;
       connectionStartRef.current = null;
 
@@ -85,11 +85,11 @@ export const useEnhancedConnectionSnap = (
       // Get the mouse position in screen coordinates
       const clientX = 'clientX' in event ? event.clientX : event.changedTouches[0].clientX;
       const clientY = 'clientY' in event ? event.clientY : event.changedTouches[0].clientY;
-      
+
 
       // Find if the mouse is over any node
       const targetNode = findNodeAtPosition(nodes, { x: clientX, y: clientY });
-      
+
 
       if (!targetNode) {
         return;
@@ -102,7 +102,7 @@ export const useEnhancedConnectionSnap = (
 
       // Find the best handle on the target node
       const targetHandle = findClosestHandle(targetNode, { x: clientX, y: clientY });
-      
+
 
       if (!targetHandle) {
         return;
@@ -139,7 +139,7 @@ export const useEnhancedConnectionSnap = (
   const handleConnectionMove = useCallback(
     (event: MouseEvent | TouchEvent) => {
       const startParams = connectionStartRef.current;
-      
+
       // Only track if we're in a connection drag
       if (!startParams || !startParams.nodeId || !startParams.handleId) {
         return;
@@ -148,7 +148,7 @@ export const useEnhancedConnectionSnap = (
       // Get the mouse position in screen coordinates
       const clientX = 'clientX' in event ? event.clientX : event.changedTouches?.[0]?.clientX;
       const clientY = 'clientY' in event ? event.clientY : event.changedTouches?.[0]?.clientY;
-      
+
       if (!clientX || !clientY) {
         return;
       }
@@ -196,7 +196,7 @@ function findNodeAtPosition(
   nodes: Node<CanvasNode>[],
   screenPos: { x: number; y: number }
 ): Node<CanvasNode> | null {
-  
+
   // We need to check against the actual DOM elements to get screen coordinates
   for (const node of nodes) {
     if (!node.width || !node.height) {
@@ -210,7 +210,7 @@ function findNodeAtPosition(
     }
 
     const rect = nodeElement.getBoundingClientRect();
-    
+
     // Check if mouse is within node bounds + snap radius
     if (
       screenPos.x >= rect.left - NODE_BOUNDS_SNAP_RADIUS &&
@@ -227,7 +227,7 @@ function findNodeAtPosition(
 
 /**
  * Determines which handle on a node is closest to the mouse position (in screen coordinates).
- * 
+ *
  * Handle IDs follow the pattern: "top-target", "right-target", etc.
  * We pick the handle on the side closest to where the mouse is.
  */
