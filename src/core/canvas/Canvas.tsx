@@ -36,6 +36,8 @@ import {
   Circle,
   Youtube,
   Square,
+  FrameIcon,
+  ShapesIcon,
 } from "lucide-react";
 
 import "@xyflow/react/dist/style.css";
@@ -90,11 +92,10 @@ type DrawingToolConfig = {
 
 const drawingToolConfigs: DrawingToolConfig[] = [
   // Configuration for tools that create nodes by drawing on the canvas
-  { id: "sticky-note", label: "Sticky Note", icon: StickyNote },
-  { id: "shape", label: "Shape", icon: Circle },
+  { id: "sticky-note", label: "Sticky Note", icon: ShapesIcon },
+  { id: "frame", label: "Frame", icon: FrameIcon },
   { id: "prompt-node", label: "Prompt Node", icon: WandSparklesIcon },
   { id: "text", label: "Text", icon: Type },
-  { id: "frame", label: "Frame", icon: Square },
 ];
 
 /**
@@ -682,25 +683,30 @@ const CanvasInner = () => {
                 aria-label="zoom in"
                 title="zoom in"
                 variant="ghost"
+                size="icon"
+                className="h-14 w-14"
               >
-                <ZoomIn className="h-5 w-5" />
+                <ZoomIn style={{ width: 32, height: 32 }} />
               </Button>
               <Button
                 onClick={() => zoomOut()}
                 aria-label="zoom out"
                 title="zoom out"
                 variant="ghost"
-                className=""
+                size="icon"
+                className="h-14 w-14"
               >
-                <ZoomOut className="h-5 w-5" />
+                <ZoomOut style={{ width: 32, height: 32 }} />
               </Button>
               <Button
                 onClick={() => fitView()}
                 aria-label="fit view"
                 title="fit view"
                 variant="ghost"
+                size="icon"
+                className="h-14 w-14"
               >
-                <Maximize className="h-5 w-5" />
+                <Maximize style={{ width: 32, height: 32 }} />
               </Button>
               <div className="border-border mx-1 h-6 border-r" />
               {drawingToolConfigs.map(({ id, label, icon: Icon }) => (
@@ -710,8 +716,10 @@ const CanvasInner = () => {
                   variant={selectedTool === id ? "secondary" : "ghost"}
                   title={label}
                   onClick={() => handleDrawingToolSelect(id)}
+                  size="icon"
+                  className="h-14 w-14"
                 >
-                  <Icon className="h-5 w-5" />
+                  <Icon style={{ width: 32, height: 32 }} />
                   <span className="sr-only">{label}</span>
                 </Button>
               ))}
@@ -723,8 +731,10 @@ const CanvasInner = () => {
                   variant="ghost"
                   title={label}
                   onClick={() => handleToolbarAction(id)}
+                  size="icon"
+                  className="h-14 w-14"
                 >
-                  <Icon className="h-5 w-5" />
+                  <Icon style={{ width: 32, height: 32 }} />
                   <span className="sr-only">{label}</span>
                 </Button>
               ))}
