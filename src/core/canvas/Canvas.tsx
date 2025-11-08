@@ -77,6 +77,7 @@ import {
 } from "./undo";
 import { CONNECTION_RADIUS } from "./constants";
 import { useEnhancedConnectionSnap } from "./hooks/useEnhancedConnectionSnap";
+import { ConnectionHoverProvider } from "./hooks/ConnectionHoverContext";
 
 /**
  * Configuration for a drawing tool, excluding image and YouTube tools.
@@ -295,7 +296,7 @@ const CanvasInner = () => {
   );
 
   // Enhanced connection snapping hooks
-  const { onConnectStart, onConnect, onConnectEnd } = useEnhancedConnectionSnap(
+  const { onConnectStart, onConnect, onConnectEnd, onConnectionMove, hoverTarget } = useEnhancedConnectionSnap(
     nodes as Node<CanvasNode>[],
     onConnectInternal
   );
@@ -465,8 +466,11 @@ const CanvasInner = () => {
         y: event.clientY,
       });
       collaborationPaneMouseMove(position);
+      
+      // Track connection hover state for visual feedback
+      onConnectionMove(event.nativeEvent);
     },
-    [collaborationPaneMouseMove, screenToFlowPosition],
+    [collaborationPaneMouseMove, screenToFlowPosition, onConnectionMove],
   );
 
   // Hide cursor from remote collaborators when leaving canvas
@@ -561,10 +565,11 @@ const CanvasInner = () => {
       onMouseLeave={handleWrapperMouseLeave}
     >
       <RemoteNodePresenceProvider value={remoteNodeInteractions}>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          onNodesChange={onNodesChange}
+        <ConnectionHoverProvider value={hoverTarget}>
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
           onConnectStart={onConnectStart}
@@ -662,6 +667,7 @@ const CanvasInner = () => {
           </Controls>
           <Background />
         </ReactFlow>
+        </ConnectionHoverProvider>
       </RemoteNodePresenceProvider>
 
       {/* Remote cursor overlay - positioned relative to the canvas wrapper */}

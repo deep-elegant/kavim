@@ -1,7 +1,15 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { Connection, Node, OnConnectStartParams, OnConnect } from "@xyflow/react";
 import type { CanvasNode } from "../types";
 import { NODE_BOUNDS_SNAP_RADIUS } from "../constants";
+
+/**
+ * Information about the current hover target during connection drag
+ */
+export type ConnectionHoverTarget = {
+  nodeId: string;
+  handleId: string;
+} | null;
 
 /**
  * Enhanced connection snapping logic that makes it easier to connect edges.
@@ -10,6 +18,7 @@ import { NODE_BOUNDS_SNAP_RADIUS } from "../constants";
  * 1. Increased snap radius around handles (via connectionRadius prop)
  * 2. Auto-connection when releasing inside node bounds
  * 3. Smart handle selection (picks closest available handle)
+ * 4. Visual feedback showing which handle will be connected
  */
 export const useEnhancedConnectionSnap = (
   nodes: Node<CanvasNode>[],
@@ -17,6 +26,7 @@ export const useEnhancedConnectionSnap = (
 ) => {
   const connectionStartRef = useRef<OnConnectStartParams | null>(null);
   const isConnectingRef = useRef(false);
+  const [hoverTarget, setHoverTarget] = useState<ConnectionHoverTarget>(null);
 
   /**
    * Called when user starts dragging from a handle
@@ -25,6 +35,7 @@ export const useEnhancedConnectionSnap = (
     (_event: MouseEvent | TouchEvent, params: OnConnectStartParams) => {
       connectionStartRef.current = params;
       isConnectingRef.current = false;
+      setHoverTarget(null);
     },
     []
   );
@@ -51,6 +62,8 @@ export const useEnhancedConnectionSnap = (
    */
   const handleConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent) => {
+      // Clear hover state
+      setHoverTarget(null);
       
       // Wait a tick to see if ReactFlow's onConnect was called
       setTimeout(() => {
@@ -119,10 +132,58 @@ export const useEnhancedConnectionSnap = (
     [nodes, onConnectCallback]
   );
 
+  /**
+   * Track mouse movement during connection to update hover state
+   */
+  const handleConnectionMove = useCallback(
+    (event: MouseEvent | TouchEvent) => {
+      const startParams = connectionStartRef.current;
+      
+      // Only track if we're in a connection drag
+      if (!startParams || !startParams.nodeId || !startParams.handleId) {
+        return;
+      }
+
+      // Get the mouse position in screen coordinates
+      const clientX = 'clientX' in event ? event.clientX : event.changedTouches?.[0]?.clientX;
+      const clientY = 'clientY' in event ? event.clientY : event.changedTouches?.[0]?.clientY;
+      
+      if (!clientX || !clientY) {
+        return;
+      }
+
+      // Find if the mouse is over any node
+      const targetNode = findNodeAtPosition(nodes, { x: clientX, y: clientY });
+
+      // Clear hover if no node found or hovering over the source node
+      if (!targetNode || targetNode.id === startParams.nodeId) {
+        setHoverTarget(null);
+        return;
+      }
+
+      // Find the best handle on the target node
+      const targetHandle = findClosestHandle(targetNode, { x: clientX, y: clientY });
+
+      if (!targetHandle) {
+        setHoverTarget(null);
+        return;
+      }
+
+      // Update hover target
+      setHoverTarget({
+        nodeId: targetNode.id,
+        handleId: targetHandle,
+      });
+    },
+    [nodes]
+  );
+
   return {
     onConnectStart: handleConnectStart,
     onConnect: handleConnect,
     onConnectEnd: handleConnectEnd,
+    onConnectionMove: handleConnectionMove,
+    hoverTarget,
   };
 };
 
