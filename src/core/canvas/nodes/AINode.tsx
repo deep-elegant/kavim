@@ -65,8 +65,8 @@ export type AiNodeData = {
 export type AiNodeType = Node<AiNodeData, "ai-node">;
 
 // Defines the minimum dimensions for an AI node.
-const MIN_WIDTH = 420;
-const MIN_HEIGHT = 480;
+const MIN_WIDTH = 520;
+const MIN_HEIGHT = 580;
 // Defines the horizontal gap between a node and a newly created split node.
 const NODE_HORIZONTAL_GAP = 80;
 
@@ -640,7 +640,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
           </CardHeader>
 
           {/* BODY */}
-          <CardContent className="px-5 py-4 space-y-4 flex-1">
+          <CardContent className="px-5 py-4 space-y-4 flex-1 overflow-y-auto">
             <div className="flex items-center justify-between text-[11px] text-slate-600">
               <span className="font-medium tracking-wide text-slate-700">
                 Prompt
