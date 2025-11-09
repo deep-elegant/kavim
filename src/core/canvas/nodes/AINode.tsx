@@ -187,8 +187,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     [id, setNodes],
   );
 
-  const [prompt, setPrompt] = useState(data.label ?? "");
-
   const attachmentNodes = useMemo(() => {
     const allNodes = getNodes();
     return (data.attachments ?? [])
@@ -330,9 +328,9 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
    * - Updates node status throughout the lifecycle (in-progress -> done)
    */
   const runPrompt = useCallback(async () => {
-    const promptText = prompt;
+    const promptText = data.label;
     const { messages, hasUsableInput: hasHistoryInput } =
-      buildChatHistory(prompt);
+      buildChatHistory(promptText);
 
     const hasTextInput = promptText.trim().length > 0;
     const hasUsableInput = hasHistoryInput || hasTextInput;
@@ -351,7 +349,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     updateNodeData({
       status: "in-progress",
       result: "",
-      label: prompt,
+      label: data.label,
     });
 
     try {
@@ -468,7 +466,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       }
     }
   }, [
-    prompt,
+    data.label,
     attachmentNodes,
     buildChatHistory,
     updateNodeData,
@@ -576,8 +574,20 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
     updateNodeData({ attachments: [] });
   };
 
+  const updatePrompt = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    updateNodeData({ label: e.target.value });
+  }, [updateNodeData]);
+
+  const stopGeneration = useCallback(() => {
+    if (requestIdRef.current) {
+      updateNodeData({
+        status: "done",
+      });
+    }
+  }, []);
+
   const isRunning = status === "in-progress";
-  const hasPrompt = !!prompt.trim();
+  const hasPrompt = !!data.label.trim();
   const hasAttachments = attachmentNodes.length > 0;
   const isSendDisabled = (!hasPrompt && !hasAttachments) || isRunning;
 
@@ -646,14 +656,14 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
               <span className="font-medium tracking-wide text-slate-700">
                 Prompt
               </span>
-              <span>{prompt.length || 0} chars</span>
+              <span>{data.label.length || 0} chars</span>
             </div>
 
             <Textarea
               placeholder="Ask or paste a prompt…"
               className="bg-slate-100 border border-slate-300 rounded-2xl min-h-[88px] resize-none text-sm leading-relaxed focus-visible:ring-2 focus-visible:ring-sky-500/50 focus-visible:border-sky-400/50 placeholder:text-slate-400"
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
+              value={data.label}
+              onChange={updatePrompt}
               onKeyDown={handleKeyDown}
               disabled={isRunning}
             />
@@ -783,11 +793,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                 variant="outline"
                 size="sm"
                 className="h-8 rounded-full border-red-500/70 text-red-400 bg-red-500/5 hover:bg-red-500/15 hover:text-red-200"
-                onClick={() =>
-                  updateNodeData({
-                    status: "done",
-                  })
-                }
+                onClick={stopGeneration}
               >
                 <Square className="mr-1 h-4 w-4" /> Stop
               </Button>
@@ -795,7 +801,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
               <Button
                 size="sm"
                 className="h-8 rounded-full bg-sky-500 hover:bg-sky-400 disabled:bg-slate-200 disabled:text-slate-500"
-                onClick={() => runPrompt()}
+                onClick={runPrompt}
                 disabled={isSendDisabled}
               >
                 <Play className="mr-1 h-4 w-4" />
