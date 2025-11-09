@@ -628,14 +628,15 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
                 </div>
               </div>
 
-              {/* Right side */}
+              {/*
+              Currently not used - "..." Menu
               <button
                 type="button"
                 className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-slate-600 text-lg leading-none hover:border-slate-400 hover:text-slate-900 transition"
                 aria-label="Node menu"
               >
                 ⋯
-              </button>
+              </button> */}
             </div>
           </CardHeader>
 
