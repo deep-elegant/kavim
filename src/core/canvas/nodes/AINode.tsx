@@ -640,7 +640,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
           </CardHeader>
 
           {/* BODY */}
-          <CardContent className="px-5 py-4 space-y-4 flex-1 overflow-y-auto">
+          <CardContent className="px-5 py-4 space-y-4 flex-1 overflow-y-auto nowheel">
             <div className="flex items-center justify-between text-[11px] text-slate-600">
               <span className="font-medium tracking-wide text-slate-700">
                 Prompt
