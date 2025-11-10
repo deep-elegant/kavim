@@ -131,24 +131,24 @@ export const useEnhancedConnectionSnap = (
       onConnectCallback(connection);
     },
     [nodes, onConnectCallback]
-  );
-
-  /**
+  );  /**
    * Track mouse movement during connection to update hover state
    */
   const handleConnectionMove = useCallback(
     (event: MouseEvent | TouchEvent) => {
       const startParams = connectionStartRef.current;
-
+      
       // Only track if we're in a connection drag
-      if (!startParams || !startParams.nodeId || !startParams.handleId) {
+      // If isConnectingRef is true, connection was already handled by ReactFlow
+      if (!startParams || !startParams.nodeId || !startParams.handleId || isConnectingRef.current) {
+        setHoverTarget(null);
         return;
       }
 
       // Get the mouse position in screen coordinates
       const clientX = 'clientX' in event ? event.clientX : event.changedTouches?.[0]?.clientX;
       const clientY = 'clientY' in event ? event.clientY : event.changedTouches?.[0]?.clientY;
-
+      
       if (!clientX || !clientY) {
         return;
       }
