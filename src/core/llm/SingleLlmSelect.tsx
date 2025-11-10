@@ -9,7 +9,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { FormControl } from "@/components/ui/form";
 import {
   LLM_PROVIDER_KEYS_UPDATED_EVENT,
   resolveModelAvailability,
@@ -36,9 +35,13 @@ const reorderByAvailability = (entries: AvailabilityEntry[]) => {
 export const SingleLlmSelect = ({
   value,
   onChange,
+  triggerClassName,
+  contentClassName,
 }: {
   value: string;
   onChange: (value: string) => void;
+  triggerClassName?: string;
+  contentClassName?: string;
 }) => {
   const [refreshState, setRefreshState] = React.useState(0);
 
@@ -132,12 +135,10 @@ export const SingleLlmSelect = ({
 
   return (
     <Select onValueChange={onChange} value={value}>
-      <FormControl>
-        <SelectTrigger className="w-full">
-          <SelectValue placeholder="Select llm" />
-        </SelectTrigger>
-      </FormControl>
-      <SelectContent>
+      <SelectTrigger className={cn("w-full", triggerClassName)}>
+        <SelectValue placeholder="Select llm" />
+      </SelectTrigger>
+      <SelectContent className={contentClassName}>
         {unrestricted.map(renderOption)}
         {/** Models that you use to generate Images */}
         {imageGenerators.length > 0 ? (

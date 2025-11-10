@@ -71,6 +71,7 @@ import useCanvasImageNodes, {
 } from "./hooks/useCanvasImageNodes";
 import useCanvasYouTubeNodes from "./hooks/useCanvasYouTubeNodes"; // Hook for managing YouTube nodes on the canvas
 import type { CanvasNode, ToolId } from "./types";
+import { CanvasActionsContext } from "./types";
 import { StatsForNerdsOverlay } from "@/components/diagnostics/StatsForNerdsOverlay";
 import { usePakAssets } from "@/core/pak/usePakAssets";
 import {
@@ -171,7 +172,8 @@ const CanvasInner = () => {
     start: XYPosition;
   } | null>(null);
   const reactFlowWrapperRef = useRef<HTMLDivElement | null>(null);
-  const { screenToFlowPosition, zoomIn, zoomOut, fitView, getInternalNode } = useReactFlow();
+  const { screenToFlowPosition, zoomIn, zoomOut, fitView, getInternalNode } =
+    useReactFlow();
   const nodeDragTokenRef = useRef<symbol | null>(null);
   // Prevents redundant broadcasts when selection hasn't changed
   const lastSelectionBroadcastRef = useRef<string | null>(null);
@@ -290,7 +292,8 @@ const CanvasInner = () => {
         }
 
         if (targetFrame) {
-          const targetFrameAbsPos = getInternalNode(targetFrame.id)?.internals.positionAbsolute!;
+          const targetFrameAbsPos = getInternalNode(targetFrame.id)?.internals
+            .positionAbsolute!;
           const local = toLocal(absPos, targetFrameAbsPos);
           const frameZ = targetFrame.zIndex ?? Z.FRAME_BASE;
           updates.set(n.id, {
@@ -318,10 +321,7 @@ const CanvasInner = () => {
 
       if (updates.size === 0) return;
 
-      setNodes((nds) =>
-        nds
-          .map((n) => updates.get(n.id) ?? n),
-      );
+      setNodes((nds) => nds.map((n) => updates.get(n.id) ?? n));
     },
     [nodes, setNodes],
   );
@@ -362,10 +362,13 @@ const CanvasInner = () => {
   );
 
   // Enhanced connection snapping hooks
-  const { onConnectStart, onConnect, onConnectEnd, onConnectionMove, hoverTarget } = useEnhancedConnectionSnap(
-    nodes as Node<CanvasNode>[],
-    onConnectInternal
-  );
+  const {
+    onConnectStart,
+    onConnect,
+    onConnectEnd,
+    onConnectionMove,
+    hoverTarget,
+  } = useEnhancedConnectionSnap(nodes as Node<CanvasNode>[], onConnectInternal);
 
   // The `onEdgeUpdate` handler has been removed.
   // Edge updates are now handled by the `LinearHistoryProvider` to support undo/redo.
@@ -569,7 +572,10 @@ const CanvasInner = () => {
         if (node.id !== nodeId) {
           return node;
         }
-        return attachToFrameOnCreate(toolImpl.onPaneMouseUp(node), currentNodes);
+        return attachToFrameOnCreate(
+          toolImpl.onPaneMouseUp(node),
+          currentNodes,
+        );
       }),
     );
 
@@ -628,160 +634,170 @@ const CanvasInner = () => {
     isImageFile,
   });
 
+  const canvasActions = useMemo(
+    () => ({
+      addImageFromDialog: handleAddImageFromDialog,
+    }),
+    [handleAddImageFromDialog],
+  );
+
   return (
-    <div
-      className={clsx("rf-wrapper relative", {
-        "rf-creating": isDrawingToolSelected,
-      })}
-      style={{ height: "100%", width: "100%" }}
-      ref={reactFlowWrapperRef}
-      onPaste={handlePaste}
-      onMouseMove={handleWrapperMouseMove}
-      onMouseLeave={handleWrapperMouseLeave}
-    >
-      <RemoteNodePresenceProvider value={remoteNodeInteractions}>
-        <ConnectionHoverProvider value={hoverTarget}>
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onConnectStart={onConnectStart}
-          onConnectEnd={onConnectEnd}
-          onNodeDragStart={handleNodeDragStart}
-          onNodeDragStop={handleNodeDragStop}
-          edgeTypes={edgeTypes}
-          onMouseDown={handlePaneMouseDown}
-          onPaneMouseMove={handlePaneMouseMove}
-          onMouseUp={handlePaneMouseUp}
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          // Panning with the right mouse button
-          panOnDrag={[2]}
-          selectionOnDrag={!isDrawingToolSelected}
-          nodeTypes={nodeTypes}
-          edgesReconnectable
-          connectionLineType={ConnectionLineType.Bezier}
-          defaultEdgeOptions={{
-            type: "editable",
-            deletable: true,
-            reconnectable: true,
-          }}
-          deleteKeyCode={["Delete", "Backspace"]}
-          connectionRadius={CONNECTION_RADIUS}
-          selectionMode={selectionMode}
-          className={isDrawingToolSelected ? "cursor-crosshair" : undefined}
-          style={{
-            cursor: isDrawingToolSelected ? "cursor-crosshair" : undefined,
-          }}
-          onSelectionChange={handleSelectionChange}
-          nodesDraggable={!selectedTool}
-          selectNodesOnDrag={false}
-          elevateNodesOnSelect={false}
-          minZoom={0.1}
-          maxZoom={6.0}
-        >
-          <MiniMap />
-          <Controls
-            position="bottom-center"
-            showZoom={false}
-            showInteractive={false}
-            showFitView={false}
-            orientation="horizontal"
-          >
-            <div className="bg-background/95 flex flex-row items-center gap-2 rounded-lg p-2 shadow-lg">
-              <Button
-                onClick={() => zoomIn()}
-                aria-label="zoom in"
-                title="zoom in"
-                variant="ghost"
-                size="icon"
-                className="h-14 w-14"
+    <CanvasActionsContext.Provider value={canvasActions}>
+      <div
+        className={clsx("rf-wrapper relative", {
+          "rf-creating": isDrawingToolSelected,
+        })}
+        style={{ height: "100%", width: "100%" }}
+        ref={reactFlowWrapperRef}
+        onPaste={handlePaste}
+        onMouseMove={handleWrapperMouseMove}
+        onMouseLeave={handleWrapperMouseLeave}
+      >
+        <RemoteNodePresenceProvider value={remoteNodeInteractions}>
+          <ConnectionHoverProvider value={hoverTarget}>
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onConnectStart={onConnectStart}
+              onConnectEnd={onConnectEnd}
+              onNodeDragStart={handleNodeDragStart}
+              onNodeDragStop={handleNodeDragStop}
+              edgeTypes={edgeTypes}
+              onMouseDown={handlePaneMouseDown}
+              onPaneMouseMove={handlePaneMouseMove}
+              onMouseUp={handlePaneMouseUp}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              // Panning with the right mouse button
+              panOnDrag={[2]}
+              selectionOnDrag={!isDrawingToolSelected}
+              nodeTypes={nodeTypes}
+              edgesReconnectable
+              connectionLineType={ConnectionLineType.Bezier}
+              defaultEdgeOptions={{
+                type: "editable",
+                deletable: true,
+                reconnectable: true,
+              }}
+              deleteKeyCode={["Delete", "Backspace"]}
+              connectionRadius={CONNECTION_RADIUS}
+              selectionMode={selectionMode}
+              className={isDrawingToolSelected ? "cursor-crosshair" : undefined}
+              style={{
+                cursor: isDrawingToolSelected ? "cursor-crosshair" : undefined,
+              }}
+              onSelectionChange={handleSelectionChange}
+              nodesDraggable={!selectedTool}
+              selectNodesOnDrag={false}
+              elevateNodesOnSelect={false}
+              minZoom={0.1}
+              maxZoom={6.0}
+              noWheelClassName="nowheel"
+            >
+              <MiniMap />
+              <Controls
+                position="bottom-center"
+                showZoom={false}
+                showInteractive={false}
+                showFitView={false}
+                orientation="horizontal"
               >
-                <ZoomIn style={{ width: 32, height: 32 }} />
-              </Button>
-              <Button
-                onClick={() => zoomOut()}
-                aria-label="zoom out"
-                title="zoom out"
-                variant="ghost"
-                size="icon"
-                className="h-14 w-14"
-              >
-                <ZoomOut style={{ width: 32, height: 32 }} />
-              </Button>
-              <Button
-                onClick={() => fitView()}
-                aria-label="fit view"
-                title="fit view"
-                variant="ghost"
-                size="icon"
-                className="h-14 w-14"
-              >
-                <Maximize style={{ width: 32, height: 32 }} />
-              </Button>
-              <div className="border-border mx-1 h-6 border-r" />
-              {drawingToolConfigs.map(({ id, label, icon: Icon }) => (
-                <Button
-                  key={id}
-                  aria-label={label}
-                  variant={selectedTool === id ? "secondary" : "ghost"}
-                  title={label}
-                  onClick={() => handleDrawingToolSelect(id)}
-                  size="icon"
-                  className="h-14 w-14"
-                >
-                  <Icon style={{ width: 32, height: 32 }} />
-                  <span className="sr-only">{label}</span>
-                </Button>
-              ))}
-              <div className="border-border mx-1 h-6 border-r" />
-              {actionButtonConfigs.map(({ id, label, icon: Icon }) => (
-                <Button
-                  key={id}
-                  aria-label={label}
-                  variant="ghost"
-                  title={label}
-                  onClick={() => handleToolbarAction(id)}
-                  size="icon"
-                  className="h-14 w-14"
-                >
-                  <Icon style={{ width: 32, height: 32 }} />
-                  <span className="sr-only">{label}</span>
-                </Button>
-              ))}
-            </div>
-          </Controls>
-          <Background />
-        </ReactFlow>
-        </ConnectionHoverProvider>
-      </RemoteNodePresenceProvider>
+                <div className="bg-background/95 flex flex-row items-center gap-2 rounded-lg p-2 shadow-lg">
+                  <Button
+                    onClick={() => zoomIn()}
+                    aria-label="zoom in"
+                    title="zoom in"
+                    variant="ghost"
+                    size="icon"
+                    className="h-14 w-14"
+                  >
+                    <ZoomIn style={{ width: 32, height: 32 }} />
+                  </Button>
+                  <Button
+                    onClick={() => zoomOut()}
+                    aria-label="zoom out"
+                    title="zoom out"
+                    variant="ghost"
+                    size="icon"
+                    className="h-14 w-14"
+                  >
+                    <ZoomOut style={{ width: 32, height: 32 }} />
+                  </Button>
+                  <Button
+                    onClick={() => fitView()}
+                    aria-label="fit view"
+                    title="fit view"
+                    variant="ghost"
+                    size="icon"
+                    className="h-14 w-14"
+                  >
+                    <Maximize style={{ width: 32, height: 32 }} />
+                  </Button>
+                  <div className="border-border mx-1 h-6 border-r" />
+                  {drawingToolConfigs.map(({ id, label, icon: Icon }) => (
+                    <Button
+                      key={id}
+                      aria-label={label}
+                      variant={selectedTool === id ? "secondary" : "ghost"}
+                      title={label}
+                      onClick={() => handleDrawingToolSelect(id)}
+                      size="icon"
+                      className="h-14 w-14"
+                    >
+                      <Icon style={{ width: 32, height: 32 }} />
+                      <span className="sr-only">{label}</span>
+                    </Button>
+                  ))}
+                  <div className="border-border mx-1 h-6 border-r" />
+                  {actionButtonConfigs.map(({ id, label, icon: Icon }) => (
+                    <Button
+                      key={id}
+                      aria-label={label}
+                      variant="ghost"
+                      title={label}
+                      onClick={() => handleToolbarAction(id)}
+                      size="icon"
+                      className="h-14 w-14"
+                    >
+                      <Icon style={{ width: 32, height: 32 }} />
+                      <span className="sr-only">{label}</span>
+                    </Button>
+                  ))}
+                </div>
+              </Controls>
+              <Background />
+            </ReactFlow>
+          </ConnectionHoverProvider>
+        </RemoteNodePresenceProvider>
 
-      {/* Remote cursor overlay - positioned relative to the canvas wrapper */}
-      {dataChannelState === "open" &&
-        remoteCollaborators.map((collaborator) =>
-          collaborator.position ? (
-            <RemoteCursor
-              key={collaborator.clientId}
-              position={collaborator.position}
-              color={collaborator.color}
-              label={collaborator.label}
-            />
-          ) : null,
-        )}
+        {/* Remote cursor overlay - positioned relative to the canvas wrapper */}
+        {dataChannelState === "open" &&
+          remoteCollaborators.map((collaborator) =>
+            collaborator.position ? (
+              <RemoteCursor
+                key={collaborator.clientId}
+                position={collaborator.position}
+                color={collaborator.color}
+                label={collaborator.label}
+              />
+            ) : null,
+          )}
 
-      <StatsForNerdsOverlay />
+        <StatsForNerdsOverlay />
 
-      {/* Dialog for embedding YouTube videos */}
-      <YouTubeEmbedDialog
-        open={isYouTubeDialogOpen}
-        onOpenChange={handleYouTubeDialogOpenChange}
-        onSubmit={handleYouTubeDialogSubmit}
-      />
+        {/* Dialog for embedding YouTube videos */}
+        <YouTubeEmbedDialog
+          open={isYouTubeDialogOpen}
+          onOpenChange={handleYouTubeDialogOpenChange}
+          onSubmit={handleYouTubeDialogSubmit}
+        />
 
-      <LinearHistoryDrawer />
-    </div>
+        <LinearHistoryDrawer />
+      </div>
+    </CanvasActionsContext.Provider>
   );
 };
 

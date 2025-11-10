@@ -6,6 +6,8 @@ import type { ImageNodeType } from "./nodes/ImageNode";
 import type { LlmFilePlaceholderNodeType } from "./nodes/LlmFilePlaceholderNode";
 import type { YouTubeNodeType } from "./nodes/YouTubeNode"; // Type for YouTube video nodes
 import type { FrameNodeType } from "./nodes/FrameNode";
+import { createContext, useContext } from "react";
+import { XYPosition } from "@xyflow/react";
 
 export type ToolId =
   | "sticky-note"
@@ -26,3 +28,22 @@ export type CanvasNode =
   | ImageNodeType
   | YouTubeNodeType
   | FrameNodeType; // Represents a frame/container node
+
+export type CanvasActionsContextType = {
+  addImageFromDialog: (
+    position?: XYPosition,
+  ) => Promise<ImageNodeType | undefined>;
+};
+
+export const CanvasActionsContext =
+  createContext<CanvasActionsContextType | null>(null);
+
+export const useCanvasActions = () => {
+  const context = useContext(CanvasActionsContext);
+  if (!context) {
+    throw new Error(
+      "useCanvasActions must be used within a CanvasActionsProvider",
+    );
+  }
+  return context;
+};
