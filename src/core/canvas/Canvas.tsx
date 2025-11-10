@@ -712,9 +712,9 @@ const CanvasInner = () => {
                     title="zoom in"
                     variant="ghost"
                     size="icon"
-                    className="h-14 w-14"
+                    className="h-10 w-10"
                   >
-                    <ZoomIn style={{ width: 32, height: 32 }} />
+                    <ZoomIn style={{ width: 20, height: 20 }} />
                   </Button>
                   <Button
                     onClick={() => zoomOut()}
@@ -722,9 +722,9 @@ const CanvasInner = () => {
                     title="zoom out"
                     variant="ghost"
                     size="icon"
-                    className="h-14 w-14"
+                    className="h-10 w-10"
                   >
-                    <ZoomOut style={{ width: 32, height: 32 }} />
+                    <ZoomOut style={{ width: 20, height: 20 }} />
                   </Button>
                   <Button
                     onClick={() => fitView()}
@@ -732,9 +732,9 @@ const CanvasInner = () => {
                     title="fit view"
                     variant="ghost"
                     size="icon"
-                    className="h-14 w-14"
+                    className="h-10 w-10"
                   >
-                    <Maximize style={{ width: 32, height: 32 }} />
+                    <Maximize style={{ width: 20, height: 20 }} />
                   </Button>
                   <div className="border-border mx-1 h-6 border-r" />
                   {drawingToolConfigs.map(({ id, label, icon: Icon }) => (
@@ -745,9 +745,9 @@ const CanvasInner = () => {
                       title={label}
                       onClick={() => handleDrawingToolSelect(id)}
                       size="icon"
-                      className="h-14 w-14"
+                      className="h-10 w-10"
                     >
-                      <Icon style={{ width: 32, height: 32 }} />
+                      <Icon style={{ width: 20, height: 20 }} />
                       <span className="sr-only">{label}</span>
                     </Button>
                   ))}
@@ -760,9 +760,9 @@ const CanvasInner = () => {
                       title={label}
                       onClick={() => handleToolbarAction(id)}
                       size="icon"
-                      className="h-14 w-14"
+                      className="h-10 w-10"
                     >
-                      <Icon style={{ width: 32, height: 32 }} />
+                      <Icon style={{ width: 20, height: 20 }} />
                       <span className="sr-only">{label}</span>
                     </Button>
                   ))}
