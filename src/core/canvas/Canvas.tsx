@@ -696,6 +696,7 @@ const CanvasInner = () => {
               minZoom={0.1}
               maxZoom={6.0}
               noWheelClassName="nowheel"
+              noDragClassName="nodrag"
             >
               <MiniMap />
               <Controls
