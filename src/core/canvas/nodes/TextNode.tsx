@@ -143,7 +143,10 @@ const TextNodeComponent = memo(
           onBlur={handleBlur}
           role="presentation"
         >
-          <div ref={containerRef} className="relative h-full w-full">
+          <div
+            ref={containerRef}
+            className="relative h-full w-full overflow-hidden"
+          >
             {isTyping ? (
               // Stop propagation to prevent node dragging while editing
               <div
@@ -154,6 +157,7 @@ const TextNodeComponent = memo(
                   editor={editor}
                   theme="transparent"
                   className="h-full w-full"
+                  matchContainerHeight={false}
                   style={{ fontSize: `${resolvedFontSize}px` }}
                 />
               </div>

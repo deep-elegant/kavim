@@ -10,6 +10,11 @@ interface MinimalTiptapProps {
   className?: string;
   theme?: "default" | "readonly" | "disabled" | "transparent";
   style?: CSSProperties;
+  /**
+   * When true (default), the editor stretches to match the container height.
+   * Disable this for text nodes so the caret height follows the actual line height.
+   */
+  matchContainerHeight?: boolean;
 }
 
 function MinimalTiptap({
@@ -18,6 +23,7 @@ function MinimalTiptap({
   className,
   theme = "default",
   style,
+  matchContainerHeight = true,
 }: MinimalTiptapProps) {
   if (!editor) {
     return null;
@@ -39,7 +45,10 @@ function MinimalTiptap({
         <EditorContent
           editor={editor}
           placeholder={placeholder}
-          className="h-full min-h-full w-full"
+          className={cn(
+            "w-full",
+            matchContainerHeight ? "h-full min-h-full" : undefined,
+          )}
         />
       </div>
     </div>
