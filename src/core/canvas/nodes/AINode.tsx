@@ -53,6 +53,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useCanvasActions } from "../types";
+import { Z } from "./nodesZindex";
 
 export type AiStatus = "not-started" | "in-progress" | "done" | "error";
 
@@ -382,6 +383,7 @@ const AiNode = memo(
             height: MIN_HEIGHT,
             style: { width: MIN_WIDTH, height: MIN_HEIGHT },
             selected: true,
+            zIndex: Z.CONTENT_BASE
           } as AiNodeType,
         ];
       });
