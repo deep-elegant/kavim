@@ -9,10 +9,12 @@ import React, {
 import {
   useReactFlow,
   useStoreApi,
+  getBezierPath,
   type Edge,
   type EdgeProps,
   type XYPosition,
   EdgeLabelRenderer,
+  Position,
 } from "@xyflow/react";
 import { ArrowLeft, ArrowRight, Minus } from "lucide-react";
 
@@ -61,9 +63,22 @@ const SPLINE_TENSION = 1;
 // Toolbar appears above the highest point of the edge
 const EDGE_TOOLBAR_VERTICAL_OFFSET = 32;
 
-// SVG paths for arrow markers pointing left and right
-const ARROW_HEAD_LEFT = "M12,0 L12,12 L0,6 z";
-const ARROW_HEAD_RIGHT = "M0,0 L0,12 L12,6 z";
+// SVG path for arrow markers (points right by default; rotation applied via marker orientation)
+const ARROW_HEAD_PATH = "M0,0 L0,12 L12,6 z";
+
+const TARGET_INWARD_ANGLES: Record<Position, number> = {
+  [Position.Left]: 0,
+  [Position.Right]: 180,
+  [Position.Top]: 90,
+  [Position.Bottom]: -90,
+};
+
+const SOURCE_OUTWARD_ANGLES: Record<Position, number> = {
+  [Position.Left]: 180,
+  [Position.Right]: 0,
+  [Position.Top]: -90,
+  [Position.Bottom]: 90,
+};
 
 /** Factory for initial edge data with sensible defaults */
 export const createDefaultEditableEdgeData = (): EditableEdgeData => ({
@@ -148,6 +163,10 @@ const buildSmoothPath = (points: Point[]) => {
   return pathCommands.join(" ");
 };
 
+/** Returns an angle in degrees for the given delta, with Math.atan2 handling zero-length gracefully */
+const angleFromDelta = (dx: number, dy: number) =>
+  (Math.atan2(dy, dx) * 180) / Math.PI;
+
 /**
  * Renders a customizable edge with smooth curves and interactive control points.
  * - Users can double-click the path to add control points.
@@ -160,8 +179,10 @@ const EditableEdge = memo(
     id,
     sourceX,
     sourceY,
+    sourcePosition,
     targetX,
     targetY,
+    targetPosition,
     data,
     selected,
     style,
@@ -179,10 +200,8 @@ const EditableEdge = memo(
 
     // Determine arrow icon orientation based on connection direction
     const isSourceLeft = sourceX < targetX;
-    const [sourceMarkerPath, targetMarkerPath] = [
-      ARROW_HEAD_LEFT,
-      ARROW_HEAD_RIGHT,
-    ];
+    const sourceMarkerPath = ARROW_HEAD_PATH;
+    const targetMarkerPath = ARROW_HEAD_PATH;
 
     const controlPoints = data?.controlPoints ?? [];
     const sourceMarker = data?.sourceMarker ?? DEFAULT_SOURCE_MARKER;
@@ -200,7 +219,61 @@ const EditableEdge = memo(
       [sourceX, sourceY, targetX, targetY, controlPoints],
     );
 
-    const path = useMemo(() => buildSmoothPath(points), [points]);
+    // Align arrow markers with the node side they connect to (fallbacks keep legacy behaviour sane).
+    const defaultDirectionAngle = useMemo(
+      () => angleFromDelta(targetX - sourceX, targetY - sourceY),
+      [sourceX, sourceY, targetX, targetY],
+    );
+
+    const sourceMarkerAngle = useMemo(() => {
+      if (sourcePosition && SOURCE_OUTWARD_ANGLES[sourcePosition] !== undefined) {
+        return SOURCE_OUTWARD_ANGLES[sourcePosition];
+      }
+
+      const nextPoint = points[1];
+      if (nextPoint) {
+        return angleFromDelta(nextPoint.x - sourceX, nextPoint.y - sourceY);
+      }
+
+      return defaultDirectionAngle;
+    }, [defaultDirectionAngle, points, sourcePosition, sourceX, sourceY]);
+
+    const targetMarkerAngle = useMemo(() => {
+      if (targetPosition && TARGET_INWARD_ANGLES[targetPosition] !== undefined) {
+        return TARGET_INWARD_ANGLES[targetPosition];
+      }
+
+      const previousPoint = points[points.length - 2];
+      if (previousPoint) {
+        return angleFromDelta(targetX - previousPoint.x, targetY - previousPoint.y);
+      }
+
+      return defaultDirectionAngle;
+    }, [defaultDirectionAngle, points, targetPosition, targetX, targetY]);
+
+    const sourceMarkerOrient = Number.isFinite(sourceMarkerAngle)
+      ? sourceMarkerAngle.toString()
+      : "auto";
+    const targetMarkerOrient = Number.isFinite(targetMarkerAngle)
+      ? targetMarkerAngle.toString()
+      : "auto";
+
+    const path = useMemo(() => {
+      // If there are no control points, use React Flow's built-in Bezier path for smooth curves
+      if (controlPoints.length === 0) {
+        const [bezierPath] = getBezierPath({
+          sourceX,
+          sourceY,
+          sourcePosition,
+          targetX,
+          targetY,
+          targetPosition,
+        });
+        return bezierPath;
+      }
+      // Otherwise use our custom smooth path with control points
+      return buildSmoothPath(points);
+    }, [points, controlPoints.length, sourceX, sourceY, targetX, targetY]);
 
     const showSourceArrow = sourceMarker === "arrow";
     const showTargetArrow = targetMarker === "arrow";
@@ -630,7 +703,7 @@ const EditableEdge = memo(
               markerHeight="12"
               refX="5"
               refY="6"
-              orient="auto"
+              orient={sourceMarkerOrient}
               markerUnits="strokeWidth"
             >
               <path d={sourceMarkerPath} fill={edgeColor} />
@@ -643,7 +716,7 @@ const EditableEdge = memo(
               markerHeight="12"
               refX="5"
               refY="6"
-              orient="auto"
+              orient={targetMarkerOrient}
               markerUnits="strokeWidth"
             >
               <path d={targetMarkerPath} fill={edgeColor} />

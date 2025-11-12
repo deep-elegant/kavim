@@ -34,10 +34,14 @@ import { copyNodesToClipboard } from "../hooks/useCanvasCopyPaste";
 import type { CanvasNode } from "../types";
 import { useCanvasUndoRedo } from "../undo";
 import { useLinearHistory } from "../history/LinearHistoryContext";
-
-const HANDLE_SIZE = 12;
-const HANDLE_OFFSET = 10; // Distance resize handles appear outside node bounds
-const CONNECTION_HANDLE_OFFSET = 14; // Additional gap for connection handles to avoid overlapping node edges
+import { useConnectionHoverTarget } from "../hooks/ConnectionHoverContext";
+import {
+  HANDLE_SIZE,
+  HANDLE_OFFSET,
+  CONNECTION_HANDLE_OFFSET,
+  CONNECTION_RADIUS,
+  TOOLBAR_VERTICAL_GAP,
+} from "../constants";
 
 /**
  * All 4 sides provide both source and target handles for maximum connection flexibility.
@@ -78,13 +82,12 @@ const sharedHandleStyle: React.CSSProperties = {
   width: HANDLE_SIZE,
   height: HANDLE_SIZE,
   borderRadius: "9999px",
-  border: "2px solid rgb(59 130 246)",
+  borderWidth: "2px",
+  borderStyle: "solid",
+  borderColor: "rgb(59 130 246)",
   backgroundColor: "white",
   boxShadow: "0 0 0 2px rgb(191 219 254 / 0.45)",
 };
-
-const DEFAULT_CONNECTION_RADIUS = 30;
-const TOOLBAR_VERTICAL_GAP = 36; // Space between node bounds and floating toolbar to keep top handles accessible.
 
 export type NodeInteractionOverlayProps = PropsWithChildren<{
   nodeId: string;
@@ -144,6 +147,9 @@ const NodeInteractionOverlay = ({
   const resizeTokenRef = useRef<symbol | null>(null);
   const { selecting: remoteSelecting, typing: remoteTyping } =
     useRemoteNodeCollaborators(nodeId);
+  
+  // Get the current connection hover target to highlight handles
+  const connectionHoverTarget = useConnectionHoverTarget();
 
   const interactionsDisabledWhileEditing =
     isEditing && !allowInteractionsWhileEditing;
@@ -214,7 +220,7 @@ const NodeInteractionOverlay = ({
   const shouldShowInteractions = isActive && !interactionsDisabledWhileEditing;
 
   const connectionRadius = useStore(
-    (state) => state.connectionRadius ?? DEFAULT_CONNECTION_RADIUS,
+    (state) => state.connectionRadius ?? CONNECTION_RADIUS,
   );
   const node = useInternalNode(nodeId);
 
@@ -459,34 +465,68 @@ const NodeInteractionOverlay = ({
           />
 
           {/* Connection handles on all 4 sides (both source and target) */}
-          {handlePositions.map(({ id, position }) => (
-            <React.Fragment key={id}>
-              <Handle
-                type="target"
-                id={`${id}-target`}
-                position={position}
-                className={cn(
-                  "transition-opacity",
-                  shouldShowHandles
-                    ? "pointer-events-auto opacity-100"
-                    : "pointer-events-none opacity-0",
-                )}
-                style={{ ...sharedHandleStyle, ...getHandleStyle(position) }}
-              />
-              <Handle
-                type="source"
-                id={`${id}-source`}
-                position={position}
-                className={cn(
-                  "transition-opacity",
-                  shouldShowHandles
-                    ? "pointer-events-auto opacity-100"
-                    : "pointer-events-none opacity-0",
-                )}
-                style={{ ...sharedHandleStyle, ...getHandleStyle(position) }}
-              />
-            </React.Fragment>
-          ))}
+          {handlePositions.map(({ id, position }) => {
+            // Check if this handle is the hover target
+            const targetHandleId = `${id}-target`;
+            const sourceHandleId = `${id}-source`;
+            const isTargetHovered = 
+              connectionHoverTarget?.nodeId === nodeId && 
+              connectionHoverTarget?.handleId === targetHandleId;
+            const isSourceHovered = 
+              connectionHoverTarget?.nodeId === nodeId && 
+              connectionHoverTarget?.handleId === sourceHandleId;
+            
+            return (
+              <React.Fragment key={id}>
+                <Handle
+                  type="target"
+                  id={targetHandleId}
+                  position={position}
+                  className={cn(
+                    "transition-all",
+                    shouldShowHandles
+                      ? "pointer-events-auto opacity-100"
+                      : "pointer-events-none opacity-0",
+                    isTargetHovered && "!opacity-100"
+                  )}
+                  style={{
+                    ...sharedHandleStyle,
+                    ...getHandleStyle(position),
+                    ...(isTargetHovered && {
+                      width: HANDLE_SIZE * 1.4,
+                      height: HANDLE_SIZE * 1.4,
+                      backgroundColor: "rgb(59 130 246)",
+                      borderColor: "rgb(59 130 246)",
+                      boxShadow: "0 0 0 4px rgb(191 219 254 / 0.6), 0 0 12px rgb(59 130 246 / 0.5)",
+                    }),
+                  }}
+                />
+                <Handle
+                  type="source"
+                  id={sourceHandleId}
+                  position={position}
+                  className={cn(
+                    "transition-all",
+                    shouldShowHandles
+                      ? "pointer-events-auto opacity-100"
+                      : "pointer-events-none opacity-0",
+                    isSourceHovered && "!opacity-100"
+                  )}
+                  style={{
+                    ...sharedHandleStyle,
+                    ...getHandleStyle(position),
+                    ...(isSourceHovered && {
+                      width: HANDLE_SIZE * 1.4,
+                      height: HANDLE_SIZE * 1.4,
+                      backgroundColor: "rgb(59 130 246)",
+                      borderColor: "rgb(59 130 246)",
+                      boxShadow: "0 0 0 4px rgb(191 219 254 / 0.6), 0 0 12px rgb(59 130 246 / 0.5)",
+                    }),
+                  }}
+                />
+              </React.Fragment>
+            );
+          })}
         </div>
       </ContextMenuTrigger>
 

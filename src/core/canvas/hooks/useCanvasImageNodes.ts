@@ -88,7 +88,11 @@ export const useCanvasImageNodes = ({
    * - Automatically selects the new node.
    */
   const addImageNode = useCallback(
-    async (src: string, position: XYPosition, fileName?: string) => {
+    async (
+      src: string,
+      position: XYPosition,
+      fileName?: string,
+    ): Promise<ImageNodeType> => {
       let naturalWidth = 0;
       let naturalHeight = 0;
       let width = IMAGE_NODE_MIN_WIDTH;
@@ -163,28 +167,35 @@ export const useCanvasImageNodes = ({
         );
         return [...deselected, newNode];
       });
+
+      return newNode;
     },
     [setNodes],
   );
 
   /** Opens file dialog to select and add an image */
-  const handleAddImageFromDialog = useCallback(async () => {
-    try {
-      const filePath = await window.fileSystem.openFile({
-        filters: IMAGE_FILE_FILTERS,
-      });
-      if (!filePath) {
-        return;
+  const handleAddImageFromDialog = useCallback(
+    async (
+      position?: XYPosition,
+    ): Promise<ImageNodeType | undefined> => {
+      try {
+        const filePath = await window.fileSystem.openFile({
+          filters: IMAGE_FILE_FILTERS,
+        });
+        if (!filePath) {
+          return;
+        }
+
+        const asset = await registerAssetFromFilePath(filePath);
+        const imagePosition = position ?? getCanvasCenterPosition();
+
+        return await addImageNode(asset.uri, imagePosition, asset.fileName);
+      } catch (error) {
+        console.error("Failed to add image node", error);
       }
-
-      const asset = await registerAssetFromFilePath(filePath);
-      const centerPosition = getCanvasCenterPosition();
-
-      await addImageNode(asset.uri, centerPosition, asset.fileName);
-    } catch (error) {
-      console.error("Failed to add image node", error);
-    }
-  }, [addImageNode, getCanvasCenterPosition, registerAssetFromFilePath]);
+    },
+    [addImageNode, getCanvasCenterPosition, registerAssetFromFilePath],
+  );
 
   /** Required to allow dropping files on the canvas */
   const handleDragOver = useCallback((event: React.DragEvent) => {

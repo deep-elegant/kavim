@@ -14,16 +14,25 @@ import {
   SimpleColorPicker,
   type ColorStyle,
 } from "@/components/ui/simple-color-picker";
+import { ShapePicker } from "@/components/ui/ShapePicker";
 import { type FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
 import { useAutoFontSizeObserver } from "./useAutoFontSizeObserver";
 import { useCanvasUndoRedo } from "../undo";
+import { Z } from "./nodesZindex";
 
 /** Data structure for sticky notes with color theming and font sizing */
+export type StickyNoteShape =
+  | "rectangle"
+  | "diamond"
+  | "triangle"
+  | "ellipse";
+
 export type StickyNoteData = {
   label: string;
   isTyping?: boolean; // UI-only flag, not synced to Yjs
   color?: ColorStyle;
   fontSize?: FontSizeSetting;
+  shape?: StickyNoteShape;
 };
 
 export type StickyNoteNodeType = Node<StickyNoteData, "sticky-note">;
@@ -66,11 +75,13 @@ export const stickyNoteDrawable: DrawableNode<StickyNoteNodeType> = {
       isTyping: false,
       color: defaultColor,
       fontSize: "auto",
+      shape: "rectangle",
     },
     width: DEFAULT_NOTE_SIZE,
     height: DEFAULT_NOTE_SIZE,
     style: { width: DEFAULT_NOTE_SIZE, height: DEFAULT_NOTE_SIZE },
     selected: true,
+    zIndex: Z.CONTENT_BASE,
   }),
 
   onPaneMouseMove: (node, start, current) => {
@@ -153,6 +164,7 @@ const StickyNoteNode = memo(
     const { performAction } = useCanvasUndoRedo();
     const label = data.label ?? "";
     const color = data.color ?? defaultColor;
+    const shape = data.shape ?? "rectangle";
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Hidden element used to measure rendered text dimensions for auto-sizing
@@ -328,6 +340,15 @@ const StickyNoteNode = memo(
       [performAction, updateNodeData],
     );
 
+    const handleShapeChange = useCallback(
+      (newShape: StickyNoteShape) => {
+        performAction(() => {
+          updateNodeData({ shape: newShape });
+        }, "sticky-note-shape");
+      },
+      [performAction, updateNodeData],
+    );
+
     // Extend default formatting tools (bold, italic, etc.) with color picker
     const toolbarItems = useMemo<ToolbarItem[]>(
       () => [
@@ -340,9 +361,72 @@ const StickyNoteNode = memo(
             <SimpleColorPicker color={color} setColor={handleColorChange} />
           ),
         },
+        { type: "separator", id: "sticky-note-shape-separator" },
+        {
+          type: "custom",
+          id: "sticky-note-shape-picker",
+          render: () => (
+            <ShapePicker shape={shape} onShapeChange={handleShapeChange} />
+          ),
+        },
       ],
-      [color, handleColorChange],
+      [color, handleColorChange, shape, handleShapeChange],
     );
+
+    const textContainerStyles = useMemo(() => {
+      switch (shape) {
+        case "triangle":
+          return {
+            position: "absolute",
+            top: "50%",
+            left: "30%",
+            width: "40%",
+            height: "50%",
+          };
+        case "diamond":
+          return {
+            position: "absolute",
+            top: "25%",
+            left: "25%",
+            width: "50%",
+            height: "50%",
+          };
+        case "ellipse":
+          return {
+            position: "absolute",
+            top: "15%",
+            left: "15%",
+            width: "70%",
+            height: "70%",
+          };
+        case "rectangle":
+        default:
+          return {
+            position: "relative",
+            width: "100%",
+            height: "100%",
+          };
+      }
+    }, [shape]);
+
+    const shapeStyles = useMemo(() => {
+      switch (shape) {
+        case "ellipse":
+          return {
+            clipPath: "ellipse(50% 50% at 50% 50%)",
+          };
+        case "diamond":
+          return {
+            clipPath: "polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)",
+          };
+        case "triangle":
+          return {
+            clipPath: "polygon(50% 0%, 0% 100%, 100% 100%)",
+          };
+        default:
+          return {};
+      }
+    }, [shape]);
 
     return (
       <NodeInteractionOverlay
@@ -359,22 +443,28 @@ const StickyNoteNode = memo(
         onEditingInteractionEnd={handleEditingInteractionEnd}
       >
         <div
-          className={cn(
-            "relative h-full w-full rounded-lg border shadow transition-colors",
-          )}
-          style={{
-            backgroundColor: color.background,
-            borderColor: color.border,
-          }}
+          className="relative h-full w-full"
           onDoubleClick={handleDoubleClick}
           onBlur={handleBlur}
           role="presentation"
         >
           <div
-            className={cn("flex h-full w-full")}
-            style={{ color: color.text }}
+            className={cn(
+              "absolute inset-0 border shadow transition-colors",
+              shape === "rectangle" && "rounded-lg",
+            )}
+            style={{
+              backgroundColor: color.background,
+              borderColor: color.border,
+              ...shapeStyles,
+            }}
+          />
+          <div
+            ref={containerRef}
+            className={cn("flex")}
+            style={{ ...textContainerStyles, color: color.text }}
           >
-            <div ref={containerRef} className="relative h-full w-full">
+            <div className="relative h-full w-full">
               {isTyping ? (
                 <div
                   className="h-full w-full"

@@ -259,7 +259,7 @@ export function useWebRTCManual(doc: Y.Doc) {
 
   /**
    * Debounce local updates to batch rapid changes.
-   * - 80ms window: balances responsiveness vs network efficiency
+   * - 30 Fps window: balances responsiveness vs network efficiency
    */
   const scheduleLocalFlush = useCallback(() => {
     if (localFlushTimerRef.current !== null) {
@@ -269,7 +269,7 @@ export function useWebRTCManual(doc: Y.Doc) {
     localFlushTimerRef.current = setTimeout(() => {
       localFlushTimerRef.current = null;
       flushLocalUpdates();
-    }, 80);
+    }, 1000/30);
   }, [flushLocalUpdates]);
 
   /**

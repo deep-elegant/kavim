@@ -2,28 +2,37 @@ import React, {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type FocusEvent,
+  type ChangeEvent,
+  type KeyboardEvent,
 } from "react";
-import { type NodeProps, type Node } from "@xyflow/react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
-import { Split } from "lucide-react";
+import { type NodeProps, type Node, type XYPosition } from "@xyflow/react";
+import {
+  GitBranch,
+  Copy,
+  RefreshCcw,
+  Play,
+  Square,
+  Paperclip,
+  Image as ImageIcon,
+  ChevronDown,
+  Maximize,
+  Minimize,
+} from "lucide-react";
 import { marked } from "marked";
 import { toast } from "sonner";
-import { ContextMenuItem } from "@/components/ui/context-menu";
 
 import NodeInteractionOverlay from "./NodeInteractionOverlay";
 import { type DrawableNode } from "./DrawableNode";
-import { type ImageNodeData, type ImageNodeType } from "./ImageNode";
-import { MinimalTiptap } from "@/components/ui/minimal-tiptap";
+import {
+  type ImageNodeType,
+  IMAGE_NODE_MIN_HEIGHT,
+  IMAGE_NODE_MIN_WIDTH,
+} from "./ImageNode";
 import { cn } from "@/utils/tailwind";
-import { useNodeAsEditor } from "@/helpers/useNodeAsEditor";
-import { type FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
-import { useAutoFontSizeObserver } from "./useAutoFontSizeObserver";
 import { AI_MODELS, type AiModel } from "../../llm/aiModels";
 import { generateAiResult } from "@/core/llm/generateAiResult";
 import { SingleLlmSelect } from "@/core/llm/SingleLlmSelect";
@@ -31,64 +40,39 @@ import {
   buildCanvasChatMessages,
   type BuildCanvasChatMessagesResult,
 } from "@/core/llm/buildCanvasChatMessages";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
 import { createDefaultEditableEdgeData } from "../edges/EditableEdge";
 import { useCanvasData } from "../CanvasDataContext";
-import { formatTextualNodeSummary, htmlToPlainText } from "../utils/text";
+import { htmlToPlainText } from "../utils/text";
 import { createAiImageGenerationManager } from "../utils/aiImageGeneration";
+import {
+  Card,
+  CardHeader,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { useCanvasActions } from "../types";
+import { Z } from "./nodesZindex";
 
-export type AiStatus = "not-started" | "in-progress" | "done";
+export type AiStatus = "not-started" | "in-progress" | "done" | "error";
 
 /** Data structure for AI-powered nodes that generate responses based on prompts */
 export type AiNodeData = {
   label: string; // User's prompt
-  isTyping?: boolean;
+  attachments?: string[]; // list of connected image node IDs
   model?: AiModel;
   status?: AiStatus;
   result?: string; // AI-generated response
-  fontSize?: FontSizeSetting;
 };
 
 export type AiNodeType = Node<AiNodeData, "ai-node">;
 
 // Defines the minimum dimensions for an AI node.
-const MIN_WIDTH = 360;
-const MIN_HEIGHT = 270;
+const MIN_WIDTH = 520;
+const MIN_HEIGHT = 580;
 // Defines the horizontal gap between a node and a newly created split node.
 const NODE_HORIZONTAL_GAP = 80;
-
-const PROMPT_PLACEHOLDER_HTML = "<p>No prompt yet.</p>";
-const PROMPT_TYPOGRAPHY = cn(
-  "prose prose-sm w-full max-w-none",
-  "prose-h1:text-xl prose-h1:leading-tight",
-  "prose-h2:text-lg prose-h2:leading-snug",
-  "prose-h3:text-base prose-h3:leading-snug",
-  "prose-p:my-1 prose-p:leading-normal",
-  "prose-ul:my-1 prose-ol:my-1",
-  "prose-li:my-0",
-  "min-h-[1.5rem] px-3 py-2",
-  "text-slate-900",
-  "break-words",
-);
-
-const AI_MODEL_VALUES = AI_MODELS.map((option) => option.value) as [
-  AiModel,
-  ...AiModel[],
-];
-
-const aiNodeFormSchema = z.object({
-  model: z.enum(AI_MODEL_VALUES),
-  prompt: z.string(),
-});
-
-type AiNodeFormValues = z.infer<typeof aiNodeFormSchema>;
 
 /**
  * Implements DrawableNode interface for creating AI nodes via drag interaction.
@@ -99,14 +83,13 @@ export const aiNodeDrawable: DrawableNode<AiNodeType> = {
     id,
     type: "ai-node",
     position,
-      data: {
-        label: "",
-        isTyping: false,
-        model: "deepseek",
-        status: "not-started",
-        result: "",
-        fontSize: "auto",
-      },
+    data: {
+      label: "",
+      model: "deepseek",
+      status: "not-started",
+      result: "",
+      attachments: [],
+    },
     width: MIN_WIDTH,
     height: MIN_HEIGHT,
     style: { width: MIN_WIDTH, height: MIN_HEIGHT },
@@ -155,7 +138,6 @@ export const aiNodeDrawable: DrawableNode<AiNodeType> = {
       },
       data: {
         ...node.data,
-        isTyping: true, // Auto-activate typing mode for immediate prompt input
       },
     };
   },
@@ -163,17 +145,39 @@ export const aiNodeDrawable: DrawableNode<AiNodeType> = {
 
 /** Human-readable labels for AI processing states */
 const STATUS_LABELS: Record<AiStatus, string> = {
-  "not-started": "Not started",
-  "in-progress": "In progress",
-  done: "Done",
+  "not-started": "Draft",
+  "in-progress": "Thinking…",
+  done: "Ready",
+  error: "Error",
 };
 
 /** Color-coded badge styles for visual status indication */
 const STATUS_STYLES: Record<AiStatus, string> = {
-  "not-started": "bg-slate-100 text-slate-700",
-  "in-progress": "bg-amber-100 text-amber-800",
-  done: "bg-emerald-100 text-emerald-800",
+  "not-started": "bg-slate-500",
+  "in-progress": "bg-sky-400",
+  done: "bg-emerald-400",
+  error: "bg-red-500",
 };
+
+const MemoizedResponse = memo(function MemoizedResponse({
+  html,
+  onKeyDown,
+}: {
+  html: string;
+  onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => void;
+}) {
+  return (
+    <div
+      className="prose prose-sm max-w-none nodrag focus:outline-none"
+      style={{cursor: 'text'}}
+      dangerouslySetInnerHTML={{ __html: html }}
+      contentEditable={true}
+      suppressContentEditableWarning={true}
+      onKeyDown={onKeyDown}
+    />
+  );
+});
+MemoizedResponse.displayName = "MemoizedResponse";
 
 /**
  * Renders an AI-powered node that generates responses from prompts.
@@ -183,235 +187,237 @@ const STATUS_STYLES: Record<AiStatus, string> = {
  * - Auto-runs prompt when user stops typing
  * - Supports creating "split" nodes for exploring multiple conversation branches
  */
-const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
-  const { setNodes, setEdges, getNodes, getEdges, doc } = useCanvasData();
-  const contentRef = useRef<HTMLDivElement>(null);
-  const promptContainerRef = useRef<HTMLDivElement>(null);
-  const promptMeasurementRef = useRef<HTMLDivElement>(null);
-  const {
-    editor,
-    isTyping,
-    handleDoubleClick,
-    handleBlur,
-    updateNodeData,
-    setTypingState,
-    fontSizeSetting,
-    resolvedFontSize,
-  } = useNodeAsEditor({
-    id,
-    data,
-  });
-  const model = data.model ?? "deepseek";
-  const resolvedModel = useMemo(
-    () => AI_MODELS.find((option) => option.value === model),
-    [model],
-  );
-  const modelLabel = resolvedModel?.label ?? model;
-  const modelInputCapabilities = resolvedModel?.capabilities?.input ?? ["text"];
-  const modelOutputCapabilities =
-    resolvedModel?.capabilities?.output ?? ["text"];
-  const supportsTextInput = modelInputCapabilities.includes("text");
-  const supportsImageInput = modelInputCapabilities.includes("image");
-  const supportsImageOutput = modelOutputCapabilities.includes("image");
-  const status = data.status ?? "not-started";
-  const resultMarkdown = data.result ?? "";
-  const resultHtml = useMemo(
-    () => marked.parse(resultMarkdown || ""),
-    [resultMarkdown],
-  );
-  const resultPlainText = useMemo(
-    () => htmlToPlainText(resultHtml),
-    [resultHtml],
-  );
-  const hasTextResponse = resultPlainText.trim().length > 0;
-  const responseResizeSignature = useMemo(() => resultMarkdown, [resultMarkdown]);
-  const label = data.label ?? "";
+const AiNode = memo(
+  ({ id, data, selected, width, height }: NodeProps<AiNodeType>) => {
+    const { setNodes, setEdges, getNodes, getEdges, doc } = useCanvasData();
+    const { addImageFromDialog } = useCanvasActions();
+    const [isOverflowing, setIsOverflowing] = useState(false);
+    const [originalSize, setOriginalSize] = useState<{
+      width: number;
+      height: number;
+    } | null>(null);
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-  const promptHasContent = useMemo(
-    () => htmlToPlainText(label).length > 0,
-    [label],
-  );
-  const promptDisplayHtml = promptHasContent ? label : PROMPT_PLACEHOLDER_HTML;
-  const promptMeasurementHtml = promptHasContent ? label : "<p></p>";
+    useEffect(() => {
+      if (scrollContainerRef.current) {
+        const { scrollHeight, clientHeight } = scrollContainerRef.current;
+        setIsOverflowing(scrollHeight > clientHeight);
+      } else {
+        setIsOverflowing(false);
+      }
+    }, [data.result, width, height, originalSize]);
 
-  const form = useForm<AiNodeFormValues>({
-    resolver: zodResolver(aiNodeFormSchema),
-    values: {
-      model,
-      prompt: label,
-    },
-  });
+    const handleExpand = useCallback(() => {
+      if (!scrollContainerRef.current) return;
 
-  useAutoFontSizeObserver({
-    editor,
-    fontSize: fontSizeSetting,
-    html: promptMeasurementHtml,
-    containerRef: promptContainerRef,
-    measurementRef: promptMeasurementRef,
-    maxSize: 36,
-  });
+      const currentNode = getNodes().find((n) => n.id === id);
+      if (!currentNode) return;
 
-  const [isPromptOpen, setPromptOpen] = useState(false);
+      const currentWidth = width ?? MIN_WIDTH;
+      const currentHeight = height ?? MIN_HEIGHT;
+      setOriginalSize({ width: currentWidth, height: currentHeight });
 
-  // Increment on each new request to cancel stale responses (prevents race conditions)
-  const requestIdRef = useRef(0);
-  const lastPromptRef = useRef(label);
-  const wasTypingRef = useRef(isTyping);
+      const { scrollHeight, clientHeight } = scrollContainerRef.current;
+      const newHeight = currentHeight + (scrollHeight - clientHeight) + 20; // Add padding
 
-  /**
-   * Builds conversation history by traversing connected AI nodes upstream.
-   * - Follows edges backwards to find parent AI nodes
-   * - Recursively collects prompts and responses in chronological order
-   * - Prevents cycles with visited set
-   * - Enables contextual conversations where each node builds on previous ones
-   */
-  const buildChatHistory = useCallback(
-    (promptHtml: string): BuildCanvasChatMessagesResult => {
-      const flowNodes = getNodes();
-      const flowEdges = getEdges();
-      const promptText = htmlToPlainText(promptHtml);
+      setNodes((nodes) =>
+        nodes.map((n) =>
+          n.id === id
+            ? { ...n, height: newHeight, style: { ...n.style, height: newHeight } }
+            : n,
+        ),
+      );
+    }, [getNodes, id, setNodes, height, width]);
 
-      return buildCanvasChatMessages({
-        nodes: flowNodes,
-        edges: flowEdges,
-        targetNodeId: id,
-        promptText,
-        supportsTextInput,
-        supportsImageInput,
-      });
-    },
-    [
-      getEdges,
-      getNodes,
-      id,
-      supportsImageInput,
-      supportsTextInput,
-    ],
-  );
+    const handleCollapse = useCallback(() => {
+      if (!originalSize) return;
 
-  /**
-   * Creates a new AI node to the right, connected to this one.
-   * - Enables exploring different conversation branches from the same context
-   * - New node inherits the model selection but starts with empty prompt
-   * - Positioned to the right with consistent spacing
-   * - Auto-activates typing mode for immediate input
-   */
-  const handleCreateSplit = useCallback(() => {
-    const flowNodes = getNodes();
-    const currentNode = flowNodes.find((node) => node.id === id);
+      setNodes((nodes) =>
+        nodes.map((n) =>
+          n.id === id
+            ? {
+                ...n,
+                height: originalSize.height,
+                style: { ...n.style, height: originalSize.height },
+              }
+            : n,
+        ),
+      );
 
-    if (!currentNode) {
-      return;
-    }
+      setOriginalSize(null);
+    }, [id, originalSize, setNodes]);
 
-    const width = Number(
-      currentNode.width ?? currentNode.style?.width ?? MIN_WIDTH,
-    );
-    const newNodeId = crypto.randomUUID();
-    const newPosition = {
-      x: currentNode.position.x + width + NODE_HORIZONTAL_GAP,
-      y: currentNode.position.y,
-    };
-
-    const currentNodeData = currentNode.data as AiNodeData | undefined;
-    const newNodeData: AiNodeData = {
-      label: "",
-      isTyping: true,
-      model: currentNodeData?.model ?? model, // Inherit model choice
-      status: "not-started",
-      result: "",
-    };
-
-    setNodes((existing) => {
-      // Deselect all nodes and exit typing mode on current node
-      const clearedSelection = existing.map((node) => {
-        if (node.id === id && node.type === "ai-node") {
-          return {
-            ...node,
-            selected: false,
-            data: {
-              ...(node.data as AiNodeData),
-              isTyping: false,
-            },
-          } as AiNodeType;
-        }
-
-        if (node.selected) {
-          return {
-            ...node,
-            selected: false,
-          };
-        }
-
-        return node;
-      });
-
-      return [
-        ...clearedSelection,
-        {
-          id: newNodeId,
-          type: "ai-node",
-          position: newPosition,
-          data: newNodeData,
-          width: MIN_WIDTH,
-          height: MIN_HEIGHT,
-          style: { width: MIN_WIDTH, height: MIN_HEIGHT },
-          selected: true,
-        } as AiNodeType,
-      ];
-    });
-
-    // Create edge connecting this node to the new split node
-    setEdges((prevEdges) => [
-      ...prevEdges,
-      {
-        id: crypto.randomUUID(),
-        source: id,
-        sourceHandle: "right-source",
-        target: newNodeId,
-        targetHandle: "left-target",
-        type: "editable",
-        data: { ...createDefaultEditableEdgeData(), targetMarker: "arrow" },
+    const updateNodeData = useCallback(
+      (newData: Partial<AiNodeData>) => {
+        setNodes((nodes) =>
+          nodes.map((n) => {
+            if (n.id === id) {
+              return {
+                ...n,
+                data: {
+                  ...n.data,
+                  ...newData,
+                },
+              };
+            }
+            return n;
+          }),
+        );
       },
-    ]);
-  }, [getNodes, id, model, setEdges, setNodes]);
+      [id, setNodes],
+    );
 
-  // Memoized prompt display (shown in top section of node when not editing)
-  const renderPromptContent = useMemo(
-    () => (
-      <div ref={promptContainerRef} className="relative w-full">
-        <div
-          className={PROMPT_TYPOGRAPHY}
-          style={{ fontSize: `${resolvedFontSize}px` }}
-          dangerouslySetInnerHTML={{ __html: promptDisplayHtml }}
-        />
-        <div
-          ref={promptMeasurementRef}
-          aria-hidden
-          className={cn(
-            "pointer-events-none absolute inset-0 box-border overflow-hidden opacity-0",
-            PROMPT_TYPOGRAPHY,
-          )}
-          dangerouslySetInnerHTML={{ __html: promptMeasurementHtml }}
-        />
-      </div>
-    ),
-    [promptDisplayHtml, promptMeasurementHtml, resolvedFontSize],
-  );
+    const attachmentNodes = useMemo(() => {
+      const allNodes = getNodes();
+      return (data.attachments ?? [])
+        .map((nodeId) => allNodes.find((n) => n.id === nodeId))
+        .filter((n): n is ImageNodeType => !!n && n.type === "image-node");
+    }, [data.attachments, getNodes]);
 
-  /**
-   * Executes the AI prompt with full chat history context.
-   * - Streams response chunks for real-time feedback
-   * - Uses request ID to cancel stale responses if prompt changes mid-generation
-   * - Updates node status throughout the lifecycle (in-progress -> done)
-   */
-  const runPrompt = useCallback(
-    async (prompt: string) => {
-      const promptText = htmlToPlainText(prompt);
-      const { messages, hasUsableInput } = buildChatHistory(prompt);
+    const model = data.model ?? "deepseek";
+    const resolvedModel = useMemo(
+      () => AI_MODELS.find((option) => option.value === model),
+      [model],
+    );
+    const modelLabel = resolvedModel?.label ?? model;
+    const modelInputCapabilities =
+      resolvedModel?.capabilities?.input ?? ["text"];
+    const modelOutputCapabilities =
+      resolvedModel?.capabilities?.output ?? ["text"];
+    const supportsTextInput = modelInputCapabilities.includes("text");
+    const supportsImageInput = modelInputCapabilities.includes("image");
+    const supportsImageOutput = modelOutputCapabilities.includes("image");
+    const status = data.status ?? "not-started";
+    const resultMarkdown = data.result ?? "";
+    const resultHtml = useMemo(
+      () => marked.parse(resultMarkdown || ""),
+      [resultMarkdown],
+    );
+    const resultPlainText = useMemo(
+      () => htmlToPlainText(resultHtml),
+      [resultHtml],
+    );
+    const hasTextResponse = resultPlainText.trim().length > 0;
+
+    // Increment on each new request to cancel stale responses (prevents race conditions)
+    const requestIdRef = useRef(0);
+
+    /**
+     * Builds conversation history by traversing connected AI nodes upstream.
+     * - Follows edges backwards to find parent AI nodes
+     * - Recursively collects prompts and responses in chronological order
+     * - Prevents cycles with visited set
+     * - Enables contextual conversations where each node builds on previous ones
+     */
+    const buildChatHistory = useCallback(
+      (promptHtml: string): BuildCanvasChatMessagesResult => {
+        const flowNodes = getNodes();
+        const flowEdges = getEdges();
+        const promptText = htmlToPlainText(promptHtml);
+
+        return buildCanvasChatMessages({
+          nodes: flowNodes,
+          edges: flowEdges,
+          targetNodeId: id,
+          promptText,
+          supportsTextInput,
+          supportsImageInput,
+        });
+      },
+      [getEdges, getNodes, id, supportsImageInput, supportsTextInput],
+    );
+
+    /**
+     * Creates a new AI node to the right, connected to this one.
+     * - Enables exploring different conversation branches from the same context
+     * - New node inherits the model selection but starts with empty prompt
+     * - Positioned to the right with consistent spacing
+     * - Auto-activates typing mode for immediate input
+     */
+    const handleCreateSplit = useCallback(() => {
+      const flowNodes = getNodes();
+      const currentNode = flowNodes.find((node) => node.id === id);
+
+      if (!currentNode) {
+        return;
+      }
+
+      const width = Number(
+        currentNode.width ?? currentNode.style?.width ?? MIN_WIDTH,
+      );
+      const newNodeId = crypto.randomUUID();
+      const newPosition = {
+        x: currentNode.position.x + width + NODE_HORIZONTAL_GAP,
+        y: currentNode.position.y,
+      };
+
+      const currentNodeData = currentNode.data as AiNodeData | undefined;
+      const newNodeData: AiNodeData = {
+        label: "",
+        model: currentNodeData?.model ?? model, // Inherit model choice
+        status: "not-started",
+        result: "",
+      };
+
+      setNodes((existing) => {
+        // Deselect all nodes and exit typing mode on current node
+        const clearedSelection = existing.map((node) => {
+          if (node.selected) {
+            return {
+              ...node,
+              selected: false,
+            };
+          }
+
+          return node;
+        });
+
+        return [
+          ...clearedSelection,
+          {
+            id: newNodeId,
+            type: "ai-node",
+            position: newPosition,
+            data: newNodeData,
+            width: MIN_WIDTH,
+            height: MIN_HEIGHT,
+            style: { width: MIN_WIDTH, height: MIN_HEIGHT },
+            selected: true,
+            zIndex: Z.CONTENT_BASE
+          } as AiNodeType,
+        ];
+      });
+
+      // Create edge connecting this node to the new split node
+      setEdges((prevEdges) => [
+        ...prevEdges,
+        {
+          id: crypto.randomUUID(),
+          source: id,
+          sourceHandle: "right-source",
+          target: newNodeId,
+          targetHandle: "left-target",
+          type: "editable",
+          data: { ...createDefaultEditableEdgeData(), targetMarker: "arrow" },
+        },
+      ]);
+    }, [getNodes, id, model, setEdges, setNodes]);
+
+    /**
+     * Executes the AI prompt with full chat history context.
+     * - Streams response chunks for real-time feedback
+     * - Uses request ID to cancel stale responses if prompt changes mid-generation
+     * - Updates node status throughout the lifecycle (in-progress -> done)
+     */
+    const runPrompt = useCallback(async () => {
+      const promptText = data.label;
+      const { messages, hasUsableInput: hasHistoryInput } =
+        buildChatHistory(promptText);
+
+      const hasTextInput = promptText.trim().length > 0;
+      const hasUsableInput = hasHistoryInput || hasTextInput;
 
       if (!hasUsableInput) {
-        lastPromptRef.current = prompt;
         updateNodeData({
           status: "not-started",
           result: "",
@@ -425,6 +431,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
       updateNodeData({
         status: "in-progress",
         result: "",
+        label: data.label,
       });
 
       try {
@@ -433,7 +440,8 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
           isRequestCurrent: () => requestIdRef.current === currentRequestId,
           getAnchorNode: (nodes) =>
             nodes.find(
-              (node): node is AiNodeType => node.id === id && node.type === "ai-node",
+              (node): node is AiNodeType =>
+                node.id === id && node.type === "ai-node",
             ),
           minimumAnchorWidth: MIN_WIDTH,
           horizontalGap: NODE_HORIZONTAL_GAP,
@@ -448,7 +456,8 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
           onImageProcessingError: (error) => {
             console.error("Failed to process AI image chunk", error);
             toast.error("Failed to render AI image", {
-              description: error instanceof Error ? error.message : String(error),
+              description:
+                error instanceof Error ? error.message : String(error),
             });
           },
         });
@@ -462,7 +471,7 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
           messages,
           minimumUpdateIntervalMs: 50,
           onStart: () => {
-            imageManager.handlePlaceholderBlock()
+            imageManager.handlePlaceholderBlock();
           },
           onProgress: ({ aggregatedText, newBlocks }) => {
             if (requestIdRef.current !== currentRequestId) {
@@ -521,7 +530,6 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
         if (requestIdRef.current === currentRequestId) {
           updateNodeData({ status: "done" });
-          lastPromptRef.current = prompt;
         }
       } catch (error) {
         console.error("Failed to generate AI result", error);
@@ -533,297 +541,401 @@ const AiNode = memo(({ id, data, selected }: NodeProps<AiNodeType>) => {
 
         if (requestIdRef.current === currentRequestId) {
           updateNodeData({
-            status: "done",
+            status: "error",
             result:
               "Unable to generate a response. Please verify your API configuration and try again.",
           });
-          lastPromptRef.current = prompt;
         }
       }
-    },
-    [
+    }, [
+      data.label,
       buildChatHistory,
-      id,
+      updateNodeData,
       supportsImageOutput,
       model,
-      modelLabel,
-      setEdges,
+      id,
       setNodes,
-      updateNodeData,
-      doc,
-    ],
-  );
+      setEdges,
+      modelLabel,
+    ]);
 
-  // Auto-run prompt when user finishes typing (detects typing -> not typing transition)
-  useEffect(() => {
-    if (wasTypingRef.current && !isTyping) {
-      if (label !== lastPromptRef.current && label !== "") {
-        void runPrompt(label);
+    const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        void runPrompt();
       }
-    }
+    };
 
-    wasTypingRef.current = isTyping;
-  }, [isTyping, label, runPrompt]);
+    const handleCopyTextResponse = useCallback(async () => {
+      const contentToCopy = resultMarkdown || resultPlainText;
 
-  // Auto-expand node height when response content grows beyond current height
-  useEffect(() => {
-    if (!contentRef.current) {
-      return;
-    }
-
-    const { scrollHeight } = contentRef.current;
-
-    setNodes((nodes) => {
-      const node = nodes.find((n) => n.id === id);
-      if (!node) return nodes;
-
-      const currentHeight = node.height ?? 0;
-
-      if (scrollHeight > currentHeight) {
-        return nodes.map((n) => {
-          if (n.id === id) {
-            return {
-              ...n,
-              height: scrollHeight,
-              style: { ...n.style, height: scrollHeight },
-            };
-          }
-          return n;
-        });
-      }
-      return nodes;
-    });
-  }, [id, responseResizeSignature, setNodes]);
-
-  const handleCopyTextResponse = useCallback(async () => {
-    const contentToCopy = resultMarkdown || resultPlainText;
-
-    if (!contentToCopy) {
-      toast.info("No AI response to copy yet.");
-      return;
-    }
-
-    if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
-      toast.error("Clipboard is not available.");
-      return;
-    }
-
-    try {
-      await navigator.clipboard.writeText(contentToCopy);
-      toast.success("AI response copied to clipboard.");
-    } catch (error) {
-      console.error("Failed to copy AI response", error);
-      toast.error("Failed to copy AI response.");
-    }
-  }, [resultMarkdown, resultPlainText]);
-
-  /**
-   * Custom blur handler to prevent exiting edit mode when interacting with:
-   * - Radix UI popovers (e.g., formatting toolbar)
-   * - Elements within the content area (e.g., clicking response section)
-   */
-  const customOnBlur = useCallback(
-    (event: FocusEvent<HTMLDivElement>) => {
-      const potentialNextFocus =
-        event.relatedTarget instanceof Element
-          ? event.relatedTarget
-          : typeof document !== "undefined"
-            ? document.activeElement
-            : null;
-
-      // Don't blur if focus moved to toolbar popover or within content area
-      if (
-        (potentialNextFocus instanceof Element &&
-          potentialNextFocus.closest("[data-radix-popper-content-wrapper]")) ||
-        (contentRef.current &&
-          potentialNextFocus instanceof Node &&
-          contentRef.current.contains(potentialNextFocus))
-      ) {
+      if (!contentToCopy) {
+        toast.info("No AI response to copy yet.");
         return;
       }
-      handleBlur(event);
-    },
-    [handleBlur],
-  );
 
-  /**
-   * Handles changes to the AI model selection.
-   * Updates the node's data and re-focuses the editor.
-   * @param value The new AI model value.
-   */
-  const onChangeModel = useCallback(
-    (value: string) => {
-      updateNodeData({ model: value as AiModel });
-      setTypingState(true);
-      const currentEditor = editor;
-      if (currentEditor) {
-        setTimeout(() => {
-          currentEditor.commands.focus("end");
-        }, 0);
+      if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
+        toast.error("Clipboard is not available.");
+        return;
       }
-    },
-    [form, editor, setTypingState],
-  );
 
-  return (
-    <NodeInteractionOverlay
-      nodeId={id}
-      isActive={selected}
-      isEditing={isTyping}
-      minWidth={MIN_WIDTH}
-      minHeight={MIN_HEIGHT}
-      className="text-slate-900"
-      editor={editor}
-      contextMenuItems={
-        !hasTextResponse
-          ? undefined
-          : (
-              <ContextMenuItem onSelect={() => void handleCopyTextResponse()}>
-                Copy AI Response
-              </ContextMenuItem>
-            )
+      try {
+        await navigator.clipboard.writeText(contentToCopy);
+        toast.success("AI response copied to clipboard.");
+      } catch (error) {
+        console.error("Failed to copy AI response", error);
+        toast.error("Failed to copy AI response.");
       }
-    >
-      <button
-        type="button"
-        aria-label="Branch prompt"
-        className="absolute top-1/2 -right-3 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-600 shadow transition hover:bg-slate-100"
-        onClick={(event) => {
-          event.stopPropagation();
-          handleCreateSplit();
-        }}
+    }, [resultMarkdown, resultPlainText]);
+
+    /**
+     * Handles changes to the AI model selection.
+     * Updates the node's data.
+     * @param value The new AI model value.
+     */
+    const onChangeModel = useCallback(
+      (value: string) => {
+        updateNodeData({ model: value as AiModel });
+      },
+      [updateNodeData],
+    );
+
+    const handleAttachClick = async () => {
+      const currentNode = getNodes().find((n) => n.id === id);
+      if (!currentNode) return;
+
+      const gap = 60;
+      const imageNodeWidth = 200; // A reasonable default guess
+      const position: XYPosition = {
+        x: currentNode.position.x - imageNodeWidth - gap,
+        y: currentNode.position.y,
+      };
+
+      const newNode = await addImageFromDialog(position);
+      if (!newNode) return;
+
+      // After the node is created, we might want to adjust its position based on its actual width
+      const finalPosition: XYPosition = {
+        x: currentNode.position.x - (newNode.width ?? imageNodeWidth) - gap,
+        y: currentNode.position.y,
+      };
+
+      setNodes((nds) =>
+        nds.map((n) =>
+          n.id === newNode.id ? { ...n, position: finalPosition } : n,
+        ),
+      );
+
+      const newEdge = {
+        id: crypto.randomUUID(),
+        source: newNode.id,
+        target: id,
+        type: "editable",
+        data: createDefaultEditableEdgeData(),
+      };
+      setEdges((eds) => [...eds, newEdge]);
+
+      updateNodeData({
+        attachments: [...(data.attachments ?? []), newNode.id],
+      });
+    };
+
+    const clearAttachments = () => {
+      const attachmentIds = data.attachments ?? [];
+      if (attachmentIds.length === 0) return;
+
+      setNodes((nds) => nds.filter((n) => !attachmentIds.includes(n.id)));
+      setEdges((eds) =>
+        eds.filter(
+          (e) => !(e.target === id && attachmentIds.includes(e.source)),
+        ),
+      );
+
+      updateNodeData({ attachments: [] });
+    };
+
+    const updatePrompt = useCallback(
+      (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        updateNodeData({ label: e.target.value });
+      },
+      [updateNodeData],
+    );
+
+    const stopGeneration = useCallback(() => {
+      if (requestIdRef.current) {
+        updateNodeData({
+          status: "done",
+        });
+      }
+    }, [updateNodeData]);
+
+    const onResponseKeyDown = useCallback((e: KeyboardEvent<HTMLDivElement>) => {
+        // Allow copy (Ctrl+C), select all (Ctrl+A), and navigation, but prevent editing.
+        if (
+            (e.ctrlKey || e.metaKey) &&
+            (e.key === "c" || e.key === "C" || e.key === "a" || e.key === "A")
+        ) {
+            return;
+        }
+        if (e.key.startsWith("Arrow")) {
+            return;
+        }
+        e.preventDefault();
+    }, []);
+
+    const isRunning = status === "in-progress";
+    const hasPrompt = !!data.label.trim();
+    const hasAttachments = attachmentNodes.length > 0;
+    const isSendDisabled = (!hasPrompt && !hasAttachments) || isRunning;
+
+    return (
+      <NodeInteractionOverlay
+        nodeId={id}
+        isActive={selected}
+        isEditing={false}
+        minWidth={MIN_WIDTH}
+        minHeight={MIN_HEIGHT}
       >
-        <Split className="h-3.5 w-3.5" />
-      </button>
-      <div
-        ref={contentRef}
-        className="border-border flex h-full w-full flex-col gap-3 rounded-lg border bg-white p-3 shadow"
-        onDoubleClick={handleDoubleClick}
-        onBlur={customOnBlur}
-        role="presentation"
-      >
-        {isTyping ? (
-          <Form {...form}>
-            <div
-              className="flex h-full w-full flex-col gap-3"
-              onMouseDown={(e) => e.stopPropagation()}
-            >
-              <FormField
-                control={form.control}
-                name="model"
-                render={({ field }) => (
-                  <FormItem className="space-y-1">
-                    <FormLabel className="text-xs font-medium text-slate-600">
-                      Model
-                    </FormLabel>
-                    <FormControl>
+        <div className="h-full w-full bg-gradient-to-br from-sky-500/40 via-cyan-400/30 to-fuchsia-500/40 p-[1px] rounded-3xl shadow-[0_18px_40px_rgba(0,0,0,0.55)]">
+          <Card className="bg-white text-slate-900 border border-slate-200 rounded-3xl h-full flex flex-col">
+            {/* HEADER */}
+            <CardHeader className="border-b border-slate-200 px-5 py-4">
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                {/* Left side: Model selector + Status inline */}
+                <div className="flex items-center gap-3 flex-wrap">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 border border-slate-300 px-3 py-1 text-[11px] font-medium tracking-wide">
+                    <span
+                      className={cn(
+                        "h-2 w-2 rounded-full",
+                        STATUS_STYLES[status],
+                      )}
+                    />
+                    <div className="relative flex items-center">
                       <SingleLlmSelect
-                        value={field.value}
+                        value={model}
                         onChange={onChangeModel}
+                        triggerClassName="appearance-none bg-transparent pr-5 text-[11px] font-medium focus:outline-none cursor-pointer h-auto border-0"
+                        contentClassName="bg-white text-slate-900 border-slate-300"
                       />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="prompt"
-                render={() => (
-                  <FormItem className="flex h-full flex-col space-y-0">
-                    <FormLabel className="text-xs font-medium text-slate-600">
-                      Prompt
-                    </FormLabel>
-                    <FormControl className="mt-1 min-h-[120px] flex-1">
-                      <div
-                        ref={promptContainerRef}
-                        className="relative h-full overflow-hidden rounded-md border border-slate-300"
-                      >
-                        <MinimalTiptap
-                          editor={editor}
-                          theme="transparent"
-                          className="h-full w-full"
-                          style={{ fontSize: `${resolvedFontSize}px` }}
-                        />
-                        <div
-                          ref={promptMeasurementRef}
-                          aria-hidden
-                          className={cn(
-                            "pointer-events-none absolute inset-0 box-border overflow-hidden opacity-0",
-                            PROMPT_TYPOGRAPHY,
-                          )}
-                          dangerouslySetInnerHTML={{
-                            __html: promptMeasurementHtml,
-                          }}
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
-          </Form>
-        ) : (
-          <div
-            className="flex h-full w-full flex-col gap-3"
-            onMouseDown={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-slate-600">Status</span>
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-xs font-semibold",
-                  STATUS_STYLES[status],
-                )}
-              >
-                {STATUS_LABELS[status]}
-              </span>
-            </div>
-            <div className="rounded-md border border-slate-200">
+                      <ChevronDown className="pointer-events-none absolute right-0 h-3 w-3 text-slate-400" />
+                    </div>
+                  </div>
+
+                  {/* Draft status on same line */}
+                  <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 border border-slate-200 px-2.5 py-1 text-[11px] text-slate-700">
+                    <span
+                      className={cn(
+                        "h-1.5 w-1.5 rounded-full",
+                        STATUS_STYLES[status],
+                      )}
+                    />
+                    <span className="uppercase tracking-[0.16em]">
+                      {STATUS_LABELS[status]}
+                    </span>
+                  </div>
+                </div>
+
+                {/*
+              Currently not used - "..." Menu
               <button
                 type="button"
-                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm font-medium text-slate-700"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setPromptOpen((current) => !current);
-                }}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-slate-600 text-lg leading-none hover:border-slate-400 hover:text-slate-900 transition"
+                aria-label="Node menu"
               >
-                <span>Prompt</span>
-                <span className="text-xs text-slate-500">
-                  {isPromptOpen ? "Hide" : "Show"}
+                ⋯
+              </button> */}
+              </div>
+            </CardHeader>
+
+            {/* BODY */}
+            <CardContent ref={scrollContainerRef} className="px-5 py-4 space-y-4 flex-1 overflow-y-auto">
+              <div className="flex items-center justify-between text-[11px] text-slate-600">
+                <span className="font-medium tracking-wide text-slate-700">
+                  Prompt
                 </span>
-              </button>
-              {isPromptOpen && (
-                <div className="border-t border-slate-200">
-                  {renderPromptContent}
+                <span>{data.label.length || 0} chars</span>
+              </div>
+
+              <Textarea
+                placeholder="Ask or paste a prompt…"
+                className="bg-slate-100 border border-slate-300 rounded-2xl min-h-[88px] resize-none text-sm leading-relaxed focus-visible:ring-2 focus-visible:ring-sky-500/50 focus-visible:border-sky-400/50 placeholder:text-slate-400 nodrag"
+                value={data.label}
+                onChange={updatePrompt}
+                onKeyDown={handleKeyDown}
+                disabled={isRunning}
+              />
+
+              {/* Attachments (multimodal) */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] text-slate-600">
+                  <span className="text-[11px] text-slate-500">
+                    Attachments
+                  </span>
+                  <span>
+                    {attachmentNodes.length
+                      ? `${attachmentNodes.length} file${
+                          attachmentNodes.length > 1 ? "s" : ""
+                        }`
+                      : "Optional"}
+                  </span>
                 </div>
-              )}
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-slate-600">Result</span>
-              <div
-                className={cn(
-                  "min-h-[120px] w-full rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm",
-                  hasTextResponse ? "text-slate-900" : "text-slate-500",
-                )}
-              >
-                {hasTextResponse ? (
-                  <div
-                    className="prose prose-sm max-w-none text-slate-900"
-                    dangerouslySetInnerHTML={{ __html: resultHtml }}
-                  />
-                ) : (
-                  <p className="text-sm text-slate-500">No AI response yet.</p>
+
+                <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-8 rounded-full border-slate-300 bg-slate-100 text-[11px] text-slate-700 hover:bg-slate-200 hover:border-slate-400"
+                      onClick={handleAttachClick}
+                    >
+                      <Paperclip className="mr-1 h-3.5 w-3.5" />
+                      Add image or file
+                    </Button>
+                    {attachmentNodes.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={clearAttachments}
+                        className="text-[11px] text-slate-600 hover:text-slate-900"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-slate-500">
+                    Images are sent to the model for multimodal answers.
+                  </span>
+                </div>
+
+                {attachmentNodes.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {attachmentNodes.map((att) => (
+                      <div
+                        key={att.id}
+                        className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-300 px-2.5 py-1 text-[11px] text-slate-700 max-w-[140px]"
+                      >
+                        <ImageIcon className="h-3.5 w-3.5 text-sky-400" />
+                        <span className="truncate">{att.data.fileName}</span>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </NodeInteractionOverlay>
-  );
-});
+
+              {/* Response preview */}
+              {hasTextResponse ? (
+                <div
+                  className="mt-2 rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-[13px] leading-relaxed text-slate-800 space-y-3"
+                >
+                  <div className="flex items-center justify-between text-[11px] text-slate-400">
+                    <span className="inline-flex items-center gap-1.5 font-medium">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      Response
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {isOverflowing && !originalSize && (
+                        <button
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 hover:border-slate-400 hover:text-slate-900 transition"
+                          type="button"
+                          onClick={handleExpand}
+                        >
+                          <Maximize size={12} />
+                          Expand
+                        </button>
+                      )}
+                      {originalSize && (
+                        <button
+                          className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 hover:border-slate-400 hover:text-slate-900 transition"
+                          type="button"
+                          onClick={handleCollapse}
+                        >
+                          <Minimize size={12} />
+                          Collapse
+                        </button>
+                      )}
+                      <span>{modelLabel}</span>
+                    </div>
+                  </div>
+
+                  <MemoizedResponse
+                    html={resultHtml}
+                    onKeyDown={onResponseKeyDown}
+                  />
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1 text-[11px] text-slate-600">
+                    <button
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 hover:border-slate-400 hover:text-slate-900 transition"
+                      type="button"
+                      onClick={runPrompt}
+                    >
+                      <RefreshCcw size={12} />
+                      Retry
+                    </button>
+                    <button
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 hover:border-slate-400 hover:text-slate-900 transition"
+                      onClick={handleCreateSplit}
+                    >
+                      <GitBranch size={12} />
+                      Branch
+                    </button>
+                    <button
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 hover:border-slate-400 hover:text-slate-900 transition"
+                      type="button"
+                      onClick={handleCopyTextResponse}
+                    >
+                      <Copy size={12} />
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="mt-2 rounded-2xl border border-dashed border-slate-300 bg-slate-100 px-3.5 py-3 text-[12px] text-slate-600 flex items-center justify-between">
+                  <div>
+                    <div className="font-medium text-slate-700">
+                      No response yet
+                    </div>
+                    <div>
+                      Write a prompt or attach an image, then press ⌘/Ctrl+Enter
+                      to run.
+                    </div>
+                  </div>
+                  <div className="hidden sm:flex items-center justify-center h-8 w-8 rounded-full border border-slate-300 text-[10px] text-slate-700">
+                    AI
+                  </div>
+                </div>
+              )}
+            </CardContent>
+
+            <CardFooter className="flex flex-col gap-2 border-t border-slate-200 px-5 py-3 text-[11px] text-slate-600 sm:flex-row sm:items-center sm:justify-between">
+              <span>Shift+Enter = newline • ⌘/Ctrl+Enter = Send</span>
+
+              {isRunning ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 rounded-full border-red-500/70 text-red-400 bg-red-500/5 hover:bg-red-500/15 hover:text-red-200"
+                  onClick={stopGeneration}
+                >
+                  <Square className="mr-1 h-4 w-4" /> Stop
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  className="h-8 rounded-full bg-sky-500 hover:bg-sky-400 disabled:bg-slate-200 disabled:text-slate-500"
+                  onClick={runPrompt}
+                  disabled={isSendDisabled}
+                >
+                  <Play className="mr-1 h-4 w-4" />
+                  {status === "done" || status === "error" ? "Resend" : "Send"}
+                </Button>
+              )}
+            </CardFooter>
+          </Card>
+        </div>
+      </NodeInteractionOverlay>
+    );
+  },
+);
 
 AiNode.displayName = "AiNode";
 
