@@ -45,6 +45,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # macOS-only: import Developer ID cert
+      - name: Decode certificate
+        if: runner.os == 'macOS'
+        run: |
+          echo "$MACOS_CERT_P12" | base64 --decode > developer-id.p12
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+
+      - name: Import certificate to keychain
+        if: runner.os == 'macOS'
+        run: |
+          security create-keychain -p "" build.keychain
+          security import developer-id.p12 -k build.keychain -P "${CERT_PASSWORD}" -T /usr/bin/codesign
+          security list-keychains -d user -s build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "" build.keychain
+          security set-key-partition-list -S apple-tool:,apple: -k "" build.keychain
+        env:
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+
       # --- Clean up any mounted volumes (macOS only)
       - name: Cleanup mounted volumes
         if: runner.os == 'macOS'
@@ -62,3 +82,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           npm_config_arch: ${{ matrix.arch }}
+          # notarization env (your forge.config.js uses process.env.*)
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
