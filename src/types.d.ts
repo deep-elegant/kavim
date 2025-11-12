@@ -116,6 +116,12 @@ interface AppInfoContext {
   get: () => Promise<AppMetadata>;
 }
 
+interface AnalyticsGuardContext {
+  disabled: boolean;
+  configPath: string;
+  shouldTrack: () => boolean;
+}
+
 /**
  * Defines the shape of the drawer preferences context that is exposed to the renderer process.
  * This allows the renderer process to get, set, and delete drawer sizes.
@@ -159,6 +165,10 @@ declare global {
         drafts: DraftContext;
         appInfo: AppInfoContext;
         drawerPreferences: DrawerPreferencesContext;
+        analyticsGuard: AnalyticsGuardContext;
+        umami?: {
+            track: (eventName?: string, data?: Record<string, unknown>) => void;
+        };
     }
 }
 export {}

@@ -11,6 +11,7 @@ import { DraftManagerProvider } from "./core/drafts/DraftManagerContext";
 import { StatsForNerdsProvider } from "./core/diagnostics/StatsForNerdsContext";
 import "./localization/i18n";
 import * as Y from "yjs";
+import { trackPageView } from "./core/analytics";
 
 /**
  * Main application component with collaborative canvas editing.
@@ -27,6 +28,10 @@ export default function App() {
   useEffect(() => {
     updateAppLanguage(i18n);
   }, [i18n]);
+
+  useEffect(() => {
+    trackPageView();
+  }, []);
 
   return (
     // WebRTC layer enables real-time collaboration via peer-to-peer connections
