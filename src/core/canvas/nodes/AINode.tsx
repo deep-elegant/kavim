@@ -1,4 +1,4 @@
-import React, {
+import {
   memo,
   useCallback,
   useEffect,
@@ -6,7 +6,6 @@ import React, {
   useMemo,
   useRef,
   useState,
-  type ChangeEvent,
   type KeyboardEvent,
 } from "react";
 import { type NodeProps, type Node, type XYPosition } from "@xyflow/react";
@@ -51,7 +50,8 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+import { MinimalTiptap } from "@/components/ui/minimal-tiptap";
+import { useAiPromptEditor } from "@/helpers/useAiPromptEditor";
 import { useCanvasActions } from "../types";
 import { Z } from "./nodesZindex";
 
@@ -197,6 +197,38 @@ const AiNode = memo(
       height: number;
     } | null>(null);
     const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const updateNodeData = useCallback(
+      (newData: Partial<AiNodeData>) => {
+        setNodes((nodes) =>
+          nodes.map((n) => {
+            if (n.id === id) {
+              return {
+                ...n,
+                data: {
+                  ...n.data,
+                  ...newData,
+                },
+              };
+            }
+            return n;
+          }),
+        );
+      },
+      [id, setNodes],
+    );
+    const status = data.status ?? "not-started";
+    const isRunning = status === "in-progress";
+    const runPromptRef = useRef<() => void>(() => {});
+    const editor = useAiPromptEditor({
+      nodeId: id,
+      content: data.label,
+      placeholder: "Ask or paste a prompt.",
+      disabled: isRunning,
+      onContentChange: (html) => {
+        updateNodeData({ label: html });
+      },
+      onSubmit: () => runPromptRef.current?.(),
+    });
 
     useEffect(() => {
       if (scrollContainerRef.current) {
@@ -247,26 +279,6 @@ const AiNode = memo(
       setOriginalSize(null);
     }, [id, originalSize, setNodes]);
 
-    const updateNodeData = useCallback(
-      (newData: Partial<AiNodeData>) => {
-        setNodes((nodes) =>
-          nodes.map((n) => {
-            if (n.id === id) {
-              return {
-                ...n,
-                data: {
-                  ...n.data,
-                  ...newData,
-                },
-              };
-            }
-            return n;
-          }),
-        );
-      },
-      [id, setNodes],
-    );
-
     const attachmentNodes = useMemo(() => {
       const allNodes = getNodes();
       return (data.attachments ?? [])
@@ -287,7 +299,6 @@ const AiNode = memo(
     const supportsTextInput = modelInputCapabilities.includes("text");
     const supportsImageInput = modelInputCapabilities.includes("image");
     const supportsImageOutput = modelOutputCapabilities.includes("image");
-    const status = data.status ?? "not-started";
     const resultMarkdown = data.result ?? "";
     const resultHtml = useMemo(
       () => marked.parse(resultMarkdown || ""),
@@ -410,9 +421,10 @@ const AiNode = memo(
      * - Updates node status throughout the lifecycle (in-progress -> done)
      */
     const runPrompt = useCallback(async () => {
-      const promptText = data.label;
+      const promptText = editor?.getText() ?? "";
+      const promptHtml = editor?.getHTML() ?? data.label;
       const { messages, hasUsableInput: hasHistoryInput } =
-        buildChatHistory(promptText);
+        buildChatHistory(promptHtml);
 
       const hasTextInput = promptText.trim().length > 0;
       const hasUsableInput = hasHistoryInput || hasTextInput;
@@ -431,7 +443,7 @@ const AiNode = memo(
       updateNodeData({
         status: "in-progress",
         result: "",
-        label: data.label,
+        label: promptHtml,
       });
 
       try {
@@ -557,14 +569,12 @@ const AiNode = memo(
       setNodes,
       setEdges,
       modelLabel,
+      editor,
     ]);
 
-    const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-        e.preventDefault();
-        void runPrompt();
-      }
-    };
+    useEffect(() => {
+      runPromptRef.current = runPrompt;
+    }, [runPrompt]);
 
     const handleCopyTextResponse = useCallback(async () => {
       const contentToCopy = resultMarkdown || resultPlainText;
@@ -654,13 +664,6 @@ const AiNode = memo(
       updateNodeData({ attachments: [] });
     };
 
-    const updatePrompt = useCallback(
-      (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        updateNodeData({ label: e.target.value });
-      },
-      [updateNodeData],
-    );
-
     const stopGeneration = useCallback(() => {
       if (requestIdRef.current) {
         updateNodeData({
@@ -683,8 +686,7 @@ const AiNode = memo(
         e.preventDefault();
     }, []);
 
-    const isRunning = status === "in-progress";
-    const hasPrompt = !!data.label.trim();
+    const hasPrompt = !!editor?.getText().trim();
     const hasAttachments = attachmentNodes.length > 0;
     const isSendDisabled = (!hasPrompt && !hasAttachments) || isRunning;
 
@@ -753,16 +755,15 @@ const AiNode = memo(
                 <span className="font-medium tracking-wide text-slate-700">
                   Prompt
                 </span>
-                <span>{data.label.length || 0} chars</span>
+                <span>{editor?.getText().length || 0} chars</span>
               </div>
 
-              <Textarea
+              <MinimalTiptap
+                editor={editor}
+                theme="transparent"
                 placeholder="Ask or paste a prompt…"
-                className="bg-slate-100 border border-slate-300 rounded-2xl min-h-[88px] resize-none text-sm leading-relaxed focus-visible:ring-2 focus-visible:ring-sky-500/50 focus-visible:border-sky-400/50 placeholder:text-slate-400 nodrag"
-                value={data.label}
-                onChange={updatePrompt}
-                onKeyDown={handleKeyDown}
-                disabled={isRunning}
+                className="bg-slate-100 border border-slate-300 rounded-2xl min-h-[88px] text-sm leading-relaxed focus-within:ring-2 focus-within:ring-sky-500/50 focus-within:border-transparent placeholder:text-slate-400 nodrag p-2 cursor-text"
+                matchContainerHeight={true}
               />
 
               {/* Attachments (multimodal) */}
