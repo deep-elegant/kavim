@@ -91,6 +91,8 @@
     "@radix-ui/react-toggle": "^1.1.9",
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@tailwindcss/vite": "^4.1.13",
+    "@tiptap/extension-history": "^3.10.6",
+    "@tiptap/extension-placeholder": "^3.10.6",
     "@tiptap/extension-text-style": "^3.7.1",
     "@tiptap/pm": "^3.6.6",
     "@tiptap/react": "^3.6.6",

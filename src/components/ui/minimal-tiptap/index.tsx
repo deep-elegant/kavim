@@ -34,6 +34,7 @@ function MinimalTiptap({
       <div
         className={cn(
           "relative h-full",
+          matchContainerHeight && "min-h-[inherit]",
           theme === "default" &&
             "bg-background focus-within:border-primary rounded-lg border transition",
           theme === "disabled" &&
@@ -47,7 +48,9 @@ function MinimalTiptap({
           placeholder={placeholder}
           className={cn(
             "w-full",
-            matchContainerHeight ? "h-full min-h-full" : undefined,
+            matchContainerHeight
+              ? "h-full min-h-[inherit] [&_.ProseMirror]:h-full [&_.ProseMirror]:min-h-[inherit] [&_.ProseMirror]:outline-none [&_.ProseMirror:focus]:outline-none [&_.ProseMirror:focus]:ring-0 [&_.ProseMirror:focus]:shadow-none [&_.ProseMirror:focus]:border-transparent"
+              : undefined,
           )}
         />
       </div>
