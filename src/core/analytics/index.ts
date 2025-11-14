@@ -3,8 +3,22 @@ type AnalyticsClient = NonNullable<Window["umami"]>;
 
 const hasWindow = typeof window !== "undefined";
 
+export const isDoNotTrackEnabled = () => {
+  if (!hasWindow) {
+    return false;
+  }
+
+  const navigatorDnt = window.navigator?.doNotTrack ?? (window as any).doNotTrack;
+  const msDnt = (window.navigator as any)?.msDoNotTrack;
+  return navigatorDnt === "1" || navigatorDnt === "yes" || msDnt === "1";
+};
+
 const shouldTrackInternal = () => {
   if (!hasWindow) {
+    return false;
+  }
+
+  if (isDoNotTrackEnabled()) {
     return false;
   }
 
@@ -15,7 +29,7 @@ const shouldTrackInternal = () => {
   try {
     return window.analyticsGuard.shouldTrack();
   } catch {
-    return !window.analyticsGuard.disabled;
+    return false;
   }
 };
 
