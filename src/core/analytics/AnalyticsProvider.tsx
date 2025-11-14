@@ -1,6 +1,7 @@
 import React from "react";
 import { toast } from "sonner";
 import { AnalyticsConsentDialog } from "@/components/AnalyticsConsentDialog";
+import { PrivacyPolicyViewer } from "@/components/PrivacyPolicyViewer";
 import { trackPageView, isDoNotTrackEnabled } from ".";
 import {
   ANALYTICS_POLICY_VERSION,
@@ -8,8 +9,6 @@ import {
   DEFAULT_ANALYTICS_PREFERENCES,
 } from "./preferences";
 import { requiresExplicitOptInForLocale } from "./region";
-
-const PRIVACY_POLICY_URL = "https://kavim.deepelegant.com/privacy-policy.html";
 
 type AnalyticsContextValue = {
   preferences: AnalyticsPreferences;
@@ -20,12 +19,12 @@ type AnalyticsContextValue = {
   requiresExplicitOptIn: boolean;
   configPath?: string;
   policyVersion: number;
-  privacyPolicyUrl: string;
   refreshPreferences: () => void;
   updatePreferences: (
     updates: Partial<AnalyticsPreferences>,
   ) => AnalyticsPreferences | null;
   setAnalyticsEnabled: (enabled: boolean) => AnalyticsPreferences | null;
+  openPrivacyPolicy: () => void;
 };
 
 const AnalyticsPreferencesContext = React.createContext<
@@ -56,6 +55,7 @@ export function AnalyticsProvider({
   const requiresExplicitOptIn = requiresExplicitOptInForLocale(
     typeof navigator !== "undefined" ? navigator.language : undefined,
   );
+  const [isPolicyOpen, setIsPolicyOpen] = React.useState(false);
 
   const trackedInitialViewRef = React.useRef(false);
 
@@ -107,6 +107,14 @@ export function AnalyticsProvider({
     }
   }, []);
 
+  const openPrivacyPolicy = React.useCallback(
+    () => setIsPolicyOpen(true),
+    [],
+  );
+
+  const handlePolicyClose = React.useCallback(() => setIsPolicyOpen(false), []);
+  const handlePolicyRequested = React.useCallback(() => setIsPolicyOpen(true), []);
+
   const contextValue = React.useMemo<AnalyticsContextValue>(() => {
     return {
       preferences,
@@ -117,10 +125,10 @@ export function AnalyticsProvider({
       requiresExplicitOptIn,
       configPath,
       policyVersion,
-      privacyPolicyUrl: PRIVACY_POLICY_URL,
       refreshPreferences,
       updatePreferences: handlePreferencesUpdate,
       setAnalyticsEnabled,
+      openPrivacyPolicy,
     };
   }, [
     analyticsActive,
@@ -134,11 +142,11 @@ export function AnalyticsProvider({
     refreshPreferences,
     requiresExplicitOptIn,
     setAnalyticsEnabled,
+    openPrivacyPolicy,
   ]);
 
   const handleAllow = () => setAnalyticsEnabled(true);
   const handleDecline = () => setAnalyticsEnabled(false);
-
   return (
     <AnalyticsPreferencesContext.Provider value={contextValue}>
       {children}
@@ -147,9 +155,9 @@ export function AnalyticsProvider({
         onAllow={handleAllow}
         onDecline={handleDecline}
         requiresExplicitOptIn={requiresExplicitOptIn}
-        privacyPolicyUrl={PRIVACY_POLICY_URL}
-        configPath={configPath}
+        onShowPolicy={handlePolicyRequested}
       />
+      <PrivacyPolicyViewer open={isPolicyOpen} onClose={handlePolicyClose} />
     </AnalyticsPreferencesContext.Provider>
   );
 }

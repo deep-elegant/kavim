@@ -176,4 +176,9 @@ declare global {
         require: NodeRequire;
     }
 }
+
+declare module "*.html?raw" {
+    const content: string;
+    export default content;
+}
 export {}

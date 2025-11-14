@@ -8,15 +8,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { openExternal } from "@/utils/openExternal";
-
 type AnalyticsConsentDialogProps = {
   open: boolean;
   onAllow: () => void;
   onDecline: () => void;
   requiresExplicitOptIn: boolean;
-  privacyPolicyUrl: string;
-  configPath?: string;
+  onShowPolicy: () => void;
 };
 
 export function AnalyticsConsentDialog({
@@ -24,13 +21,17 @@ export function AnalyticsConsentDialog({
   onAllow,
   onDecline,
   requiresExplicitOptIn,
-  privacyPolicyUrl,
-  configPath,
+  onShowPolicy,
 }: AnalyticsConsentDialogProps) {
-  const handlePrivacyClick = () => openExternal(privacyPolicyUrl);
-
   return (
-    <Dialog open={open}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          onDecline();
+        }
+      }}
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Help improve Kavim</DialogTitle>
@@ -42,11 +43,8 @@ export function AnalyticsConsentDialog({
         </DialogHeader>
         <div className="space-y-3 text-sm">
           <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-            <li>Only aggregated screen views and feature clicks are recorded.</li>
+            <li>Only screen loads and basic device metadata are recorded.</li>
             <li>Data is stored on DeepElegant servers with Umami.</li>
-            <li>
-              Preferences live locally at <code>{configPath ?? "~/.kavim-analytics.json"}</code>.
-            </li>
           </ul>
           {requiresExplicitOptIn ? (
             <p className="text-sm font-medium text-foreground">
@@ -61,7 +59,7 @@ export function AnalyticsConsentDialog({
           )}
         </div>
         <DialogFooter className="gap-2 sm:justify-between">
-          <Button variant="ghost" onClick={handlePrivacyClick}>
+          <Button variant="ghost" onClick={onShowPolicy}>
             Privacy policy
           </Button>
           <div className="flex gap-2">

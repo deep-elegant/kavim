@@ -9,7 +9,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useAnalyticsPreferences } from "@/core/analytics/AnalyticsProvider";
-import { openExternal } from "@/utils/openExternal";
 
 type PrivacyModalProps = {
   isOpen: boolean;
@@ -23,9 +22,9 @@ export function PrivacyModal({ isOpen, onClose }: PrivacyModalProps) {
     analyticsActive,
     doNotTrackEnabled,
     configPath,
-    privacyPolicyUrl,
     setAnalyticsEnabled,
     refreshPreferences,
+    openPrivacyPolicy,
   } = useAnalyticsPreferences();
 
   React.useEffect(() => {
@@ -36,7 +35,6 @@ export function PrivacyModal({ isOpen, onClose }: PrivacyModalProps) {
 
   const handleEnable = () => setAnalyticsEnabled(true);
   const handleDisable = () => setAnalyticsEnabled(false);
-  const handlePrivacyClick = () => openExternal(privacyPolicyUrl);
 
   const statusLabel = analyticsActive
     ? "Analytics is enabled."
@@ -84,7 +82,7 @@ export function PrivacyModal({ isOpen, onClose }: PrivacyModalProps) {
           </div>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={handlePrivacyClick}>
+          <Button variant="ghost" onClick={openPrivacyPolicy}>
             View privacy policy
           </Button>
           <Button variant="secondary" onClick={onClose}>
