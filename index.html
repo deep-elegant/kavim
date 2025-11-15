@@ -3,8 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <title>DeepElegant - Kavim</title>
-    <meta http-equiv="Content-Security-Policy" content="script-src 'self';" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="script-src 'self' https://umami.deepelegant.com/;
+        connect-src 'self' https://umami.deepelegant.com/;
+        img-src 'self' data: https://umami.deepelegant.com/;"
+    />
     <link rel="stylesheet" href="/src/styles/global.css" />
+    <script
+      defer
+      src="https://umami.deepelegant.com/script.js"
+      data-website-id="3f1f5b7a-ff3e-4f35-b393-9a360c2e4121"
+      data-auto-track="false"
+      data-do-not-track="true"
+    ></script>
   </head>
   <body>
     <div id="app" />

@@ -11,6 +11,7 @@ import { DraftManagerProvider } from "./core/drafts/DraftManagerContext";
 import { StatsForNerdsProvider } from "./core/diagnostics/StatsForNerdsContext";
 import "./localization/i18n";
 import * as Y from "yjs";
+import { AnalyticsProvider } from "./core/analytics/AnalyticsProvider";
 
 /**
  * Main application component with collaborative canvas editing.
@@ -31,20 +32,22 @@ export default function App() {
   return (
     // WebRTC layer enables real-time collaboration via peer-to-peer connections
     <StatsForNerdsProvider>
-      <WebRTCProvider doc={doc}>
-        {/* Draft management for auto-save and recovery */}
-        <DraftManagerProvider>
-          {/* Canvas state tied to the shared Y.Doc for CRDT-based sync */}
-          <CanvasDataProvider doc={doc}>
-            <Toaster />
-            <BaseLayout>
-              <div className="h-full w-full">
-                <Canvas />
-              </div>
-            </BaseLayout>
-          </CanvasDataProvider>
-        </DraftManagerProvider>
-      </WebRTCProvider>
+      <AnalyticsProvider>
+        <WebRTCProvider doc={doc}>
+          {/* Draft management for auto-save and recovery */}
+          <DraftManagerProvider>
+            {/* Canvas state tied to the shared Y.Doc for CRDT-based sync */}
+            <CanvasDataProvider doc={doc}>
+              <Toaster />
+              <BaseLayout>
+                <div className="h-full w-full">
+                  <Canvas />
+                </div>
+              </BaseLayout>
+            </CanvasDataProvider>
+          </DraftManagerProvider>
+        </WebRTCProvider>
+      </AnalyticsProvider>
     </StatsForNerdsProvider>
   );
 }

@@ -19,6 +19,7 @@ import { SaveModal } from "./SaveModal";
 import { SettingsModal } from "./SettingsModal";
 import { PrepromptModal } from "./PrepromptModal";
 import { AboutModal } from "./AboutModal";
+import { PrivacyModal } from "./PrivacyModal";
 import { PeerConnectionModal } from "@/core/canvas/collaboration/PeerConnectionModal";
 import { useCanvasData } from "@/core/canvas/CanvasDataContext";
 import { useWebRTC } from "@/core/canvas/collaboration/WebRTCContext";
@@ -149,6 +150,7 @@ export default function MenuBar() {
     { message: string; tone: "default" | "success" | "error" } | null
   >(null);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
 
   // Reload settings from storage when modal opens to reflect any external changes
   React.useEffect(() => {
@@ -807,6 +809,9 @@ export default function MenuBar() {
               <MenubarItem onClick={() => setIsPrepromptModalOpen(true)}>
                 {i18n.t("menuBar.preprompt")}
               </MenubarItem>
+              <MenubarItem onClick={() => setIsPrivacyModalOpen(true)}>
+                Privacy & analytics
+              </MenubarItem>
               <MenubarItem
                 onClick={() => setStatsForNerdsEnabled(!statsForNerdsEnabled)}
               >
@@ -976,6 +981,11 @@ export default function MenuBar() {
         gatewaySettings={gatewaySettings}
         setGatewaySetting={handleGatewaySettingChange}
         handleSettingsSave={handleSettingsSave}
+      />
+
+      <PrivacyModal
+        isOpen={isPrivacyModalOpen}
+        onClose={() => setIsPrivacyModalOpen(false)}
       />
 
       <PrepromptModal
