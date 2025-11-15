@@ -32,7 +32,10 @@ export function AnalyticsConsentDialog({
         }
       }}
     >
-      <DialogContent>
+      <DialogContent
+        onPointerDownOutside={(event) => event.preventDefault()}
+        onInteractOutside={(event) => event.preventDefault()}
+      >
         <DialogHeader>
           <DialogTitle>Help improve Kavim</DialogTitle>
           <DialogDescription>
