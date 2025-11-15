@@ -39,9 +39,7 @@ export function AnalyticsConsentDialog({
         <DialogHeader>
           <DialogTitle>Help improve Kavim</DialogTitle>
           <DialogDescription>
-            Share anonymous usage analytics so we can fix bugs and prioritize
-            features. No personal data or project content is collected, and you
-            can change your mind any time.
+            Share minimal usage analytics so we can understand how Kavim is used and improve the app. We do not collect project content, and we do not use analytics data to identify anyone.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3 text-sm">
