@@ -1,7 +1,7 @@
 {
   "name": "deepelegant-kavim",
   "productName": "DeepElegant - Kavim",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "description": "Kavim is a visual workspace for creative brainstorming — connect ideas, models, and notes on a single collaborative canvas.",
   "main": ".vite/build/main.js",
   "repository": "https://github.com/deep-elegant/kavim.git",
