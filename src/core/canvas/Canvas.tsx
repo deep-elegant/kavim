@@ -625,7 +625,9 @@ const CanvasInner = () => {
 
   const { handlePaste } = useCanvasCopyPaste({
     nodes,
+    edges,
     setNodes,
+    setEdges,
     setSelectedTool,
     addImageNode,
     getCanvasCenterPosition,
