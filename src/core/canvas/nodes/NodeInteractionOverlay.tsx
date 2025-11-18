@@ -303,6 +303,11 @@ const NodeInteractionOverlay = ({
   const handleCopySelect = useCallback(() => {
     const latestNodes = getNodes() as Node<CanvasNode>[];
     const selectedNodes = latestNodes.filter((node) => node.selected);
+
+    if (selectedNodes.length === 0) {
+      return;
+    }
+
     const latestEdges = getEdges();
     void copyNodesToClipboard(selectedNodes, latestEdges);
   }, [getNodes, getEdges]);
