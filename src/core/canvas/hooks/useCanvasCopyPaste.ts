@@ -169,9 +169,10 @@ export const useCanvasCopyPaste = ({
         const updatedCopiedNodes: Node<CanvasNode>[] = [];
         // Map old node IDs to new node IDs for edge recreation
         const oldToNewNodeIdMap = new Map<string, string>();
+        // Offset applied to both nodes and edge control points
+        const offset = 20;
 
         copiedNodes.forEach((nodeToCopy: Node<CanvasNode>) => {
-          const offset = 20;
           const newPosition = {
             x: nodeToCopy.position.x + offset,
             y: nodeToCopy.position.y + offset,
@@ -196,7 +197,7 @@ export const useCanvasCopyPaste = ({
           updatedCopiedNodes.push(updatedNode);
         });
 
-        // Create new edges with remapped node IDs
+        // Create new edges with remapped node IDs and offset control points
         const newEdges: Edge<EditableEdgeData>[] = [];
         const updatedCopiedEdges: Edge<EditableEdgeData>[] = [];
 
@@ -206,18 +207,37 @@ export const useCanvasCopyPaste = ({
 
           // Both source and target should exist in the map
           if (newSourceId && newTargetId) {
+            // Clone the edge data and offset control points by the same amount as nodes
+            const clonedEdgeData = cloneNode(edgeToCopy.data);
+            if (clonedEdgeData?.controlPoints) {
+              clonedEdgeData.controlPoints = clonedEdgeData.controlPoints.map(
+                (point) => ({
+                  x: point.x + offset,
+                  y: point.y + offset,
+                }),
+              );
+            }
+
             const newEdge: Edge<EditableEdgeData> = {
               ...cloneNode(edgeToCopy),
               id: crypto.randomUUID(),
               source: newSourceId,
               target: newTargetId,
               selected: true,
-              data: cloneNode(edgeToCopy.data),
+              data: clonedEdgeData,
             };
             newEdges.push(newEdge);
 
-            // Update ref for next paste
+            // Update ref for next paste with offset control points
             const updatedEdge = cloneNode(edgeToCopy);
+            if (updatedEdge.data?.controlPoints) {
+              updatedEdge.data.controlPoints = updatedEdge.data.controlPoints.map(
+                (point) => ({
+                  x: point.x + offset,
+                  y: point.y + offset,
+                }),
+              );
+            }
             updatedCopiedEdges.push(updatedEdge);
           }
         });
