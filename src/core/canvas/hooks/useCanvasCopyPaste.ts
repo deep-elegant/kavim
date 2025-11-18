@@ -316,6 +316,7 @@ export const useCanvasCopyPaste = ({
       isImageFile,
       registerAssetFromBytes,
       setNodes,
+      setEdges,
       setSelectedTool,
     ],
   );
