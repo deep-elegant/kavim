@@ -131,7 +131,7 @@ const NodeInteractionOverlay = ({
   onEditingInteractionStart,
   onEditingInteractionEnd,
 }: NodeInteractionOverlayProps) => {
-  const { setNodes, getNodes } = useCanvasData();
+  const { setNodes, getNodes, getEdges } = useCanvasData();
   // The `useLinearHistory` hook provides a function to open the linear history view for a node.
   const { open: openLinearHistory } = useLinearHistory();
   // The `useCanvasUndoRedo` hook provides functions to manage undo/redo state.
@@ -303,8 +303,9 @@ const NodeInteractionOverlay = ({
   const handleCopySelect = useCallback(() => {
     const latestNodes = getNodes() as Node<CanvasNode>[];
     const selectedNodes = latestNodes.filter((node) => node.selected);
-    void copyNodesToClipboard(selectedNodes);
-  }, [getNodes]);
+    const latestEdges = getEdges();
+    void copyNodesToClipboard(selectedNodes, latestEdges);
+  }, [getNodes, getEdges]);
 
   // This function is called when the user selects the "Show Linear History" context menu item.
   // It opens the linear history view for the current node.
