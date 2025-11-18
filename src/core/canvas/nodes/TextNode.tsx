@@ -136,6 +136,7 @@ const TextNodeComponent = memo(
         className="text-slate-900"
         editor={editor}
         contextMenuItems={undefined}
+        allowInteractionsWhileEditing
       >
         <div
           className="relative flex h-full w-full cursor-text items-center"
