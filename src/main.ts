@@ -3,6 +3,7 @@ import Store from "electron-store";
 import registerListeners from "./helpers/ipc/listeners-register";
 import { updateElectronApp } from "update-electron-app";
 import started from 'electron-squirrel-startup';
+import express from "express";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -21,6 +22,8 @@ import {
 
 const inDevelopment = process.env.NODE_ENV === "development";
 const APP_TITLE = "DeepElegant - Kavim";
+let stopRendererServer: (() => void) | null = null;
+let rendererLaunchUrl: string | null = null;
 
 app.setName(APP_TITLE);
 
@@ -87,12 +90,27 @@ function configureMacApp(iconPath: string) {
   Menu.setApplicationMenu(menu);
 }
 
+async function startRendererServer(rendererRoot: string) {
+  const srv = express();
+  srv.use(express.static(rendererRoot));
+  return new Promise<{ port: number; close: () => void }>((resolve) => {
+    const server = srv.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      const port = typeof address === "object" && address ? address.port : 0;
+      resolve({
+        port,
+        close: () => server.close(),
+      });
+    });
+  });
+}
+
 /**
  * Creates the main application window with platform-specific configurations.
  * - Uses custom title bar for modern UI consistency
  * - Context isolation enabled for security (separates renderer from Node.js)
  */
-function createWindow() {
+function createWindow(rendererUrl: string) {
   const preload = path.join(__dirname, "preload.js");
   const iconPath = getIcon();
 
@@ -103,6 +121,7 @@ function createWindow() {
     height: 600,
     title: APP_TITLE,
     webPreferences: {
+      webSecurity: true,
       devTools: inDevelopment,
       contextIsolation: true, // Security: isolate renderer from Node.js context
       nodeIntegration: true,
@@ -122,13 +141,7 @@ function createWindow() {
   registerListeners(mainWindow);
 
   // Dev: use Vite dev server for HMR, Prod: load built files
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
-  } else {
-    mainWindow.loadFile(
-      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
-    );
-  }
+  mainWindow.loadURL(rendererUrl);
   mainWindow.webContents.openDevTools({ mode: "detach" });
 }
 
@@ -145,7 +158,23 @@ async function installExtensions() {
   }
 }
 
-app.whenReady().then(createWindow).then(installExtensions);
+app.whenReady().then(async () => {
+  const rendererRoot = path.join(
+    __dirname,
+    `../renderer/${MAIN_WINDOW_VITE_NAME}`
+  );
+
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    rendererLaunchUrl = MAIN_WINDOW_VITE_DEV_SERVER_URL;
+  } else {
+    const { port, close } = await startRendererServer(rendererRoot);
+    stopRendererServer = close;
+    rendererLaunchUrl = `http://127.0.0.1:${port}/index.html`;
+  }
+
+  createWindow(rendererLaunchUrl);
+  return installExtensions();
+});
 
 // macOS: keep app running when all windows closed (standard behavior)
 app.on("window-all-closed", () => {
@@ -157,6 +186,13 @@ app.on("window-all-closed", () => {
 // macOS: recreate window when dock icon clicked with no windows open
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
-    createWindow();
+    if (rendererLaunchUrl) {
+      createWindow(rendererLaunchUrl);
+    }
   }
+});
+
+app.on("before-quit", () => {
+  stopRendererServer?.();
+  stopRendererServer = null;
 });
