@@ -146,11 +146,11 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
     editorProps: {
       attributes: {
         class: cn(
-          "prose prose-sm w-full max-w-none focus:outline-none",
+          "prose prose-sm w-full max-w-none focus:outline-none leading-tight",
           "prose-h1:text-xl prose-h1:leading-tight",
           "prose-h2:text-lg prose-h2:leading-snug",
           "prose-h3:text-base prose-h3:leading-snug",
-          "prose-p:my-1 prose-p:leading-normal",
+          "prose-p:my-1 prose-p:leading-tight",
           "prose-ul:my-1 prose-ol:my-1",
           "prose-li:my-0",
           "min-h-[1.5rem] border-0 px-3 py-2",

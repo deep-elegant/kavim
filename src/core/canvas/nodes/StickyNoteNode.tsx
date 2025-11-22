@@ -479,6 +479,7 @@ const StickyNoteNode = memo(
                       "[&_.ProseMirror]:px-2",
                       "[&_.ProseMirror]:py-1.5",
                       "[&_.ProseMirror]:leading-[1.2]",
+                      "[&_.ProseMirror]:flex [&_.ProseMirror]:flex-col [&_.ProseMirror]:justify-center",
                     )}
                     style={{
                       color: color.text,
@@ -491,6 +492,7 @@ const StickyNoteNode = memo(
                 <div
                   className={cn(
                     "prose prose-sm w-full max-w-none leading-tight",
+                    "h-full flex flex-col justify-center",
                     "prose-h1:text-xl prose-h1:leading-tight",
                     "prose-h2:text-lg prose-h2:leading-snug",
                     "prose-h3:text-base prose-h3:leading-snug",
@@ -528,6 +530,7 @@ const StickyNoteNode = memo(
                 className={cn(
                   "pointer-events-none absolute inset-0 box-border overflow-hidden opacity-0",
                   "prose prose-sm w-full max-w-none leading-tight",
+                  "h-full flex flex-col justify-center",
                   "prose-h1:text-xl prose-h1:leading-tight",
                   "prose-h2:text-lg prose-h2:leading-snug",
                   "prose-h3:text-base prose-h3:leading-snug",
