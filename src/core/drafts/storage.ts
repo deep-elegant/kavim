@@ -9,6 +9,7 @@ import {
   readPakArchive,
 } from "@/core/pak/pak-utils";
 import { readPak } from "@/core/pak/unpacker";
+import { upgradePak } from "@/core/pak/migrations";
 import { getActivePak, setActivePak, toBuffer } from "@/core/pak/pak-manager";
 import type {
   CleanupDraftsRequest,
@@ -285,7 +286,8 @@ export const listDrafts = async (): Promise<DraftRecord[]> => {
     const archivePath = path.join(directory, fileName);
     try {
       const pak = await readPak(archivePath);
-      drafts.push(manifestToRecord(pak.manifest, archivePath));
+      const upgradedPak = await upgradePak(archivePath, pak);
+      drafts.push(manifestToRecord(upgradedPak.manifest, archivePath));
     } catch (error) {
       console.error(`Failed to inspect draft archive ${archivePath}`, error);
     }

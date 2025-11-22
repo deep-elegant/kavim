@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import { unpack } from "./msgpack";
-import type { PakReadResult } from "./types";
+import type { PakIndexEntry, PakReadResult } from "./types";
 
 /**
  * Reads .pak archives created by packer.ts.
@@ -32,20 +32,25 @@ export const readPak = async (filePath: string): Promise<PakReadResult> => {
     const indexBuffer = Buffer.alloc(indexLength);
     await fd.read(indexBuffer, 0, indexLength, indexOffset);
 
-    const { manifest, entries } = unpack(indexBuffer) as {
+    const decodedIndex = unpack(indexBuffer) as {
       manifest: PakReadResult["manifest"];
-      entries: { path: string; start: number; length: number }[];
+      entries: PakIndexEntry[];
     };
 
     // Load each file using offsets from index
     const files: Record<string, Buffer> = {};
-    for (const entry of entries) {
+    for (const entry of decodedIndex.entries) {
       const buffer = Buffer.alloc(entry.length);
       await fd.read(buffer, 0, entry.length, entry.start);
       files[entry.path] = buffer;
     }
 
-    return { manifest, files, version, fileCount };
+    return {
+      manifest: decodedIndex.manifest,
+      files,
+      version,
+      fileCount,
+    };
   } finally {
     await fd.close();
   }
