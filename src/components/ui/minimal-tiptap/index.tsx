@@ -12,7 +12,6 @@ interface MinimalTiptapProps {
   style?: CSSProperties;
   /**
    * When true (default), the editor stretches to match the container height.
-   * Disable this for text nodes so the caret height follows the actual line height.
    */
   matchContainerHeight?: boolean;
 }
