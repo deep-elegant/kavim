@@ -1,4 +1,4 @@
-import React, { memo, useCallback, useMemo, useRef } from "react";
+import React, { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { type NodeProps, type Node } from "@xyflow/react";
 
 import NodeInteractionOverlay from "./NodeInteractionOverlay";
@@ -122,7 +122,78 @@ const TextNodeComponent = memo(
       handleBlur,
       fontSizeSetting,
       resolvedFontSize,
+      setTypingState,
     } = useNodeAsEditor({ id, data, onStopEditing: handleStopEditing });
+
+    // Switch into typing mode from a key press and replace any existing content.
+    const startTypingFromKey = useCallback(
+      (initialText: string | null) => {
+        setTypingState(true);
+
+        requestAnimationFrame(() => {
+          if (!editor) {
+            return;
+          }
+
+          editor.commands.setContent("");
+          const chain = editor.chain().focus(undefined, {
+            scrollIntoView: false,
+          });
+
+          if (initialText) {
+            chain.insertContent(initialText);
+          }
+
+          chain.run();
+        });
+      },
+      [editor, setTypingState],
+    );
+
+    // When selected but not typing, capture printable keys and restart the editor fresh.
+    useEffect(() => {
+      if (!selected || isTyping) {
+        return;
+      }
+
+      const handleKeyDown = (event: KeyboardEvent) => {
+        const target = event.target as HTMLElement | null;
+        if (
+          target?.closest("input, textarea, select, [contenteditable='true']")
+        ) {
+          return;
+        }
+
+        if (event.defaultPrevented) {
+          return;
+        }
+
+        if (event.metaKey || event.ctrlKey) {
+          return;
+        }
+
+        const { key } = event;
+
+        const isCharacterKey = key.length === 1;
+        const isEnter = key === "Enter";
+
+        if (!isCharacterKey && !isEnter) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        const initialText = isEnter ? null : key;
+        startTypingFromKey(initialText);
+      };
+
+      window.addEventListener("keydown", handleKeyDown, { capture: false });
+      return () => {
+        window.removeEventListener("keydown", handleKeyDown);
+      };
+    }, [isTyping, selected, startTypingFromKey]);
+
     const label = data.label ?? "";
     const containerRef = useRef<HTMLDivElement>(null);
 
