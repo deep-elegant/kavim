@@ -15,7 +15,10 @@ const HEADER_SIZE = 12;
  * Loads .pak file from disk and extracts all contents.
  * - Reads header to find index location, deserializes index, then reads all files.
  */
-export const readPak = async (filePath: string): Promise<PakReadResult> => {
+export const readPak = async (
+  filePath: string,
+  rewriteLegacyIndex = true,
+): Promise<PakReadResult> => {
   const fd = await fs.promises.open(filePath, "r");
 
   try {
@@ -61,7 +64,7 @@ export const readPak = async (filePath: string): Promise<PakReadResult> => {
 
     await fd.close();
 
-    if (legacyJsonIndex) {
+    if (legacyJsonIndex && rewriteLegacyIndex) {
       await rewriteJsonIndexPak(filePath, decodedIndex.manifest, files);
     }
 
