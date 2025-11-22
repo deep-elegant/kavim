@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import { unpack } from "./msgpack";
+import { decodeJsonIndex, rewriteJsonIndexPak } from "./json-to-msgpack";
 import type { PakIndexEntry, PakReadResult } from "./types";
 
 /**
@@ -18,6 +19,8 @@ export const readPak = async (filePath: string): Promise<PakReadResult> => {
   const fd = await fs.promises.open(filePath, "r");
 
   try {
+    let legacyJsonIndex = false;
+
     // Read header to get metadata pointers
     const header = Buffer.alloc(HEADER_SIZE);
     await fd.read(header, 0, HEADER_SIZE, 0);
@@ -32,10 +35,21 @@ export const readPak = async (filePath: string): Promise<PakReadResult> => {
     const indexBuffer = Buffer.alloc(indexLength);
     await fd.read(indexBuffer, 0, indexLength, indexOffset);
 
-    const decodedIndex = unpack(indexBuffer) as {
-      manifest: PakReadResult["manifest"];
-      entries: PakIndexEntry[];
-    };
+    let decodedIndex: { manifest: PakReadResult["manifest"]; entries: PakIndexEntry[] };
+
+    try {
+      decodedIndex = unpack(indexBuffer) as {
+        manifest: PakReadResult["manifest"];
+        entries: PakIndexEntry[];
+      };
+    } catch (error) {
+      const jsonIndex = decodeJsonIndex(indexBuffer);
+      if (!jsonIndex) {
+        throw error;
+      }
+      decodedIndex = jsonIndex;
+      legacyJsonIndex = true;
+    }
 
     // Load each file using offsets from index
     const files: Record<string, Buffer> = {};
@@ -43,6 +57,12 @@ export const readPak = async (filePath: string): Promise<PakReadResult> => {
       const buffer = Buffer.alloc(entry.length);
       await fd.read(buffer, 0, entry.length, entry.start);
       files[entry.path] = buffer;
+    }
+
+    await fd.close();
+
+    if (legacyJsonIndex) {
+      await rewriteJsonIndexPak(filePath, decodedIndex.manifest, files);
     }
 
     return {
