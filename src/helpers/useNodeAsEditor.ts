@@ -1,4 +1,4 @@
-import { useEditor } from "@tiptap/react";
+import { useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import {
   useCallback,
@@ -35,6 +35,7 @@ export type NodeDataWithLabel = {
 export type UseNodeAsEditorParams<T extends NodeDataWithLabel> = {
   id: string;
   data: T;
+  onStopEditing?: (editor: Editor | null) => void;
 };
 
 /**
@@ -47,6 +48,7 @@ export type UseNodeAsEditorParams<T extends NodeDataWithLabel> = {
 export const useNodeAsEditor = <T extends NodeDataWithLabel>({
   id,
   data,
+  onStopEditing,
 }: UseNodeAsEditorParams<T>) => {
   const { setNodes } = useCanvasData();
   const { beginAction, commitAction, isReplaying } = useCanvasUndoRedo();
@@ -285,6 +287,7 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
       return;
     }
     setTypingState(false);
+    onStopEditing?.(editor);
   };
 
   const resolvedFontSize =

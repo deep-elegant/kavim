@@ -8,6 +8,8 @@ import { cn } from "@/utils/tailwind";
 import { useNodeAsEditor } from "@/helpers/useNodeAsEditor";
 import { type FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
 import { useAutoFontSizeObserver } from "./useAutoFontSizeObserver";
+import { useCanvasData } from "@/core/canvas/CanvasDataContext";
+import { type Editor } from "@tiptap/react";
 
 /** Data structure for text nodes with rich text editing capabilities */
 export type TextNodeData = {
@@ -102,6 +104,17 @@ export const textDrawable: DrawableNode<TextNode> = {
  */
 const TextNodeComponent = memo(
   ({ id, data, selected }: NodeProps<TextNode>) => {
+    const { setNodes } = useCanvasData();
+
+    const handleStopEditing = useCallback(
+      (editor: Editor | null) => {
+        if (editor && editor.isEmpty) {
+          setNodes((nodes) => nodes.filter((node) => node.id !== id));
+        }
+      },
+      [id, setNodes],
+    );
+
     const {
       editor,
       isTyping,
@@ -109,7 +122,7 @@ const TextNodeComponent = memo(
       handleBlur,
       fontSizeSetting,
       resolvedFontSize,
-    } = useNodeAsEditor({ id, data });
+    } = useNodeAsEditor({ id, data, onStopEditing: handleStopEditing });
     const label = data.label ?? "";
     const containerRef = useRef<HTMLDivElement>(null);
 
