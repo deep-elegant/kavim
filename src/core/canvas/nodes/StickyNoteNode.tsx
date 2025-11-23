@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { type NodeProps, type Node } from "@xyflow/react";
+import { type Editor } from "@tiptap/react";
 
 import NodeInteractionOverlay from "./NodeInteractionOverlay";
 import { type DrawableNode } from "./DrawableNode";
@@ -12,6 +13,7 @@ import { cn } from "@/utils/tailwind";
 import {
   useClickToEditHandler,
   useNodeAsEditor,
+  useEditorFocusAtClick,
 } from "@/helpers/useNodeAsEditor";
 import {
   SimpleColorPicker,
@@ -153,6 +155,8 @@ export const stickyNoteDrawable: DrawableNode<StickyNoteNodeType> = {
  */
 const StickyNoteNode = memo(
   ({ id, data, selected }: NodeProps<StickyNoteNodeType>) => {
+    const { handleStartEditing, handleFocus } = useEditorFocusAtClick();
+
     const {
       editor,
       isTyping,
@@ -162,11 +166,12 @@ const StickyNoteNode = memo(
       setTypingState,
       fontSizeSetting,
       resolvedFontSize,
-    } = useNodeAsEditor({ id, data });
+    } = useNodeAsEditor({ id, data, onFocus: handleFocus });
     const handleClickToEdit = useClickToEditHandler(
       selected,
       isTyping,
       setTypingState,
+      handleStartEditing,
     );
     // Get the `performAction` function to wrap mutations in undoable actions.
     const { performAction } = useCanvasUndoRedo();

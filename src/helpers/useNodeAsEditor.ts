@@ -36,6 +36,7 @@ export type UseNodeAsEditorParams<T extends NodeDataWithLabel> = {
   id: string;
   data: T;
   onStopEditing?: (editor: Editor | null) => void;
+  onFocus?: (editor: Editor) => void;
 };
 
 /**
@@ -49,6 +50,7 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
   id,
   data,
   onStopEditing,
+  onFocus,
 }: UseNodeAsEditorParams<T>) => {
   const { setNodes } = useCanvasData();
   const { beginAction, commitAction, isReplaying } = useCanvasUndoRedo();
@@ -170,7 +172,7 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
         },
       },
     },
-  });
+  );
 
   useEffect(() => {
     fontSizeSettingRef.current = fontSizeSetting;
@@ -229,14 +231,18 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
         editor.view.dom.classList.add("nodrag");
         requestAnimationFrame(() => {
           if (!editor.isDestroyed && !editor.isFocused) {
-            editor.commands.focus(undefined, { scrollIntoView: false });
+            if (onFocus) {
+              onFocus(editor);
+            } else {
+              editor.commands.focus(undefined, { scrollIntoView: false });
+            }
           }
         });
       } else {
         editor.view.dom.classList.remove("nodrag");
       }
     }
-  }, [isTyping, editor]);
+  }, [isTyping, editor, onFocus]);
 
   /**
    * Sets typing state for this node and clears it for all others.
@@ -337,6 +343,7 @@ export const useClickToEditHandler = (
   selected: boolean,
   isTyping: boolean,
   setTypingState: (value: boolean) => void,
+  onStartEditing?: (event: MouseEvent<HTMLDivElement>) => void,
 ) =>
   useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
@@ -345,7 +352,42 @@ export const useClickToEditHandler = (
       }
 
       event.stopPropagation();
+      onStartEditing?.(event);
       setTypingState(true);
     },
-    [isTyping, selected, setTypingState],
+    [isTyping, selected, setTypingState, onStartEditing],
   );
+
+/**
+ * Hook to manage setting the editor focus at the specific click position.
+ * Returns handlers to capture the click event and to set focus on the editor.
+ */
+export const useEditorFocusAtClick = () => {
+  const clickPositionRef = useRef<{ x: number; y: number } | null>(null);
+
+  const handleStartEditing = useCallback(
+    (event: MouseEvent<HTMLElement>) => {
+      clickPositionRef.current = { x: event.clientX, y: event.clientY };
+    },
+    [],
+  );
+
+  const handleFocus = useCallback((editor: Editor) => {
+    if (clickPositionRef.current) {
+      const pos = editor.view.posAtCoords({
+        left: clickPositionRef.current.x,
+        top: clickPositionRef.current.y,
+      });
+      if (pos) {
+        editor.commands.focus(pos.pos);
+      } else {
+        editor.commands.focus(undefined, { scrollIntoView: false });
+      }
+      clickPositionRef.current = null;
+    } else {
+      editor.commands.focus(undefined, { scrollIntoView: false });
+    }
+  }, []);
+
+  return { handleStartEditing, handleFocus };
+};

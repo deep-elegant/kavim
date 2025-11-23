@@ -1,11 +1,16 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { type NodeProps, type Node } from "@xyflow/react";
+import { type Editor } from "@tiptap/react";
 
 import { cn } from "@/utils/tailwind";
 
 import NodeInteractionOverlay from "./NodeInteractionOverlay";
 import { type DrawableNode } from "./DrawableNode";
-import { useNodeAsEditor } from "@/helpers/useNodeAsEditor";
+import {
+  useClickToEditHandler,
+  useNodeAsEditor,
+  useEditorFocusAtClick,
+} from "@/helpers/useNodeAsEditor";
 import { MinimalTiptap } from "@/components/ui/minimal-tiptap";
 import {
   defaultToolbarItems,
@@ -122,6 +127,8 @@ export const shapeDrawable: DrawableNode<ShapeNode> = {
  */
 const ShapeNodeComponent = memo(
   ({ id, data, selected }: NodeProps<ShapeNode>) => {
+    const { handleStartEditing, handleFocus } = useEditorFocusAtClick();
+
     const {
       editor,
       isTyping,
@@ -131,7 +138,7 @@ const ShapeNodeComponent = memo(
       setTypingState,
       fontSizeSetting,
       resolvedFontSize,
-    } = useNodeAsEditor({ id, data });
+    } = useNodeAsEditor({ id, data, onFocus: handleFocus });
     // Get the `performAction` function to wrap mutations in undoable actions.
     const { performAction } = useCanvasUndoRedo();
     const { label = "", shapeType } = data;
@@ -312,6 +319,13 @@ const ShapeNodeComponent = memo(
       shapeType === "circle" ? CIRCLE_MIN_SIZE : RECTANGLE_MIN_HEIGHT;
     const textAlignClass = shapeType === "circle" ? "text-center" : "text-left";
 
+    const handleClickToEdit = useClickToEditHandler(
+      selected,
+      isTyping,
+      setTypingState,
+      handleStartEditing,
+    );
+
     return (
       <NodeInteractionOverlay
         nodeId={id}
@@ -337,6 +351,7 @@ const ShapeNodeComponent = memo(
           onDoubleClick={handleDoubleClick}
           onBlur={handleBlur}
           role="presentation"
+          onClick={handleClickToEdit}
         >
           <div
             className={cn("flex h-full w-full")}

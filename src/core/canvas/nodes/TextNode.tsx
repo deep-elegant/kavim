@@ -8,6 +8,7 @@ import { cn } from "@/utils/tailwind";
 import {
   useClickToEditHandler,
   useNodeAsEditor,
+  useEditorFocusAtClick,
 } from "@/helpers/useNodeAsEditor";
 import { type FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
 import { useAutoFontSizeObserver } from "./useAutoFontSizeObserver";
@@ -118,6 +119,8 @@ const TextNodeComponent = memo(
       [id, setNodes],
     );
 
+    const { handleStartEditing, handleFocus } = useEditorFocusAtClick();
+
     const {
       editor,
       isTyping,
@@ -126,11 +129,17 @@ const TextNodeComponent = memo(
       fontSizeSetting,
       resolvedFontSize,
       setTypingState,
-    } = useNodeAsEditor({ id, data, onStopEditing: handleStopEditing });
+    } = useNodeAsEditor({
+      id,
+      data,
+      onStopEditing: handleStopEditing,
+      onFocus: handleFocus,
+    });
     const handleClickToEdit = useClickToEditHandler(
       selected,
       isTyping,
       setTypingState,
+      handleStartEditing,
     );
 
     // Switch into typing mode from a key press and replace any existing content.
