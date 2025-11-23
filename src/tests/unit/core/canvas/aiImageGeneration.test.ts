@@ -3,7 +3,10 @@ import type { Edge, Node } from "@xyflow/react";
 
 import { createAiImageGenerationManager } from "@/core/canvas/utils/aiImageGeneration";
 import { type AiNodeData } from "@/core/canvas/nodes/AINode";
-import { IMAGE_NODE_MIN_HEIGHT, IMAGE_NODE_MIN_WIDTH } from "@/core/canvas/nodes/ImageNode";
+import {
+  IMAGE_NODE_MIN_HEIGHT,
+  IMAGE_NODE_MIN_WIDTH,
+} from "@/core/canvas/nodes/ImageNode";
 import { type EditableEdgeData } from "@/core/canvas/edges/EditableEdge";
 
 const flushPromises = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -21,13 +24,15 @@ describe("createAiImageGenerationManager", () => {
     dragging: false,
   };
 
-  it("materializes placeholders with optional owner and repositions nodes", () => {
+  it("creates a placeholder node next to the anchor and links an edge with metadata", () => {
     let nodes: Node[] = [baseAiNode];
     const setNodes = (updater: (current: Node[]) => Node[]) => {
       nodes = updater(nodes);
     };
     let edges: Edge<EditableEdgeData>[] = [];
-    const setEdges = (updater: (current: Edge<EditableEdgeData>[]) => Edge<EditableEdgeData>[]) => {
+    const setEdges = (
+      updater: (current: Edge<EditableEdgeData>[]) => Edge<EditableEdgeData>[],
+    ) => {
       edges = updater(edges);
     };
 
@@ -44,29 +49,38 @@ describe("createAiImageGenerationManager", () => {
       setEdges,
       edgeSourceId: baseAiNode.id,
       edgeSourceHandle: "right-source",
-      buildEdgeMetadata: vi.fn(),
+      buildEdgeMetadata: vi.fn().mockReturnValue({ meta: "data" }),
       onImageProcessingError: vi.fn(),
     });
 
-    manager.handlePlaceholderBlock({
-      type: "image-placeholder",
-      asset: { path: "asset-1", uri: "placeholder", fileName: "image.png" },
-    });
+    manager.handlePlaceholderBlock();
 
     expect(nodes).toHaveLength(2);
     const placeholder = nodes.find((node) => node.type === "llm-file-placeholder");
     expect(placeholder).toBeTruthy();
     expect(placeholder?.position).toEqual({ x: 440, y: 0 });
-    expect(edges).toHaveLength(0);
+    expect(placeholder?.style?.width).toBe(IMAGE_NODE_MIN_WIDTH);
+    expect(placeholder?.style?.height).toBe(IMAGE_NODE_MIN_HEIGHT);
+
+    expect(edges).toHaveLength(1);
+    const [edge] = edges;
+    expect(edge?.source).toBe("source");
+    expect(edge?.target).toBe(placeholder?.id);
+    expect(edge?.sourceHandle).toBe("right-source");
+    expect(edge?.targetHandle).toBe("left-target");
+    expect(edge?.data?.targetMarker).toBe("arrow");
+    expect(edge?.data?.metadata).toEqual({ meta: "data" });
   });
 
-  it("converts placeholders to image nodes and links edges with metadata", async () => {
+  it("materializes an image node using resolved size and preserves the edge", async () => {
     let nodes: Node[] = [baseAiNode];
     const setNodes = (updater: (current: Node[]) => Node[]) => {
       nodes = updater(nodes);
     };
     let edges: Edge<EditableEdgeData>[] = [];
-    const setEdges = (updater: (current: Edge<EditableEdgeData>[]) => Edge<EditableEdgeData>[]) => {
+    const setEdges = (
+      updater: (current: Edge<EditableEdgeData>[]) => Edge<EditableEdgeData>[],
+    ) => {
       edges = updater(edges);
     };
 
@@ -93,10 +107,7 @@ describe("createAiImageGenerationManager", () => {
       }),
     });
 
-    manager.handlePlaceholderBlock({
-      type: "image-placeholder",
-      asset: { path: "asset-2", uri: "placeholder", fileName: "image.png" },
-    });
+    manager.handlePlaceholderBlock();
 
     manager.handleImageBlock({
       type: "image",
@@ -111,6 +122,10 @@ describe("createAiImageGenerationManager", () => {
     expect(imageNode?.position).toEqual({ x: 440, y: 0 });
     expect(imageNode?.width).toBe(IMAGE_NODE_MIN_WIDTH + 20);
     expect((imageNode?.data as { src?: string }).src).toBe("image://uri");
+    expect((imageNode?.data as { alt?: string }).alt).toBe("description");
+    expect((imageNode?.data as { fileName?: string }).fileName).toBe("image.png");
+    expect((imageNode?.data as { naturalWidth?: number }).naturalWidth).toBe(500);
+    expect((imageNode?.data as { naturalHeight?: number }).naturalHeight).toBe(400);
 
     expect(edges).toHaveLength(1);
     const [edge] = edges;
@@ -122,20 +137,22 @@ describe("createAiImageGenerationManager", () => {
     });
   });
 
-  it("skips updates when the request is no longer current", async () => {
+  it("removes placeholder and edge and reports an error when image processing fails", async () => {
     let nodes: Node[] = [baseAiNode];
     const setNodes = (updater: (current: Node[]) => Node[]) => {
       nodes = updater(nodes);
     };
     let edges: Edge<EditableEdgeData>[] = [];
-    const setEdges = (updater: (current: Edge<EditableEdgeData>[]) => Edge<EditableEdgeData>[]) => {
+    const setEdges = (
+      updater: (current: Edge<EditableEdgeData>[]) => Edge<EditableEdgeData>[],
+    ) => {
       edges = updater(edges);
     };
 
-    let isCurrent = true;
+    const onError = vi.fn();
     const manager = createAiImageGenerationManager({
       supportsImageOutput: true,
-      isRequestCurrent: () => isCurrent,
+      isRequestCurrent: () => true,
       getAnchorNode: (currentNodes) =>
         currentNodes.find(
           (node): node is Node<AiNodeData> => node.id === baseAiNode.id && node.type === "ai-node",
@@ -145,23 +162,22 @@ describe("createAiImageGenerationManager", () => {
       setNodes,
       setEdges,
       edgeSourceId: baseAiNode.id,
-      onImageProcessingError: vi.fn(),
+      onImageProcessingError: onError,
+      resolveImageSize: vi.fn().mockRejectedValue(new Error("boom")),
     });
 
-    manager.handlePlaceholderBlock({
-      type: "image-placeholder",
-      asset: { path: "asset-3", uri: "placeholder", fileName: "image.png" },
-    });
-
-    isCurrent = false;
+    manager.handlePlaceholderBlock();
     manager.handleImageBlock({
       type: "image",
-      asset: { path: "asset-3", uri: "image://uri", fileName: "image.png" },
+      asset: { path: "asset", uri: "image://uri", fileName: "file.png" },
     });
 
     await flushPromises();
 
-    expect(nodes.find((node) => node.type === "image-node")).toBeUndefined();
+    expect(nodes).toHaveLength(1);
+    expect(nodes[0].id).toBe(baseAiNode.id);
     expect(edges).toHaveLength(0);
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onError.mock.calls[0][0]).toEqual(expect.any(Error));
   });
 });
