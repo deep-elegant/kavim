@@ -9,7 +9,10 @@ import {
   type ToolbarItem,
 } from "@/components/ui/minimal-tiptap/TiptapToolbar";
 import { cn } from "@/utils/tailwind";
-import { useNodeAsEditor } from "@/helpers/useNodeAsEditor";
+import {
+  useClickToEditHandler,
+  useNodeAsEditor,
+} from "@/helpers/useNodeAsEditor";
 import {
   SimpleColorPicker,
   type ColorStyle,
@@ -160,6 +163,11 @@ const StickyNoteNode = memo(
       fontSizeSetting,
       resolvedFontSize,
     } = useNodeAsEditor({ id, data });
+    const handleClickToEdit = useClickToEditHandler(
+      selected,
+      isTyping,
+      setTypingState,
+    );
     // Get the `performAction` function to wrap mutations in undoable actions.
     const { performAction } = useCanvasUndoRedo();
     const label = data.label ?? "";
@@ -444,6 +452,7 @@ const StickyNoteNode = memo(
       >
         <div
           className="relative h-full w-full"
+          onClick={handleClickToEdit}
           onDoubleClick={handleDoubleClick}
           onBlur={handleBlur}
           role="presentation"

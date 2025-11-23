@@ -5,7 +5,10 @@ import NodeInteractionOverlay from "./NodeInteractionOverlay";
 import { type DrawableNode } from "./DrawableNode";
 import { MinimalTiptap } from "@/components/ui/minimal-tiptap";
 import { cn } from "@/utils/tailwind";
-import { useNodeAsEditor } from "@/helpers/useNodeAsEditor";
+import {
+  useClickToEditHandler,
+  useNodeAsEditor,
+} from "@/helpers/useNodeAsEditor";
 import { type FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
 import { useAutoFontSizeObserver } from "./useAutoFontSizeObserver";
 import { useCanvasData } from "@/core/canvas/CanvasDataContext";
@@ -124,6 +127,11 @@ const TextNodeComponent = memo(
       resolvedFontSize,
       setTypingState,
     } = useNodeAsEditor({ id, data, onStopEditing: handleStopEditing });
+    const handleClickToEdit = useClickToEditHandler(
+      selected,
+      isTyping,
+      setTypingState,
+    );
 
     // Switch into typing mode from a key press and replace any existing content.
     const startTypingFromKey = useCallback(
@@ -260,6 +268,7 @@ const TextNodeComponent = memo(
       >
         <div
           className="relative flex h-full w-full cursor-text items-center"
+          onClick={handleClickToEdit}
           onDoubleClick={handleDoubleClick}
           onBlur={handleBlur}
           role="presentation"

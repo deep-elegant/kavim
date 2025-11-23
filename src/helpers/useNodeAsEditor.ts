@@ -304,3 +304,24 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
     resolvedFontSize,
   };
 };
+
+/**
+ * Shared click-to-edit handler used by text-like nodes.
+ * - Enters typing mode on a second click when the node is already selected.
+ */
+export const useClickToEditHandler = (
+  selected: boolean,
+  isTyping: boolean,
+  setTypingState: (value: boolean) => void,
+) =>
+  useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      if (!selected || isTyping) {
+        return;
+      }
+
+      event.stopPropagation();
+      setTypingState(true);
+    },
+    [isTyping, selected, setTypingState],
+  );
