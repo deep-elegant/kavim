@@ -5,6 +5,7 @@ import { addFileSystemEventListeners } from "./file-system/file-system-listeners
 import { addLlmEventListeners } from "./llm/llm-listeners";
 import { addDraftEventListeners } from "./drafts/draft-listeners";
 import { addAppEventListeners } from "./app/app-listeners";
+import { addClipboardEventListeners } from "./clipboard/clipboard-listeners";
 
 let globalListenersRegistered = false;
 
@@ -20,6 +21,7 @@ export default function registerListeners(mainWindow: BrowserWindow) {
   addLlmEventListeners();
   addDraftEventListeners();
   addAppEventListeners();
+  addClipboardEventListeners();
 
   globalListenersRegistered = true;
 }
