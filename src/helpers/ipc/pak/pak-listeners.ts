@@ -27,11 +27,8 @@ import {
   PAK_GET_ASSET_CHANNEL,
   PAK_HAS_ASSET_CHANNEL,
 } from "./pak-channels";
-import {
-  buildManifest,
-  createPakArchive,
-  getCanvasFromPak,
-} from "@/core/pak/pak-utils";
+import { buildManifest, createPakArchive, getCanvasFromPak } from "@/core/pak/pak-utils";
+import { upgradePak } from "@/core/pak/migrations";
 
 export interface PakAssetDataResult {
   path: string;
@@ -86,17 +83,19 @@ const savePakFile = async (
   await createPakArchive(outputPath, payload.canvas, manifest, assets);
 
   const pak = await readPak(outputPath);
-  setActivePak({ ...pak, filePath: outputPath });
-  const canvas = getCanvasFromPak(pak.files);
+  const upgradedPak = await upgradePak(outputPath, pak);
+  setActivePak({ ...upgradedPak, filePath: outputPath });
+  const canvas = getCanvasFromPak(upgradedPak.files);
 
-  return { manifest: pak.manifest, canvas, filePath: outputPath };
+  return { manifest: upgradedPak.manifest, canvas, filePath: outputPath };
 };
 
 const loadPakFile = async (filePath: string): Promise<PakOperationResult> => {
   const pak = await readPak(filePath);
-  setActivePak({ ...pak, filePath });
-  const canvas = getCanvasFromPak(pak.files);
-  return { manifest: pak.manifest, canvas, filePath };
+  const upgradedPak = await upgradePak(filePath, pak);
+  setActivePak({ ...upgradedPak, filePath });
+  const canvas = getCanvasFromPak(upgradedPak.files);
+  return { manifest: upgradedPak.manifest, canvas, filePath };
 };
 
 export const getAssetData = (assetPath: string): PakAssetDataResult | null => {

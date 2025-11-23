@@ -3,6 +3,7 @@ import type { Node } from "@xyflow/react";
 import type { CanvasSnapshot, PakAssetInput, PakManifest } from "./types";
 import { createPak } from "./packer";
 import { readPak } from "./unpacker";
+import { upgradePak } from "./migrations";
 import { ImageNodeType } from "@/core/canvas/nodes/ImageNode";
 
 /**
@@ -158,10 +159,11 @@ const createPakArchive = async (
  */
 const readPakArchive = async (filePath: string) => {
   const pak = await readPak(filePath);
+  const upgradedPak = await upgradePak(filePath, pak);
   return {
-    ...pak,
+    ...upgradedPak,
     filePath,
-    canvas: getCanvasFromPak(pak.files),
+    canvas: getCanvasFromPak(upgradedPak.files),
   };
 };
 
