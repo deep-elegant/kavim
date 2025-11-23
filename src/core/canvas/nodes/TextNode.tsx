@@ -264,7 +264,6 @@ const TextNodeComponent = memo(
         className="text-slate-900"
         editor={editor}
         contextMenuItems={undefined}
-        allowInteractionsWhileEditing
       >
         <div
           className="relative flex h-full w-full cursor-text items-center"
@@ -280,14 +279,15 @@ const TextNodeComponent = memo(
             {isTyping ? (
               // Stop propagation to prevent node dragging while editing
               <div
-                className="h-full w-full"
+                className="h-full w-full nodrag"
                 onMouseDown={(e) => e.stopPropagation()}
+                onPointerDownCapture={(e) => e.stopPropagation()}
               >
                 <MinimalTiptap
                   editor={editor}
                   theme="transparent"
                   className={cn(
-                    "h-full w-full",
+                    "h-full w-full cursor-text nodrag",
                     "[&_.ProseMirror]:flex [&_.ProseMirror]:flex-col [&_.ProseMirror]:justify-center",
                     "[&_.ProseMirror]:py-1",
                     "[&_.ProseMirror_p]:my-0",

@@ -148,6 +148,7 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
     editorProps: {
       attributes: {
         class: cn(
+          "nodrag cursor-text",
           "prose prose-sm w-full max-w-none focus:outline-none leading-tight",
           "prose-h1:text-xl prose-h1:leading-tight",
           "prose-h2:text-lg prose-h2:leading-snug",
@@ -157,6 +158,16 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
           "prose-li:my-0",
           "min-h-[1.5rem] border-0 px-3 py-2",
         ),
+      },
+      handleDOMEvents: {
+        mousedown: (_view, event) => {
+          event.stopPropagation();
+          return false;
+        },
+        pointerdown: (_view, event) => {
+          event.stopPropagation();
+          return false;
+        },
       },
     },
   });
@@ -197,7 +208,16 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
   // Sync label content into editor when changed externally (e.g., undo/redo, collaboration)
   useEffect(() => {
     if (editor && label !== editor.getHTML()) {
+      const { from, to } = editor.state.selection;
+      const wasFocused = editor.isFocused;
+
       editor.commands.setContent(label, false);
+
+      if (wasFocused) {
+        const clampedFrom = Math.min(from, editor.state.doc.content.size);
+        const clampedTo = Math.min(to, editor.state.doc.content.size);
+        editor.commands.setTextSelection({ from: clampedFrom, to: clampedTo });
+      }
     }
   }, [label, editor]);
 
@@ -207,7 +227,11 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
       editor.setEditable(isTyping);
       if (isTyping) {
         editor.view.dom.classList.add("nodrag");
-        editor.commands.focus("end");
+        requestAnimationFrame(() => {
+          if (!editor.isDestroyed && !editor.isFocused) {
+            editor.commands.focus(undefined, { scrollIntoView: false });
+          }
+        });
       } else {
         editor.view.dom.classList.remove("nodrag");
       }

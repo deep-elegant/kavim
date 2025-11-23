@@ -322,7 +322,6 @@ const ShapeNodeComponent = memo(
         editor={editor}
         toolbarItems={toolbarItems}
         contextMenuItems={undefined}
-        allowInteractionsWhileEditing
         onEditingInteractionStart={handleEditingInteractionStart}
         onEditingInteractionEnd={handleEditingInteractionEnd}
       >
@@ -347,13 +346,17 @@ const ShapeNodeComponent = memo(
               {isTyping ? (
                 // Stop propagation to prevent node dragging while editing
                 <div
-                  className="h-full w-full"
+                  className="h-full w-full nodrag"
                   onMouseDown={(e) => e.stopPropagation()}
+                  onPointerDownCapture={(e) => e.stopPropagation()}
                 >
                   <MinimalTiptap
                     editor={editor}
                     theme="transparent"
-                    className={cn("h-full w-full", textAlignClass)}
+                    className={cn(
+                      "h-full w-full cursor-text nodrag",
+                      textAlignClass,
+                    )}
                     style={{
                       color: color.text,
                       fontSize: `${resolvedFontSize}px`,

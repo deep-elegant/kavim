@@ -63,6 +63,19 @@ export function useAiPromptEditor({
         onChangeRef.current(html, editor.getText());
       },
       editorProps: {
+        attributes: {
+          class: "nodrag cursor-text",
+        },
+        handleDOMEvents: {
+          mousedown: (_view, event) => {
+            event.stopPropagation();
+            return false;
+          },
+          pointerdown: (_view, event) => {
+            event.stopPropagation();
+            return false;
+          },
+        },
         handleKeyDown: (_view, event) => {
           if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
             event.preventDefault();

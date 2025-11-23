@@ -446,7 +446,6 @@ const StickyNoteNode = memo(
         editor={editor}
         toolbarItems={toolbarItems}
         contextMenuItems={undefined}
-        allowInteractionsWhileEditing
         onEditingInteractionStart={handleEditingInteractionStart}
         onEditingInteractionEnd={handleEditingInteractionEnd}
       >
@@ -476,14 +475,15 @@ const StickyNoteNode = memo(
             <div className="relative h-full w-full">
               {isTyping ? (
                 <div
-                  className="h-full w-full"
+                  className="h-full w-full nodrag"
                   onMouseDown={(e) => e.stopPropagation()}
+                  onPointerDownCapture={(e) => e.stopPropagation()}
                 >
                   <MinimalTiptap
                     editor={editor}
                     theme="transparent"
                     className={cn(
-                      "h-full w-full leading-tight",
+                      "h-full w-full leading-tight cursor-text nodrag",
                       "[&_.ProseMirror]:min-h-0",
                       "[&_.ProseMirror]:px-2",
                       "[&_.ProseMirror]:py-1.5",
