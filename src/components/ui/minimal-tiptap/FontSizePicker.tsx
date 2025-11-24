@@ -12,10 +12,9 @@ import {
   type FontSizeStorage,
 } from "@/components/ui/minimal-tiptap/FontSizePlugin";
 
-type PresetSize = { label: string; value: number | "auto" };
+type PresetSize = { label: string; value: number };
 
 const FONT_SIZES: PresetSize[] = [
-  { label: "Auto", value: "auto" },
   { label: "8", value: 8 },
   { label: "12", value: 12 },
   { label: "16", value: 16 },
@@ -39,25 +38,20 @@ export const FontSizePicker = ({ editor }: { editor: Editor | null }) => {
     return editor.storage.fontSize as FontSizeStorage | undefined;
   }, [editor]);
 
-  const mode = storage?.mode ?? "auto";
-  const manualSize = storage?.value ?? DEFAULT_FONT_SIZE;
+  const currentSize = storage?.value ?? DEFAULT_FONT_SIZE;
+
   useEffect(() => {
     setDraftValue(null);
-  }, [mode, manualSize]);
+  }, [currentSize]);
 
   if (!editor) {
     return null;
   }
 
-  const displayValue =
-    draftValue ?? (mode === "auto" ? "Auto" : formatSize(manualSize));
+  const displayValue = draftValue ?? formatSize(currentSize);
 
-  const handleSizeSelect = (value: PresetSize["value"]) => {
-    if (value === "auto") {
-      editor.commands.setAutoFontSize();
-    } else {
-      editor.commands.setFontSize(value);
-    }
+  const handleSizeSelect = (value: number) => {
+    editor.commands.setFontSize(value, "user");
     setDraftValue(null);
     setIsOpen(false);
   };
@@ -72,7 +66,7 @@ export const FontSizePicker = ({ editor }: { editor: Editor | null }) => {
     const input = (draftValue ?? event.currentTarget.value).trim();
     const parsed = Number.parseFloat(input);
     if (Number.isFinite(parsed) && parsed > 0) {
-      editor.commands.setFontSize(parsed);
+      editor.commands.setFontSize(parsed, "user");
       setDraftValue(null);
       setIsOpen(false);
     }
@@ -87,8 +81,7 @@ export const FontSizePicker = ({ editor }: { editor: Editor | null }) => {
       if (current !== null) {
         return current;
       }
-
-      return mode === "auto" ? "" : formatSize(manualSize);
+      return formatSize(currentSize);
     });
   };
 
@@ -97,7 +90,6 @@ export const FontSizePicker = ({ editor }: { editor: Editor | null }) => {
       if (current === null) {
         return current;
       }
-
       return current.trim().length === 0 ? null : current;
     });
   };
@@ -122,10 +114,7 @@ export const FontSizePicker = ({ editor }: { editor: Editor | null }) => {
       >
         <div className="flex flex-col">
           {FONT_SIZES.map((size) => {
-            const isActive =
-              size.value === "auto"
-                ? mode === "auto"
-                : mode === "fixed" && Math.round(manualSize) === size.value;
+            const isActive = Math.round(currentSize) === size.value;
 
             return (
               <Button
@@ -134,7 +123,7 @@ export const FontSizePicker = ({ editor }: { editor: Editor | null }) => {
                 className="justify-start"
                 onClick={() => handleSizeSelect(size.value)}
               >
-                {size.value === "auto" ? "Auto" : size.label}
+                {size.label}
               </Button>
             );
           })}

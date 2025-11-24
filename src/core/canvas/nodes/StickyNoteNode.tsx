@@ -1,5 +1,6 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef } from "react";
-import { type NodeProps, type Node } from "@xyflow/react";
+import { type NodeProps, type Node, useReactFlow } from "@xyflow/react";
+import { type Editor } from "@tiptap/react";
 
 import NodeInteractionOverlay from "./NodeInteractionOverlay";
 import { type DrawableNode } from "./DrawableNode";
@@ -9,14 +10,21 @@ import {
   type ToolbarItem,
 } from "@/components/ui/minimal-tiptap/TiptapToolbar";
 import { cn } from "@/utils/tailwind";
-import { useNodeAsEditor } from "@/helpers/useNodeAsEditor";
+import {
+  useClickToEditHandler,
+  useNodeAsEditor,
+  useEditorFocusAtClick,
+} from "@/helpers/useNodeAsEditor";
 import {
   SimpleColorPicker,
   type ColorStyle,
 } from "@/components/ui/simple-color-picker";
 import { ShapePicker } from "@/components/ui/ShapePicker";
-import { type FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
-import { useAutoFontSizeObserver } from "./useAutoFontSizeObserver";
+import {
+  type FontSizeSetting,
+  DEFAULT_FONT_SIZE,
+} from "@/components/ui/minimal-tiptap/FontSizePlugin";
+import { useTextNodeSizing } from "./useTextNodeSizing";
 import { useCanvasUndoRedo } from "../undo";
 import { Z } from "./nodesZindex";
 
@@ -74,7 +82,7 @@ export const stickyNoteDrawable: DrawableNode<StickyNoteNodeType> = {
       label: "",
       isTyping: false,
       color: defaultColor,
-      fontSize: "auto",
+      fontSize: DEFAULT_FONT_SIZE,
       shape: "rectangle",
     },
     width: DEFAULT_NOTE_SIZE,
@@ -150,6 +158,41 @@ export const stickyNoteDrawable: DrawableNode<StickyNoteNodeType> = {
  */
 const StickyNoteNode = memo(
   ({ id, data, selected }: NodeProps<StickyNoteNodeType>) => {
+    const { setNodes } = useReactFlow();
+    const { handleStartEditing, handleFocus } = useEditorFocusAtClick();
+
+    const handleFontSizeChange = useCallback(
+      (newSize: number, previousSize: number) => {
+        setNodes((nodes) =>
+          nodes.map((node) => {
+            if (node.id !== id) return node;
+
+            const ratio = newSize / previousSize;
+            const width = Math.max(
+              MIN_WIDTH,
+              (Number(node.width) || MIN_WIDTH) * ratio,
+            );
+            const height = Math.max(
+              MIN_HEIGHT,
+              (Number(node.height) || MIN_HEIGHT) * ratio,
+            );
+
+            return {
+              ...node,
+              width,
+              height,
+              style: {
+                ...node.style,
+                width,
+                height,
+              },
+            };
+          }),
+        );
+      },
+      [id, setNodes],
+    );
+
     const {
       editor,
       isTyping,
@@ -158,8 +201,18 @@ const StickyNoteNode = memo(
       updateNodeData,
       setTypingState,
       fontSizeSetting,
-      resolvedFontSize,
-    } = useNodeAsEditor({ id, data });
+    } = useNodeAsEditor({
+      id,
+      data,
+      onFocus: handleFocus,
+      onFontSizeChange: handleFontSizeChange,
+    });
+    const handleClickToEdit = useClickToEditHandler(
+      selected,
+      isTyping,
+      setTypingState,
+      handleStartEditing,
+    );
     // Get the `performAction` function to wrap mutations in undoable actions.
     const { performAction } = useCanvasUndoRedo();
     const label = data.label ?? "";
@@ -235,7 +288,7 @@ const StickyNoteNode = memo(
             return;
           }
 
-          editor.commands.setContent("", true);
+          editor.commands.setContent("", { emitUpdate: true });
           const chain = editor.chain().focus(undefined, {
             scrollIntoView: false,
           });
@@ -321,12 +374,11 @@ const StickyNoteNode = memo(
       [],
     );
 
-    useAutoFontSizeObserver({
+    useTextNodeSizing({
       editor,
-      fontSize: fontSizeSetting,
       html: displayHtml,
-      containerRef,
-      measurementRef,
+      containerRef: containerRef as React.RefObject<HTMLElement>,
+      measurementRef: measurementRef as React.RefObject<HTMLElement>,
       maxSize: getAutoFontCap,
     });
 
@@ -438,12 +490,12 @@ const StickyNoteNode = memo(
         editor={editor}
         toolbarItems={toolbarItems}
         contextMenuItems={undefined}
-        allowInteractionsWhileEditing
         onEditingInteractionStart={handleEditingInteractionStart}
         onEditingInteractionEnd={handleEditingInteractionEnd}
       >
         <div
           className="relative h-full w-full"
+          onClick={handleClickToEdit}
           onDoubleClick={handleDoubleClick}
           onBlur={handleBlur}
           role="presentation"
@@ -462,27 +514,34 @@ const StickyNoteNode = memo(
           <div
             ref={containerRef}
             className={cn("flex")}
-            style={{ ...textContainerStyles, color: color.text }}
+            style={
+              {
+                ...textContainerStyles,
+                color: color.text,
+              } as React.CSSProperties
+            }
           >
             <div className="relative h-full w-full">
               {isTyping ? (
                 <div
-                  className="h-full w-full"
+                  className="h-full w-full nodrag"
                   onMouseDown={(e) => e.stopPropagation()}
+                  onPointerDownCapture={(e) => e.stopPropagation()}
                 >
                   <MinimalTiptap
                     editor={editor}
                     theme="transparent"
                     className={cn(
-                      "h-full w-full leading-tight",
+                      "h-full w-full leading-tight cursor-text nodrag",
                       "[&_.ProseMirror]:min-h-0",
                       "[&_.ProseMirror]:px-2",
                       "[&_.ProseMirror]:py-1.5",
                       "[&_.ProseMirror]:leading-[1.2]",
+                      "[&_.ProseMirror]:flex [&_.ProseMirror]:flex-col [&_.ProseMirror]:justify-center",
                     )}
                     style={{
                       color: color.text,
-                      fontSize: `${resolvedFontSize}px`,
+                      fontSize: `${fontSizeSetting}px`,
                       lineHeight: NOTE_LINE_HEIGHT,
                     }}
                   />
@@ -491,6 +550,7 @@ const StickyNoteNode = memo(
                 <div
                   className={cn(
                     "prose prose-sm w-full max-w-none leading-tight",
+                    "h-full flex flex-col justify-center",
                     "prose-h1:text-xl prose-h1:leading-tight",
                     "prose-h2:text-lg prose-h2:leading-snug",
                     "prose-h3:text-base prose-h3:leading-snug",
@@ -500,21 +560,23 @@ const StickyNoteNode = memo(
                     "min-h-0 px-2 py-1.5",
                     "break-words",
                   )}
-                  style={{
-                    "--tw-prose-body": color.text,
-                    "--tw-prose-headings": color.text,
-                    "--tw-prose-links": color.text,
-                    "--tw-prose-bold": color.text,
-                    "--tw-prose-counters": color.text,
-                    "--tw-prose-bullets": color.text,
-                    "--tw-prose-hr": color.border,
-                    "--tw-prose-quotes": color.text,
-                    "--tw-prose-quote-borders": color.border,
-                    "--tw-prose-captions": color.text,
-                    color: color.text,
-                    fontSize: `${resolvedFontSize}px`,
-                    lineHeight: NOTE_LINE_HEIGHT,
-                  }}
+                  style={
+                    {
+                      "--tw-prose-body": color.text,
+                      "--tw-prose-headings": color.text,
+                      "--tw-prose-links": color.text,
+                      "--tw-prose-bold": color.text,
+                      "--tw-prose-counters": color.text,
+                      "--tw-prose-bullets": color.text,
+                      "--tw-prose-hr": color.border,
+                      "--tw-prose-quotes": color.text,
+                      "--tw-prose-quote-borders": color.border,
+                      "--tw-prose-captions": color.text,
+                      color: color.text,
+                      fontSize: `${fontSizeSetting}px`,
+                      lineHeight: NOTE_LINE_HEIGHT,
+                    } as React.CSSProperties
+                  }
                   dangerouslySetInnerHTML={{
                     __html: displayHtml,
                   }}
@@ -528,6 +590,7 @@ const StickyNoteNode = memo(
                 className={cn(
                   "pointer-events-none absolute inset-0 box-border overflow-hidden opacity-0",
                   "prose prose-sm w-full max-w-none leading-tight",
+                  "h-full flex flex-col justify-center",
                   "prose-h1:text-xl prose-h1:leading-tight",
                   "prose-h2:text-lg prose-h2:leading-snug",
                   "prose-h3:text-base prose-h3:leading-snug",
@@ -537,19 +600,21 @@ const StickyNoteNode = memo(
                   "min-h-0 px-2 py-1.5",
                   "break-words",
                 )}
-                style={{
-                  "--tw-prose-body": color.text,
-                  "--tw-prose-headings": color.text,
-                  "--tw-prose-links": color.text,
-                  "--tw-prose-bold": color.text,
-                  "--tw-prose-counters": color.text,
-                  "--tw-prose-bullets": color.text,
-                  "--tw-prose-hr": color.border,
-                  "--tw-prose-quotes": color.text,
-                  "--tw-prose-quote-borders": color.border,
-                  "--tw-prose-captions": color.text,
-                  lineHeight: NOTE_LINE_HEIGHT,
-                }}
+                style={
+                  {
+                    "--tw-prose-body": color.text,
+                    "--tw-prose-headings": color.text,
+                    "--tw-prose-links": color.text,
+                    "--tw-prose-bold": color.text,
+                    "--tw-prose-counters": color.text,
+                    "--tw-prose-bullets": color.text,
+                    "--tw-prose-hr": color.border,
+                    "--tw-prose-quotes": color.text,
+                    "--tw-prose-quote-borders": color.border,
+                    "--tw-prose-captions": color.text,
+                    lineHeight: NOTE_LINE_HEIGHT,
+                  } as React.CSSProperties
+                }
                 dangerouslySetInnerHTML={{
                   __html: displayHtml,
                 }}

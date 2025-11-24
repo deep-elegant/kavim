@@ -216,7 +216,9 @@ const NodeInteractionOverlay = ({
     }
   }, [finishEditingInteraction, isEditing]);
 
-  // Show resize handles and selection UI when selected. Keep them visible while editing if allowed.
+  // Selection frame and resize handles should stay visible while selected, even when editing.
+  const shouldShowSelectionUi = isActive;
+  // Interactions like dragging should still respect editing disable flag.
   const shouldShowInteractions = isActive && !interactionsDisabledWhileEditing;
 
   const connectionRadius = useStore(
@@ -259,7 +261,7 @@ const NodeInteractionOverlay = ({
 
   // Show handles: always when selected, or during connection if involved/nearby
   const shouldShowHandles =
-    shouldShowInteractions ||
+    shouldShowSelectionUi ||
     (inProgress &&
       (fromNodeId === nodeId || toNodeId === nodeId || isPointerNearNode));
 
@@ -344,8 +346,7 @@ const NodeInteractionOverlay = ({
           className={cn(
             "relative h-full w-full",
             className,
-            isEditing && !allowInteractionsWhileEditing && "cursor-text",
-            shouldShowInteractions && "cursor-grab active:cursor-grabbing",
+            isEditing ? "cursor-text" : shouldShowInteractions && "cursor-grab active:cursor-grabbing",
           )}
           style={containerStyle}
         >
@@ -367,11 +368,11 @@ const NodeInteractionOverlay = ({
           {children}
 
           {/* Local selection border (solid blue) */}
-          {shouldShowInteractions && (
-            <div className="pointer-events-none absolute inset-0 -m-2">
-              <div className="absolute inset-0 rounded-xl border-2 border-sky-500/80" />
-            </div>
-          )}
+            {shouldShowSelectionUi && (
+              <div className="pointer-events-none absolute inset-0 -m-2">
+                <div className="absolute inset-0 rounded-xl border-2 border-sky-500/80" />
+              </div>
+            )}
 
           {/* Drag surfaces outside the editable content so sticky notes can move while typing */}
           {allowInteractionsWhileEditing && isEditing && isActive && (
@@ -455,7 +456,7 @@ const NodeInteractionOverlay = ({
 
           {/* Corner resize handles (visible when node interactions are enabled) */}
           <NodeResizer
-            isVisible={shouldShowInteractions}
+            isVisible={shouldShowSelectionUi}
             minWidth={minWidth}
             minHeight={minHeight}
             lineClassName="!border-sky-500/60"

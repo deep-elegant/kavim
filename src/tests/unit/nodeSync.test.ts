@@ -56,7 +56,7 @@ describe("sanitizeNodeDataForSync", () => {
   });
 
   it("returns the original reference when no transient keys are present", () => {
-    const data = { label: "hello", fontSize: "auto" };
+    const data = { label: "hello", fontSize: 14 };
     const sanitized = sanitizeNodeDataForSync(data);
 
     expect(sanitized).toBe(data);
