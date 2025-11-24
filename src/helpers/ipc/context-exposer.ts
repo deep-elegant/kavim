@@ -7,6 +7,7 @@ import { exposeDraftContext } from "./drafts/draft-context";
 import { exposeAppContext } from "./app/app-context";
 import { exposeDrawerPreferencesContext } from "./drawer-preferences";
 import { exposeAnalyticsContext } from "./analytics/analytics-context";
+import { exposeClipboardContext } from "./clipboard/clipboard-context";
 
 export default function exposeContexts() {
   exposeWindowContext();
@@ -19,4 +20,5 @@ export default function exposeContexts() {
   // Expose the drawer preferences context to the renderer process.
   exposeDrawerPreferencesContext();
   exposeAnalyticsContext();
+  exposeClipboardContext();
 }

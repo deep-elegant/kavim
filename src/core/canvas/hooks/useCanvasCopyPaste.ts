@@ -67,19 +67,15 @@ export const copyNodesToClipboard = async (
 
   copiedNodesStore.set(cloneNodes(selectedNodes), cloneNodes(selectedEdges));
 
-  if (typeof navigator === "undefined" || !navigator.clipboard?.writeText) {
-    return;
-  }
-
   try {
-    await navigator.clipboard.writeText(COPIED_NODES_MARKER);
+    await window.clipboard.writeText(COPIED_NODES_MARKER);
   } catch (error) {
     console.error("Failed to write to clipboard:", error);
   }
 };
 
 export interface UseCanvasCopyPasteParams {
-  nodes: Node[];
+  getNodes: () => Node[];
   edges: Edge<EditableEdgeData>[];
   setNodes: Dispatch<SetStateAction<Node[]>>;
   setEdges: Dispatch<SetStateAction<Edge<EditableEdgeData>[]>>;
@@ -106,7 +102,7 @@ export interface UseCanvasCopyPasteParams {
  * - Recreates edges between pasted nodes with proper ID mapping.
  */
 export const useCanvasCopyPaste = ({
-  nodes,
+  getNodes,
   edges,
   setNodes,
   setEdges,
@@ -131,7 +127,7 @@ export const useCanvasCopyPaste = ({
       }
 
       if ((event.ctrlKey || event.metaKey) && event.code === "KeyC") {
-        const selectedNodes = nodes.filter(
+        const selectedNodes = getNodes().filter(
           (node) => node.selected,
         ) as Node<CanvasNode>[];
         if (selectedNodes.length > 0) {
@@ -144,7 +140,7 @@ export const useCanvasCopyPaste = ({
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [nodes, edges]);
+  }, [getNodes, edges]);
 
   /**
    * Handles paste events from the clipboard.
@@ -155,7 +151,7 @@ export const useCanvasCopyPaste = ({
    */
   const handlePaste = useCallback(
     async (event: ReactClipboardEvent) => {
-      const clipboardText = event.clipboardData.getData("text/plain");
+      const clipboardText = await window.clipboard.readText();
 
       // Check if we're pasting our own copied nodes
       const copiedNodes = copiedNodesStore.getNodes();

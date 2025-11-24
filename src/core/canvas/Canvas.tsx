@@ -159,7 +159,7 @@ const drawingToolIds: ToolId[] = drawingToolConfigs.map((tool) => tool.id);
  * - Broadcasts user interactions (selection, typing) to remote collaborators
  */
 const CanvasInner = () => {
-  const { nodes, edges, setNodes, setEdges } = useCanvasData();
+  const { nodes, edges, setNodes, setEdges, getNodes, getEdges } = useCanvasData();
   const { pickContainingFrame, attachToFrameOnCreate } = useCanvasFrame();
   const { beginAction, commitAction, performAction, undo, redo, isReplaying } =
     useCanvasUndoRedo();
@@ -624,7 +624,7 @@ const CanvasInner = () => {
   useUndoRedoShortcuts({ undo, redo });
 
   const { handlePaste } = useCanvasCopyPaste({
-    nodes,
+    getNodes,
     edges,
     setNodes,
     setEdges,
@@ -635,6 +635,23 @@ const CanvasInner = () => {
     getFileName,
     isImageFile,
   });
+
+  // Fallback to a window-level listener to catch paste events that bypass React's onPaste (focus issues)
+  const handleWindowPaste = useCallback(
+    (event: ClipboardEvent) => {
+      // The existing handler can work with the native event shape
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      handlePaste(event as any);
+    },
+    [handlePaste],
+  );
+
+  useEffect(() => {
+    window.addEventListener("paste", handleWindowPaste, { capture: true });
+    return () => {
+      window.removeEventListener("paste", handleWindowPaste, { capture: true });
+    };
+  }, [handleWindowPaste]);
 
   const canvasActions = useMemo(
     () => ({

@@ -93,6 +93,11 @@ interface FileSystemContext {
   ) => Promise<string | null>;
 }
 
+interface ClipboardContext {
+  writeText: (text: string) => Promise<void>;
+  readText: () => Promise<string>;
+}
+
 interface LlmContext {
   stream: (payload: LlmStreamRequestPayload) => void;
   onChunk: (callback: (payload: LlmChunkPayload) => void) => () => void;
@@ -165,6 +170,7 @@ declare global {
         };
         projectPak: PakContext;
         fileSystem: FileSystemContext;
+        clipboard: ClipboardContext;
         llm: LlmContext;
         drafts: DraftContext;
         appInfo: AppInfoContext;
