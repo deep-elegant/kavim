@@ -56,7 +56,8 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
   const { beginAction, commitAction, isReplaying } = useCanvasUndoRedo();
   const isTyping = Boolean(data.isTyping);
   const label = data.label ?? "";
-  const fontSizeSetting = data.fontSize ?? DEFAULT_FONT_SIZE;
+  // Ensure legacy "auto" values or undefined are converted to a valid number
+  const fontSizeSetting = Number(data.fontSize) || DEFAULT_FONT_SIZE;
   // A ref to hold the token for the current typing session.
   const typingHistoryTokenRef = useRef<symbol | null>(null);
 

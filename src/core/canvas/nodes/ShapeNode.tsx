@@ -20,7 +20,10 @@ import {
   SimpleColorPicker,
   type ColorStyle,
 } from "@/components/ui/simple-color-picker";
-import { type FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
+import {
+  type FontSizeSetting,
+  DEFAULT_FONT_SIZE,
+} from "@/components/ui/minimal-tiptap/FontSizePlugin";
 import { useTextNodeSizing } from "./useTextNodeSizing";
 import { useCanvasUndoRedo } from "../undo";
 
@@ -62,7 +65,7 @@ export const shapeDrawable: DrawableNode<ShapeNode> = {
       shapeType: "circle",
       isTyping: false,
       color: defaultColor,
-      fontSize: "auto",
+      fontSize: DEFAULT_FONT_SIZE,
     },
     width: CIRCLE_MIN_SIZE,
     height: CIRCLE_MIN_SIZE,

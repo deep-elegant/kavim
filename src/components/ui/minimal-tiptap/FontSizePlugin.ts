@@ -20,6 +20,8 @@ export interface FontSizeOptions {
   onChange?: (change: FontSizeChange) => void;
 }
 
+export type FontSizeSetting = number;
+
 export const DEFAULT_FONT_SIZE = 14;
 
 const clampFontSize = (value: number): number => {

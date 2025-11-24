@@ -20,7 +20,10 @@ import {
   type ColorStyle,
 } from "@/components/ui/simple-color-picker";
 import { ShapePicker } from "@/components/ui/ShapePicker";
-import { type FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
+import {
+  type FontSizeSetting,
+  DEFAULT_FONT_SIZE,
+} from "@/components/ui/minimal-tiptap/FontSizePlugin";
 import { useTextNodeSizing } from "./useTextNodeSizing";
 import { useCanvasUndoRedo } from "../undo";
 import { Z } from "./nodesZindex";
@@ -79,7 +82,7 @@ export const stickyNoteDrawable: DrawableNode<StickyNoteNodeType> = {
       label: "",
       isTyping: false,
       color: defaultColor,
-      fontSize: "auto",
+      fontSize: DEFAULT_FONT_SIZE,
       shape: "rectangle",
     },
     width: DEFAULT_NOTE_SIZE,
