@@ -1,5 +1,5 @@
 import React, { memo, useCallback, useEffect, useMemo, useRef } from "react";
-import { type NodeProps, type Node } from "@xyflow/react";
+import { type NodeProps, type Node, useReactFlow } from "@xyflow/react";
 import { type Editor } from "@tiptap/react";
 
 import { cn } from "@/utils/tailwind";
@@ -21,7 +21,7 @@ import {
   type ColorStyle,
 } from "@/components/ui/simple-color-picker";
 import { type FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
-import { useAutoFontSizeObserver } from "./useAutoFontSizeObserver";
+import { useTextNodeSizing } from "./useTextNodeSizing";
 import { useCanvasUndoRedo } from "../undo";
 
 export type ShapeType = "circle" | "rectangle";
@@ -127,7 +127,46 @@ export const shapeDrawable: DrawableNode<ShapeNode> = {
  */
 const ShapeNodeComponent = memo(
   ({ id, data, selected }: NodeProps<ShapeNode>) => {
+    const { setNodes } = useReactFlow();
     const { handleStartEditing, handleFocus } = useEditorFocusAtClick();
+
+    const handleFontSizeChange = useCallback(
+      (newSize: number, previousSize: number) => {
+        setNodes((nodes) =>
+          nodes.map((node) => {
+            if (node.id !== id) return node;
+
+            const shapeType = (node.data as ShapeNodeData).shapeType;
+            const minWidth =
+              shapeType === "circle" ? CIRCLE_MIN_SIZE : RECTANGLE_MIN_WIDTH;
+            const minHeight =
+              shapeType === "circle" ? CIRCLE_MIN_SIZE : RECTANGLE_MIN_HEIGHT;
+
+            const ratio = newSize / previousSize;
+            const width = Math.max(
+              minWidth,
+              (Number(node.width) || minWidth) * ratio,
+            );
+            const height = Math.max(
+              minHeight,
+              (Number(node.height) || minHeight) * ratio,
+            );
+
+            return {
+              ...node,
+              width,
+              height,
+              style: {
+                ...node.style,
+                width,
+                height,
+              },
+            };
+          }),
+        );
+      },
+      [id, setNodes],
+    );
 
     const {
       editor,
@@ -137,8 +176,12 @@ const ShapeNodeComponent = memo(
       updateNodeData,
       setTypingState,
       fontSizeSetting,
-      resolvedFontSize,
-    } = useNodeAsEditor({ id, data, onFocus: handleFocus });
+    } = useNodeAsEditor({
+      id,
+      data,
+      onFocus: handleFocus,
+      onFontSizeChange: handleFontSizeChange,
+    });
     // Get the `performAction` function to wrap mutations in undoable actions.
     const { performAction } = useCanvasUndoRedo();
     const { label = "", shapeType } = data;
@@ -213,7 +256,7 @@ const ShapeNodeComponent = memo(
             return;
           }
 
-          editor.commands.setContent("", true);
+          editor.commands.setContent("", { emitUpdate: true });
           const chain = editor.chain().focus(undefined, {
             scrollIntoView: false,
           });
@@ -278,12 +321,11 @@ const ShapeNodeComponent = memo(
     );
 
     // Dynamically adjust font size when in auto mode based on shape dimensions
-    useAutoFontSizeObserver({
+    useTextNodeSizing({
       editor,
-      fontSize: fontSizeSetting,
       html: displayHtml,
-      containerRef,
-      measurementRef,
+      containerRef: containerRef as React.RefObject<HTMLElement>,
+      measurementRef: measurementRef as React.RefObject<HTMLElement>,
     });
 
     const handleColorChange = useCallback(
@@ -374,7 +416,7 @@ const ShapeNodeComponent = memo(
                     )}
                     style={{
                       color: color.text,
-                      fontSize: `${resolvedFontSize}px`,
+                      fontSize: `${fontSizeSetting}px`,
                     }}
                   />
                 </div>
@@ -385,20 +427,22 @@ const ShapeNodeComponent = memo(
                     "prose prose-sm flex h-full w-full max-w-none items-center justify-center overflow-hidden p-4 break-words whitespace-pre-wrap",
                     textAlignClass,
                   )}
-                  style={{
-                    "--tw-prose-body": color.text,
-                    "--tw-prose-headings": color.text,
-                    "--tw-prose-links": color.text,
-                    "--tw-prose-bold": color.text,
-                    "--tw-prose-counters": color.text,
-                    "--tw-prose-bullets": color.text,
-                    "--tw-prose-hr": color.border,
-                    "--tw-prose-quotes": color.text,
-                    "--tw-prose-quote-borders": color.border,
-                    "--tw-prose-captions": color.text,
-                    color: color.text,
-                    fontSize: `${resolvedFontSize}px`,
-                  }}
+                  style={
+                    {
+                      "--tw-prose-body": color.text,
+                      "--tw-prose-headings": color.text,
+                      "--tw-prose-links": color.text,
+                      "--tw-prose-bold": color.text,
+                      "--tw-prose-counters": color.text,
+                      "--tw-prose-bullets": color.text,
+                      "--tw-prose-hr": color.border,
+                      "--tw-prose-quotes": color.text,
+                      "--tw-prose-quote-borders": color.border,
+                      "--tw-prose-captions": color.text,
+                      color: color.text,
+                      fontSize: `${fontSizeSetting}px`,
+                    } as React.CSSProperties
+                  }
                   dangerouslySetInnerHTML={{
                     __html: displayHtml,
                   }}
@@ -414,18 +458,20 @@ const ShapeNodeComponent = memo(
                   "prose prose-sm flex h-full w-full max-w-none items-center justify-center overflow-hidden p-4 break-words whitespace-pre-wrap",
                   textAlignClass,
                 )}
-                style={{
-                  "--tw-prose-body": color.text,
-                  "--tw-prose-headings": color.text,
-                  "--tw-prose-links": color.text,
-                  "--tw-prose-bold": color.text,
-                  "--tw-prose-counters": color.text,
-                  "--tw-prose-bullets": color.text,
-                  "--tw-prose-hr": color.border,
-                  "--tw-prose-quotes": color.text,
-                  "--tw-prose-quote-borders": color.border,
-                  "--tw-prose-captions": color.text,
-                }}
+                style={
+                  {
+                    "--tw-prose-body": color.text,
+                    "--tw-prose-headings": color.text,
+                    "--tw-prose-links": color.text,
+                    "--tw-prose-bold": color.text,
+                    "--tw-prose-counters": color.text,
+                    "--tw-prose-bullets": color.text,
+                    "--tw-prose-hr": color.border,
+                    "--tw-prose-quotes": color.text,
+                    "--tw-prose-quote-borders": color.border,
+                    "--tw-prose-captions": color.text,
+                  } as React.CSSProperties
+                }
                 dangerouslySetInnerHTML={{
                   __html: displayHtml,
                 }}

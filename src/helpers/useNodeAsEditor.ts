@@ -5,7 +5,6 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
   type FocusEvent,
   type MouseEvent,
 } from "react";
@@ -14,7 +13,6 @@ import {
   DEFAULT_FONT_SIZE,
   FontSize,
   type FontSizeChange,
-  type FontSizeSetting,
   type FontSizeStorage,
 } from "../components/ui/minimal-tiptap/FontSizePlugin";
 import { useCanvasData } from "@/core/canvas/CanvasDataContext";
@@ -24,12 +22,12 @@ import { useCanvasUndoRedo } from "@/core/canvas/undo";
  * Base shape for node data that supports rich text editing.
  * - `label` holds the HTML content from TipTap editor.
  * - `isTyping` tracks whether this node is currently being edited.
- * - Font size properties enable per-node text scaling (auto or fixed).
+ * - Font size properties enable per-node text scaling.
  */
 export type NodeDataWithLabel = {
   label: string;
   isTyping?: boolean;
-  fontSize?: FontSizeSetting;
+  fontSize?: number;
 };
 
 export type UseNodeAsEditorParams<T extends NodeDataWithLabel> = {
@@ -37,13 +35,14 @@ export type UseNodeAsEditorParams<T extends NodeDataWithLabel> = {
   data: T;
   onStopEditing?: (editor: Editor | null) => void;
   onFocus?: (editor: Editor) => void;
+  onFontSizeChange?: (size: number, previousSize: number) => void;
 };
 
 /**
  * Hook to integrate a TipTap rich text editor into a canvas node.
  * - Manages editing state (typing vs. draggable).
  * - Syncs editor content bidirectionally with node data.
- * - Handles font size persistence (auto-scaling or fixed size).
+ * - Handles font size persistence.
  * - Prevents node dragging while typing by toggling `.nodrag` class.
  */
 export const useNodeAsEditor = <T extends NodeDataWithLabel>({
@@ -51,12 +50,13 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
   data,
   onStopEditing,
   onFocus,
+  onFontSizeChange,
 }: UseNodeAsEditorParams<T>) => {
   const { setNodes } = useCanvasData();
   const { beginAction, commitAction, isReplaying } = useCanvasUndoRedo();
   const isTyping = Boolean(data.isTyping);
   const label = data.label ?? "";
-  const fontSizeSetting = data.fontSize ?? "auto";
+  const fontSizeSetting = data.fontSize ?? DEFAULT_FONT_SIZE;
   // A ref to hold the token for the current typing session.
   const typingHistoryTokenRef = useRef<symbol | null>(null);
 
@@ -82,22 +82,17 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
 
   // Stable ref to avoid re-creating TipTap extensions when updateNodeData changes
   const updateNodeDataRef = useRef(updateNodeData);
-  const initialFontSizeSetting = useRef<FontSizeSetting>(fontSizeSetting);
-  const initialFontSizeValue = useRef<number>(
-    typeof initialFontSizeSetting.current === "number"
-      ? initialFontSizeSetting.current
-      : DEFAULT_FONT_SIZE,
-  );
-  const [autoFontSize, setAutoFontSize] = useState<number>(
-    typeof initialFontSizeSetting.current === "number"
-      ? initialFontSizeSetting.current
-      : initialFontSizeValue.current,
-  );
-  const fontSizeSettingRef = useRef<FontSizeSetting>(fontSizeSetting);
+  const initialFontSizeValue = useRef<number>(fontSizeSetting);
+  const fontSizeSettingRef = useRef<number>(fontSizeSetting);
+  const onFontSizeChangeRef = useRef(onFontSizeChange);
 
   useEffect(() => {
     updateNodeDataRef.current = updateNodeData;
   }, [updateNodeData]);
+
+  useEffect(() => {
+    onFontSizeChangeRef.current = onFontSizeChange;
+  }, [onFontSizeChange]);
 
   const handleLabelChange = (value: string) => {
     updateNodeData({ label: value } as Partial<T>);
@@ -113,27 +108,21 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
       }),
       // Custom extension to persist font size changes back to node data
       FontSize.configure({
-        initialMode:
-          typeof initialFontSizeSetting.current === "number" ? "fixed" : "auto",
         initialValue: initialFontSizeValue.current,
-        onChange: ({ mode, value, computed }: FontSizeChange) => {
-          setAutoFontSize(computed);
-
-          const nextSetting: FontSizeSetting = mode === "auto" ? "auto" : value;
+        onChange: ({ value, source, previousValue }: FontSizeChange) => {
+          const nextSetting = value;
           const previousSetting = fontSizeSettingRef.current;
 
-          const settingsEqual =
-            (previousSetting === "auto" && nextSetting === "auto") ||
-            (typeof previousSetting === "number" &&
-              typeof nextSetting === "number" &&
-              previousSetting === nextSetting);
-
-          if (settingsEqual) {
+          if (previousSetting === nextSetting) {
             return;
           }
 
           fontSizeSettingRef.current = nextSetting;
           updateNodeDataRef.current({ fontSize: nextSetting } as Partial<T>);
+
+          if (source === "user") {
+            onFontSizeChangeRef.current?.(nextSetting, previousValue);
+          }
         },
       }),
     ],
@@ -172,20 +161,10 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
         },
       },
     },
-  );
+  });
 
   useEffect(() => {
     fontSizeSettingRef.current = fontSizeSetting;
-  }, [fontSizeSetting]);
-
-  useEffect(() => {
-    if (typeof fontSizeSetting !== "number") {
-      return;
-    }
-
-    setAutoFontSize((current) =>
-      current === fontSizeSetting ? current : fontSizeSetting,
-    );
   }, [fontSizeSetting]);
 
   // Sync font size from node data into TipTap editor when changed externally
@@ -194,16 +173,10 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
       return;
     }
 
-    const storage = (editor.storage.fontSize ?? {}) as Partial<FontSizeStorage>;
-    if (fontSizeSetting === "auto") {
-      if (storage.mode !== "auto") {
-        editor.commands.setAutoFontSize();
-      }
-      return;
-    }
+    const storage = (editor.storage as any).fontSize as Partial<FontSizeStorage>;
 
-    if (storage.mode !== "fixed" || storage.value !== fontSizeSetting) {
-      editor.commands.setFontSize(fontSizeSetting);
+    if (storage.value !== fontSizeSetting) {
+      editor.commands.setFontSize(fontSizeSetting, "auto");
     }
   }, [editor, fontSizeSetting]);
 
@@ -213,7 +186,7 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
       const { from, to } = editor.state.selection;
       const wasFocused = editor.isFocused;
 
-      editor.commands.setContent(label, false);
+      editor.commands.setContent(label, { emitUpdate: false });
 
       if (wasFocused) {
         const clampedFrom = Math.min(from, editor.state.doc.content.size);
@@ -320,9 +293,6 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
     onStopEditing?.(editor);
   };
 
-  const resolvedFontSize =
-    fontSizeSetting === "auto" ? autoFontSize : fontSizeSetting;
-
   return {
     editor,
     isTyping,
@@ -331,7 +301,6 @@ export const useNodeAsEditor = <T extends NodeDataWithLabel>({
     updateNodeData,
     setTypingState,
     fontSizeSetting,
-    resolvedFontSize,
   };
 };
 

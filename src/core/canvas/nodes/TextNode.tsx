@@ -11,7 +11,7 @@ import {
   useEditorFocusAtClick,
 } from "@/helpers/useNodeAsEditor";
 import { type FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
-import { useAutoFontSizeObserver } from "./useAutoFontSizeObserver";
+import { useTextNodeSizing } from "./useTextNodeSizing";
 import { useCanvasData } from "@/core/canvas/CanvasDataContext";
 import { type Editor } from "@tiptap/react";
 
@@ -19,7 +19,7 @@ import { type Editor } from "@tiptap/react";
 export type TextNodeData = {
   label: string;
   isTyping?: boolean;
-  fontSize?: FontSizeSetting;
+  fontSize?: number;
 };
 
 export type TextNode = Node<TextNodeData, "text-node">;
@@ -43,7 +43,7 @@ export const textDrawable: DrawableNode<TextNode> = {
     data: {
       label: "",
       isTyping: false,
-      fontSize: "auto",
+      fontSize: 14,
     },
     width: MIN_WIDTH,
     height: MIN_HEIGHT,
@@ -121,19 +121,51 @@ const TextNodeComponent = memo(
 
     const { handleStartEditing, handleFocus } = useEditorFocusAtClick();
 
+    const handleFontSizeChange = useCallback(
+      (newSize: number, previousSize: number) => {
+        setNodes((nodes) =>
+          nodes.map((node) => {
+            if (node.id !== id) return node;
+
+            const ratio = newSize / previousSize;
+            const width = Math.max(
+              MIN_WIDTH,
+              (Number(node.width) || MIN_WIDTH) * ratio,
+            );
+            const height = Math.max(
+              MIN_HEIGHT,
+              (Number(node.height) || MIN_HEIGHT) * ratio,
+            );
+
+            return {
+              ...node,
+              width,
+              height,
+              style: {
+                ...node.style,
+                width,
+                height,
+              },
+            };
+          }),
+        );
+      },
+      [id, setNodes],
+    );
+
     const {
       editor,
       isTyping,
       handleDoubleClick,
       handleBlur,
       fontSizeSetting,
-      resolvedFontSize,
       setTypingState,
     } = useNodeAsEditor({
       id,
       data,
       onStopEditing: handleStopEditing,
       onFocus: handleFocus,
+      onFontSizeChange: handleFontSizeChange,
     });
     const handleClickToEdit = useClickToEditHandler(
       selected,
@@ -254,9 +286,8 @@ const TextNodeComponent = memo(
     );
 
     // Dynamically adjust font size when in auto mode based on container dimensions
-    useAutoFontSizeObserver({
+    useTextNodeSizing({
       editor,
-      fontSize: fontSizeSetting,
       html: measurementHtml,
       containerRef: containerRef as React.RefObject<HTMLElement>,
       measurementRef: measurementRef as React.RefObject<HTMLElement>,
@@ -303,7 +334,7 @@ const TextNodeComponent = memo(
                     "[&_.ProseMirror_ul]:my-0 [&_.ProseMirror_ol]:my-0",
                   )}
                   matchContainerHeight={true}
-                  style={{ fontSize: `${resolvedFontSize}px` }}
+                  style={{ fontSize: `${fontSizeSetting}px` }}
                 />
               </div>
             ) : (
@@ -322,7 +353,7 @@ const TextNodeComponent = memo(
                   "text-slate-900",
                   "break-words",
                 )}
-                style={{ fontSize: `${resolvedFontSize}px` }}
+                style={{ fontSize: `${fontSizeSetting}px` }}
                 dangerouslySetInnerHTML={{ __html: displayHtml }}
               />
             )}

@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useLayoutEffect } from "react";
 import type { Editor } from "@tiptap/react";
 
-import type { FontSizeSetting } from "@/components/ui/minimal-tiptap/FontSizePlugin";
-
-export interface UseAutoFontSizeObserverOptions {
+export interface UseTextNodeSizingOptions {
   editor: Editor | null;
-  fontSize: FontSizeSetting;
   html: string;
   containerRef: React.RefObject<HTMLElement>;
-  measurementRef: React.RefObject<HTMLElement>; // Hidden clone used for overflow detection
+  measurementRef: React.RefObject<HTMLElement>;
   minSize?: number;
   /**
    * Optional upper bound for auto font size.
@@ -23,24 +20,18 @@ const DEFAULT_MIN_SIZE = 8;
  * Automatically scales font size to fit content within container bounds.
  * - Uses binary search on a hidden measurement element to find largest size without overflow.
  * - Re-measures on content change (html) or container resize.
- * - Only active when mode is 'auto'; manual mode bypasses this logic.
  */
-export const useAutoFontSizeObserver = ({
+export const useTextNodeSizing = ({
   editor,
-  fontSize,
   html,
   containerRef,
   measurementRef,
   minSize,
   maxSize,
-}: UseAutoFontSizeObserverOptions) => {
+}: UseTextNodeSizingOptions) => {
   const measure = useCallback(() => {
-    if (!editor || typeof editor.commands.updateAutoFontSize !== "function") {
+    if (!editor) {
       return;
-    }
-
-    if (fontSize !== "auto") {
-      return; // Manual mode: user controls font size explicitly
     }
 
     const containerElement = containerRef.current;
@@ -88,22 +79,19 @@ export const useAutoFontSizeObserver = ({
       }
     }
 
-    editor.commands.updateAutoFontSize(best);
-  }, [editor, fontSize, containerRef, measurementRef, minSize, maxSize]);
+    // Update with source="auto" to distinguish from user actions
+    editor.commands.setFontSize(best, "auto");
+  }, [editor, containerRef, measurementRef, minSize, maxSize]);
 
   // useLayoutEffect ensures measurement happens before paint to avoid flicker
   const container = containerRef.current;
   const measurement = measurementRef.current;
   useLayoutEffect(() => {
     measure();
-  }, [measure, html, fontSize, container, measurement]);
+  }, [measure, html, container, measurement]);
 
   useEffect(() => {
-    if (!editor || fontSize !== "auto") {
-      return;
-    }
-
-    if (!container || typeof ResizeObserver === "undefined") {
+    if (!editor || !container || typeof ResizeObserver === "undefined") {
       return;
     }
 
@@ -115,5 +103,5 @@ export const useAutoFontSizeObserver = ({
     observer.observe(container);
 
     return () => observer.disconnect();
-  }, [editor, fontSize, container, measure]);
+  }, [editor, container, measure]);
 };
