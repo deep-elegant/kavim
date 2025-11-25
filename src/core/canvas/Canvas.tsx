@@ -668,7 +668,6 @@ const CanvasInner = () => {
         })}
         style={{ height: "100%", width: "100%" }}
         ref={reactFlowWrapperRef}
-        onPaste={handlePaste}
         onMouseMove={handleWrapperMouseMove}
         onMouseLeave={handleWrapperMouseLeave}
       >
