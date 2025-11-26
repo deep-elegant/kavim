@@ -102,6 +102,15 @@ export const SingleLlmSelect = ({
 
   const renderOption = (entry: AvailabilityEntry) => {
     const { model, isEnabled } = entry;
+    const isCustom = model.value === "custom-openai-compatible";
+    const customModelName =
+      isCustom && typeof window !== "undefined" && window.settingsStore
+        ? window.settingsStore.getProvider("openai-compatible")?.model?.trim()
+        : "";
+    const displayLabel =
+      isCustom && customModelName
+        ? `Custom: ${customModelName}`
+        : model.label;
 
     return (
       <SelectItem
@@ -122,7 +131,7 @@ export const SingleLlmSelect = ({
         )}
       >
         <div className="flex flex-col">
-          <span>{model.label}</span>
+          <span>{displayLabel}</span>
           {!isEnabled ? (
             <span className="text-[11px] font-normal text-slate-500">
               Configure the API key in Settings to enable this model.

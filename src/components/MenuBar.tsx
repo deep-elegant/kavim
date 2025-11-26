@@ -34,7 +34,12 @@ import { LLM_PROVIDER_KEYS_UPDATED_EVENT } from "@/core/llm/llmAvailability";
 import { useDraftManager } from "@/core/drafts/DraftManagerContext";
 import { useStatsForNerds } from "@/core/diagnostics/StatsForNerdsContext";
 
-type ProviderKeyState = Record<AiProvider, string>;
+type ProviderKeyStateValue = {
+  apiKey: string;
+  baseURL?: string;
+  model?: string;
+};
+type ProviderKeyState = Record<AiProvider, ProviderKeyStateValue>;
 
 /**
  * Form state for a gateway configuration (matches SettingsModal contract).
@@ -52,8 +57,12 @@ type GatewaySettingsState = Record<AiGateway, GatewayFormState>;
 /** Loads all provider API keys from persistent storage. */
 const createProviderKeyState = (): ProviderKeyState =>
   AI_PROVIDER_METADATA.reduce((accumulator, provider) => {
-    accumulator[provider.value] =
-      window.settingsStore.getProvider(provider.value)?.apiKey ?? "";
+    const stored = window.settingsStore.getProvider(provider.value);
+    accumulator[provider.value] = {
+      apiKey: stored?.apiKey ?? "",
+      baseURL: stored?.baseURL ?? "",
+      model: stored?.model ?? "",
+    };
     return accumulator;
   }, {} as ProviderKeyState);
 
@@ -542,10 +551,16 @@ export default function MenuBar() {
 
   /** Updates a single provider's API key in local state (not persisted until save). */
   const handleProviderKeyChange = useCallback(
-    (provider: AiProvider, value: string) => {
+    (
+      provider: AiProvider,
+      value: Partial<ProviderKeyStateValue>,
+    ) => {
       setProviderKeys((previous) => ({
         ...previous,
-        [provider]: value,
+        [provider]: {
+          ...previous[provider],
+          ...value,
+        },
       }));
     },
     [],
@@ -723,14 +738,25 @@ export default function MenuBar() {
       let gatewayFallbackEnabled = false;
 
       AI_PROVIDER_METADATA.forEach(({ value: provider }) => {
-        const rawKey = providerKeys[provider] ?? "";
-        const trimmedKey = rawKey.trim();
+        const rawConfig = providerKeys[provider] ?? { apiKey: "" };
+        const trimmedApiKey = rawConfig.apiKey?.trim() ?? "";
+        const trimmedBaseURL = rawConfig.baseURL?.trim() ?? "";
+        const trimmedModel = rawConfig.model?.trim() ?? "";
 
         window.settingsStore.setProvider(provider, {
-          apiKey: trimmedKey,
+          apiKey: trimmedApiKey,
+          ...(trimmedBaseURL ? { baseURL: trimmedBaseURL } : {}),
+          ...(trimmedModel ? { model: trimmedModel } : {}),
         });
 
-        if (trimmedKey) {
+        if (provider === "openai-compatible") {
+          if (trimmedBaseURL && trimmedModel) {
+            enabledProviders.push(provider);
+          }
+          return;
+        }
+
+        if (trimmedApiKey) {
           enabledProviders.push(provider);
         }
       });

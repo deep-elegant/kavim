@@ -22,8 +22,20 @@ export const readEnabledProviders = (): Set<AiProvider> => {
   }
 
   for (const provider of AI_PROVIDER_METADATA) {
-    const storedKey =
-      window.settingsStore.getProvider(provider.value)?.apiKey?.trim();
+    const stored = window.settingsStore.getProvider(provider.value);
+
+    if (provider.value === "openai-compatible") {
+      const hasEndpoint = stored?.baseURL?.trim();
+      const hasModel = stored?.model?.trim();
+
+      if (hasEndpoint && hasModel) {
+        providers.add(provider.value);
+      }
+
+      continue;
+    }
+
+    const storedKey = stored?.apiKey?.trim();
 
     if (storedKey) {
       providers.add(provider.value);
@@ -52,6 +64,9 @@ export const resolveModelAvailability = (): ModelAvailability[] => {
 
   return AI_MODELS.map((model) => ({
     model,
-    isEnabled: gatewayCoversAll || providersWithKeys.has(model.provider),
+    isEnabled:
+      gatewayCoversAll ||
+      providersWithKeys.has(model.provider) ||
+      model.provider === "openai-compatible",
   }));
 };

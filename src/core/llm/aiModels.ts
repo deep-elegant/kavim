@@ -38,6 +38,13 @@ export const AI_PROVIDER_METADATA = [
     apiKeyPlaceholder: "YOUR_GROK_API_KEY",
     baseURL: "https://api.x.ai/v1",
   },
+  {
+    value: "openai-compatible",
+    label: "Custom (OpenAI-compatible / Ollama)",
+    inputPlaceholder: "Enter your API key (leave empty if not required)",
+    apiKeyPlaceholder: "OPTIONAL_API_KEY",
+    baseURL: "http://localhost:11434/v1",
+  },
 ] as const;
 
 export type AiProvider = (typeof AI_PROVIDER_METADATA)[number]["value"];
@@ -74,6 +81,7 @@ type BaseAiModel = {
   label: string;
   provider: AiProvider;
   modelId: string;
+  baseURL?: string;
   // Indicates if model requires verified organization account (e.g., for beta access)
   requiresOrganizationVerification?: boolean;
   // Alternative model IDs when accessed via gateway (e.g., OpenRouter uses different format)
@@ -212,6 +220,13 @@ export const AI_MODELS = [
     gatewayModelOverrides: {
       openrouter: "xai/grok-4",
     },
+    capabilities: { input: ["text"], output: ["text"] },
+  },
+  {
+    value: "custom-openai-compatible",
+    label: "Custom: OpenAI-compatible model",
+    provider: "openai-compatible",
+    modelId: "custom-openai-compatible",
     capabilities: { input: ["text"], output: ["text"] },
   },
 ] as const satisfies ReadonlyArray<BaseAiModel>;

@@ -165,7 +165,13 @@ export const generateAiResult = async ({
     throw new Error(`Unknown AI model: ${model}`);
   }
 
-  const apiKey = settings.envKey();
+  // Resolve dynamic settings for the custom OpenAI-compatible provider
+  const customConfig =
+    settings.provider === "openai-compatible"
+      ? window.settingsStore.getProvider("openai-compatible")
+      : null;
+
+  const apiKey = customConfig?.apiKey ?? settings.envKey();
   const requestId = crypto.randomUUID();
 
   assertLlmBridgeAvailable();
@@ -320,30 +326,32 @@ export const generateAiResult = async ({
           }
         | undefined;
 
-      for (const gateway of AI_GATEWAY_METADATA) {
-        const stored = window.settingsStore.getGateway(gateway.value);
+      if (settings.provider !== "openai-compatible") {
+        for (const gateway of AI_GATEWAY_METADATA) {
+          const stored = window.settingsStore.getGateway(gateway.value);
 
-        if (!stored?.useForAllModels || !stored.apiKey) {
-          continue;
+          if (!stored?.useForAllModels || !stored.apiKey) {
+            continue;
+          }
+
+          // Collect optional gateway headers (OpenRouter's app ranking metadata)
+          const headerMap: Record<string, string> = {};
+
+          if (stored.headers?.referer) {
+            headerMap["HTTP-Referer"] = stored.headers.referer;
+          }
+
+          if (stored.headers?.title) {
+            headerMap["X-Title"] = stored.headers.title;
+          }
+
+          gatewayPreference = {
+            gateway,
+            stored,
+            headers: Object.keys(headerMap).length > 0 ? headerMap : undefined,
+          };
+          break;
         }
-
-        // Collect optional gateway headers (OpenRouter's app ranking metadata)
-        const headerMap: Record<string, string> = {};
-
-        if (stored.headers?.referer) {
-          headerMap["HTTP-Referer"] = stored.headers.referer;
-        }
-
-        if (stored.headers?.title) {
-          headerMap["X-Title"] = stored.headers.title;
-        }
-
-        gatewayPreference = {
-          gateway,
-          stored,
-          headers: Object.keys(headerMap).length > 0 ? headerMap : undefined,
-        };
-        break;
       }
 
       // Use gateway if configured, otherwise direct provider
@@ -352,10 +360,17 @@ export const generateAiResult = async ({
       const effectiveModelName = gatewayPreference?.gateway.value
         ? (settings.gatewayModelOverrides?.[gatewayPreference.gateway.value] ??
           settings.modelName)
-        : settings.modelName;
+        : settings.provider === "openai-compatible"
+          ? customConfig?.model ?? settings.modelName
+          : settings.modelName;
       const effectiveBaseURL =
-        gatewayPreference?.gateway.baseURL ?? settings.baseURL;
-      const effectiveApiKey = gatewayPreference?.stored.apiKey ?? apiKey;
+        settings.provider === "openai-compatible"
+          ? customConfig?.baseURL ?? settings.baseURL
+          : gatewayPreference?.gateway.baseURL ?? settings.baseURL;
+      const effectiveApiKey =
+        settings.provider === "openai-compatible"
+          ? customConfig?.apiKey ?? ""
+          : gatewayPreference?.stored.apiKey ?? apiKey;
       const headers = gatewayPreference?.headers;
 
       const payload = buildStreamPayload({

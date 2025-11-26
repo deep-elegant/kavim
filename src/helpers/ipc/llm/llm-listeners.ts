@@ -496,7 +496,8 @@ export const addLlmEventListeners = () => {
         } else if (
           provider === "openai" ||
           provider === "deepseek" ||
-          provider === "openrouter"
+          provider === "openrouter" ||
+          provider === "openai-compatible"
         ) {
           const llm = createOpenAiChatClient(payload);
           event.sender.send(LLM_STREAM_START_CHANNEL, {

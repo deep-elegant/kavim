@@ -15,7 +15,13 @@ import {
   type AiProvider,
 } from "@/core/llm/aiModels";
 
-type ProviderKeyMap = Record<AiProvider, string>;
+type ProviderKeyValue = {
+  apiKey: string;
+  baseURL?: string;
+  model?: string;
+};
+
+type ProviderKeyMap = Record<AiProvider, ProviderKeyValue>;
 
 type ProviderVisibilityMap = Record<AiProvider, boolean>;
 
@@ -59,7 +65,10 @@ interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   providerKeys: ProviderKeyMap;
-  setProviderKey: (provider: AiProvider, value: string) => void;
+  setProviderKey: (
+    provider: AiProvider,
+    value: Partial<ProviderKeyValue>,
+  ) => void;
   gatewaySettings: GatewaySettingsMap;
   setGatewaySetting: (
     gateway: AiGateway,
@@ -87,6 +96,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [activeTab, setActiveTab] = React.useState<"providers" | "gateways">(
     "providers",
   );
+  const [initialProviderKeys, setInitialProviderKeys] =
+    React.useState<ProviderKeyMap | null>(null);
+  const [initialGatewaySettings, setInitialGatewaySettings] =
+    React.useState<GatewaySettingsMap | null>(null);
+  const [showUnsavedDialog, setShowUnsavedDialog] = React.useState(false);
 
   // Reset UI state when modal closes to avoid leaking visible passwords
   React.useEffect(() => {
@@ -94,8 +108,42 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       setVisibleProviders(createInitialVisibilityMap());
       setVisibleGateways(createInitialGatewayVisibilityMap());
       setActiveTab("providers");
+      setInitialProviderKeys(null);
+      setInitialGatewaySettings(null);
+      setShowUnsavedDialog(false);
     }
   }, [isOpen]);
+
+  React.useEffect(() => {
+    if (isOpen && !initialProviderKeys && !initialGatewaySettings) {
+      setInitialProviderKeys(providerKeys);
+      setInitialGatewaySettings(gatewaySettings);
+    }
+  }, [
+    gatewaySettings,
+    initialGatewaySettings,
+    initialProviderKeys,
+    isOpen,
+    providerKeys,
+  ]);
+
+  const hasUnsavedChanges = React.useMemo(() => {
+    if (!initialProviderKeys || !initialGatewaySettings) {
+      return false;
+    }
+    return (
+      JSON.stringify(providerKeys) !== JSON.stringify(initialProviderKeys) ||
+      JSON.stringify(gatewaySettings) !== JSON.stringify(initialGatewaySettings)
+    );
+  }, [gatewaySettings, initialGatewaySettings, initialProviderKeys, providerKeys]);
+
+  const handleRequestClose = () => {
+    if (hasUnsavedChanges) {
+      setShowUnsavedDialog(true);
+      return;
+    }
+    onClose();
+  };
 
   /** Toggle visibility of a provider's API key field. */
   const toggleProviderVisibility = (provider: AiProvider) => {
@@ -119,39 +167,120 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       {AI_PROVIDER_METADATA.map(
         ({ value: provider, label, inputPlaceholder }) => {
           const isVisible = visibleProviders[provider];
-          const providerKey = providerKeys[provider] ?? "";
+          const providerKey = providerKeys[provider]?.apiKey ?? "";
 
           return (
-            <label key={provider} className="flex flex-col gap-1 text-sm">
-              {label} API Key
-              <div className="relative">
-                <input
-                  value={providerKey}
-                  onChange={(event) =>
-                    setProviderKey(provider, event.target.value)
-                  }
-                  type={isVisible ? "text" : "password"}
-                  className="border-input bg-background focus:ring-ring w-full rounded-md border px-3 py-2 pr-10 text-sm shadow-sm focus:ring-2 focus:outline-none"
-                  placeholder={inputPlaceholder}
-                />
-                <button
-                  type="button"
-                  onClick={() => toggleProviderVisibility(provider)}
-                  className="text-muted-foreground hover:text-foreground absolute inset-y-0 right-2 flex items-center"
-                  aria-label={
-                    isVisible
-                      ? `Hide ${label} API key`
-                      : `Show ${label} API key`
-                  }
-                >
-                  {isVisible ? (
-                    <EyeOff className="h-4 w-4" />
-                  ) : (
-                    <Eye className="h-4 w-4" />
-                  )}
-                </button>
-              </div>
-            </label>
+            <div
+              key={provider}
+              className="border-border rounded-md border p-3 text-sm"
+            >
+              <div className="mb-2 font-medium">{label}</div>
+              {provider === "openai-compatible" ? (
+                <div className="space-y-2">
+                  <div className="text-xs text-muted-foreground">
+                    Endpoint must be OpenAI-compatible (e.g., Ollama
+                    /v1). Fill endpoint and model to enable; API key is optional.
+                  </div>
+                  <label className="flex flex-col gap-1">
+                    Endpoint URL
+                    <input
+                      value={providerKeys[provider]?.baseURL ?? ""}
+                      onChange={(event) =>
+                        setProviderKey(provider, {
+                          ...providerKeys[provider],
+                          baseURL: event.target.value,
+                        })
+                      }
+                      type="text"
+                      className="border-input bg-background focus:ring-ring w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:ring-2 focus:outline-none"
+                      placeholder="http://localhost:11434/v1"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    Model name
+                    <input
+                      value={providerKeys[provider]?.model ?? ""}
+                      onChange={(event) =>
+                        setProviderKey(provider, {
+                          ...providerKeys[provider],
+                          model: event.target.value,
+                        })
+                      }
+                      type="text"
+                      className="border-input bg-background focus:ring-ring w-full rounded-md border px-3 py-2 text-sm shadow-sm focus:ring-2 focus:outline-none"
+                      placeholder="llama3.1"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    API Key (optional)
+                    <div className="relative">
+                      <input
+                        value={providerKeys[provider]?.apiKey ?? ""}
+                        onChange={(event) =>
+                          setProviderKey(provider, {
+                            ...providerKeys[provider],
+                            apiKey: event.target.value,
+                          })
+                        }
+                        type={isVisible ? "text" : "password"}
+                        className="border-input bg-background focus:ring-ring w-full rounded-md border px-3 py-2 pr-10 text-sm shadow-sm focus:ring-2 focus:outline-none"
+                        placeholder={inputPlaceholder}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => toggleProviderVisibility(provider)}
+                        className="text-muted-foreground hover:text-foreground absolute inset-y-0 right-2 flex items-center"
+                        aria-label={
+                          isVisible
+                            ? `Hide ${label} API key`
+                            : `Show ${label} API key`
+                        }
+                      >
+                        {isVisible ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </label>
+                </div>
+              ) : (
+                <label className="flex flex-col gap-1">
+                  API Key
+                  <div className="relative">
+                    <input
+                      value={providerKey}
+                      onChange={(event) =>
+                        setProviderKey(provider, {
+                          ...providerKeys[provider],
+                          apiKey: event.target.value,
+                        })
+                      }
+                      type={isVisible ? "text" : "password"}
+                      className="border-input bg-background focus:ring-ring w-full rounded-md border px-3 py-2 pr-10 text-sm shadow-sm focus:ring-2 focus:outline-none"
+                      placeholder={inputPlaceholder}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => toggleProviderVisibility(provider)}
+                      className="text-muted-foreground hover:text-foreground absolute inset-y-0 right-2 flex items-center"
+                      aria-label={
+                        isVisible
+                          ? `Hide ${label} API key`
+                          : `Show ${label} API key`
+                      }
+                    >
+                      {isVisible ? (
+                        <EyeOff className="h-4 w-4" />
+                      ) : (
+                        <Eye className="h-4 w-4" />
+                      )}
+                    </button>
+                  </div>
+                </label>
+              )}
+            </div>
           );
         },
       )}
@@ -265,49 +394,87 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   );
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>LLM settings</DialogTitle>
-        </DialogHeader>
-        <div className="space-y-4">
-          <div className="border-border bg-muted/40 flex items-center gap-2 rounded-md border p-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab("providers")}
-              className={`flex-1 rounded-sm px-3 py-1 text-sm font-medium transition-colors ${
-                activeTab === "providers"
-                  ? "bg-background text-foreground shadow"
-                  : "text-muted-foreground"
-              }`}
-            >
-              Provider keys
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("gateways")}
-              className={`flex-1 rounded-sm px-3 py-1 text-sm font-medium transition-colors ${
-                activeTab === "gateways"
-                  ? "bg-background text-foreground shadow"
-                  : "text-muted-foreground"
-              }`}
-            >
-              Gateway keys
-            </button>
+    <>
+      <Dialog open={isOpen} onOpenChange={(open) => !open && handleRequestClose()}>
+        <DialogContent className="max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>LLM settings</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="border-border bg-muted/40 flex items-center gap-2 rounded-md border p-1">
+              <button
+                type="button"
+                onClick={() => setActiveTab("providers")}
+                className={`flex-1 rounded-sm px-3 py-1 text-sm font-medium transition-colors ${
+                  activeTab === "providers"
+                    ? "bg-background text-foreground shadow"
+                    : "text-muted-foreground"
+                }`}
+              >
+                Provider keys
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab("gateways")}
+                className={`flex-1 rounded-sm px-3 py-1 text-sm font-medium transition-colors ${
+                  activeTab === "gateways"
+                    ? "bg-background text-foreground shadow"
+                    : "text-muted-foreground"
+                }`}
+              >
+                Gateway keys
+              </button>
+            </div>
+            {activeTab === "providers"
+              ? renderProviderTab()
+              : activeTab === "gateways"
+                ? renderGatewayTab()
+                : null}
           </div>
-          {activeTab === "providers"
-            ? renderProviderTab()
-            : activeTab === "gateways"
-              ? renderGatewayTab()
-              : null}
-        </div>
-        <DialogFooter>
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={handleSettingsSave}>Save settings</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter>
+            <Button variant="ghost" onClick={handleRequestClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleSettingsSave}>Save settings</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={showUnsavedDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowUnsavedDialog(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Unsaved changes</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            You have unsaved changes. Save them before closing?
+          </p>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setShowUnsavedDialog(false);
+                onClose();
+              }}
+            >
+              Discard changes
+            </Button>
+            <Button
+              onClick={() => {
+                setShowUnsavedDialog(false);
+                handleSettingsSave();
+              }}
+            >
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };

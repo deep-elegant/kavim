@@ -148,8 +148,23 @@ declare global {
     interface Window {
         electronWindow: ElectronWindow;
         settingsStore: {
-            getProvider: (key: AiProvider) => { apiKey: string } | undefined;
-            setProvider: (key: AiProvider, value: { apiKey: string }) => void;
+            getProvider: (
+              key: AiProvider,
+            ) =>
+              | {
+                  apiKey?: string;
+                  baseURL?: string;
+                  model?: string;
+                }
+              | undefined;
+            setProvider: (
+              key: AiProvider,
+              value: {
+                apiKey?: string;
+                baseURL?: string;
+                model?: string;
+              },
+            ) => void;
             getGateway: (key: AiGateway) =>
             | {
                 apiKey: string;
